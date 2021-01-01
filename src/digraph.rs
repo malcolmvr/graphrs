@@ -1,64 +1,43 @@
+use std::hash::Hash;
 use std::collections::HashMap;
-use crate::node_attributes::NodeAttributes;
 
-pub struct DiGraph<'a> {
-    adj: HashMap<&'a str, HashMap<&'a str, NodeAttributes<'a>>>,
-    node: HashMap<&'a str, NodeAttributes<'a>>,
-    pred: HashMap<&'a str, HashMap<&'a str, NodeAttributes<'a>>>,
-    succ: HashMap<&'a str, HashMap<&'a str, NodeAttributes<'a>>>,
+pub struct Node<T, K, V> {
+    pub name: T,
+    pub attributes: HashMap<K, V>,
 }
 
-impl<'a> DiGraph<'a> {
+pub struct Edge<T> {
+    pub u: T,
+    pub v: T,
+}
 
-    pub fn new() -> DiGraph<'a> {
-        let adj = HashMap::<&str, HashMap<&str, NodeAttributes<'a>>>::new();
-        let node = HashMap::<&'a str, NodeAttributes<'a>>::new();
-        let pred = HashMap::<&str, HashMap<&str, NodeAttributes<'a>>>::new();
-        let succ = HashMap::<&str, HashMap<&str, NodeAttributes<'a>>>::new();
-        DiGraph { adj, node, pred, succ }
-    }
+pub struct DiGraph<T, K, V> {
+    pub nodes: HashMap<T, Node<T, K, V>>,
+    pub edges: Vec<Edge<T>>,
+}
 
-    pub fn add_node(&mut self, node_for_adding: &'a str, attr: Option<NodeAttributes<'a>>) -> &mut DiGraph<'a> {
-        let _attr = match attr {
-            Some(a) => a,
-            None => NodeAttributes::new(),
-        };
-        if !self.succ.contains_key(node_for_adding) {
-            self.succ.insert(node_for_adding, HashMap::<&str, NodeAttributes<'a>>::new());
-            self.pred.insert(node_for_adding, HashMap::<&str, NodeAttributes<'a>>::new());
-            self.node.insert(node_for_adding, _attr);
-        } else {
-            self.update_node_attributes(node_for_adding, &_attr);
+impl<T, K, V> DiGraph<T, K, V> {
+
+    pub fn new(nodes: Vec<(T, HashMap<K, V>)>, edges: Vec<(T, T)>) -> DiGraph<T, K, V>
+        where T: Hash, T: Eq, T: Copy, K: Hash, K: Eq
+    {
+        let mut nodes_map = HashMap::new();
+
+        for node in nodes {
+            let _node = Node { name: node.0, attributes: node.1 };
+            nodes_map.insert(_node.name, _node);
         }
-        self
-    }
-
-    pub fn add_edge(&mut self, u: &'a str, v: &'a str, attr: Option<NodeAttributes<'a>>) {
-        let _attr = match attr {
-            Some(a) => a,
-            None => NodeAttributes::new(),
-        };
-        if !self.node.contains_key(u) {
-            self.node.insert(u, NodeAttributes::new());
-            self.adj.insert(u, HashMap::<&str, NodeAttributes<'a>>::new());
+    
+        let mut edges_vec = Vec::<Edge<T>>::with_capacity(edges.len());
+        for edge in edges {
+            let u = nodes_map[&edge.0].name.clone();
+            let v = nodes_map[&edge.1].name.clone();
+            let _edge = Edge { u, v };
+            edges_vec.push(_edge);
         }
-        if !self.node.contains_key(v) {
-            self.node.insert(v, NodeAttributes::new());
-            self.adj.insert(v, HashMap::<&str, NodeAttributes<'a>>::new());
-        }
-        let current_attr = self.adj.get_mut(u).unwrap().get_mut(v).unwrap();
-        let merged = NodeAttributes::merge_attributes(&current_attr, &_attr);
-        *current_attr = merged;
+
+        DiGraph { nodes: nodes_map, edges: edges_vec }
     }
 
-    pub fn get_node_attributes(&self, n: &str) -> &NodeAttributes<'a> {
-        &self.node[n]
-    }
-
-    pub fn update_node_attributes(&mut self, n: &str, attr: &NodeAttributes<'a>) {
-        let current_attr = self.get_node_attributes(n);
-        let combined = NodeAttributes::merge_attributes(&current_attr, &attr);
-        *self.node.get_mut(n).unwrap() = combined;
-    }
 }
 
