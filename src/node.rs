@@ -4,7 +4,7 @@ use std::collections::HashMap;
 
 pub struct Node<T, K, V> {
     pub name: T,
-    pub attributes: HashMap<K, V>,
+    pub attributes: Option<HashMap<K, V>>,
 }
 
 
@@ -12,18 +12,19 @@ impl<T, K, V> Node<T, K, V> {
 
 
     pub fn from_name(name: T) -> Node<T, K, V> {
-        Node { name, attributes: HashMap::new() }
+        Node { name, attributes: None }
     }
 
 
-    pub fn from_name_and_weight(name: T, weight_name: K, weight: V) -> Node<T, K, V>
-        where K: Hash, K: Eq
+    pub fn from_name_and_attribute_tuples(name: T, attributes: Vec<(K, V)>) -> Node<T, K, V>
+        where T: Hash + Eq + Copy, K: Hash + Eq + Copy, V: Copy
     {
-        let mut attributes = HashMap::new();
-        attributes.insert(weight_name, weight);
-        Node { name, attributes }
+        let mut attr = HashMap::new();
+        for (key, value) in attributes {
+            attr.insert(key, value);
+        }
+        Node { name, attributes: Some(attr) }
     }
 
 
-    // pub fn from_name
 }

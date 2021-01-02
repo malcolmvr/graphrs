@@ -5,7 +5,7 @@ mod edge;
 pub use edge::Edge;
 
 mod digraph;
-pub use digraph::{DiGraph};
+pub use digraph::{DiGraph, MergeStrategy};
 
 mod node_attributes;
 pub use node_attributes::NodeAttributes;
