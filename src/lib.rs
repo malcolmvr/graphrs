@@ -2,10 +2,10 @@ mod node;
 pub use node::Node;
 
 mod edge;
-pub use edge::Edge;
+pub use edge::{Edge, EdgeSide};
 
 mod digraph;
-pub use digraph::{DiGraph, MergeStrategy};
+pub use digraph::{DiGraph};
 
-mod node_attributes;
-pub use node_attributes::NodeAttributes;
+mod merge_attributes;
+pub use merge_attributes::{MergeStrategy};
