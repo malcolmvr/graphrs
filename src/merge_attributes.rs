@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::hash::Hash;
 
-pub enum MergeStrategy {
+pub enum AttributeMergeStrategy {
     Replace,
     Update,
 }
@@ -9,15 +9,17 @@ pub enum MergeStrategy {
 pub fn merge_attributes<'a, K, V>(
     existing_attributes: &Option<HashMap<K, V>>,
     new_attributes: &Option<HashMap<K, V>>,
-    merge_strategy: &MergeStrategy,
+    merge_strategy: &AttributeMergeStrategy,
 ) -> Option<HashMap<K, V>>
 where
     K: Hash + Eq + Copy,
     V: Copy,
 {
     let merged = match merge_strategy {
-        MergeStrategy::Replace => merge_attributes_replace(new_attributes),
-        MergeStrategy::Update => merge_attributes_update(existing_attributes, new_attributes),
+        AttributeMergeStrategy::Replace => merge_attributes_replace(new_attributes),
+        AttributeMergeStrategy::Update => {
+            merge_attributes_update(existing_attributes, new_attributes)
+        }
     };
     merged
 }

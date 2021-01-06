@@ -1,7 +1,7 @@
 #[cfg(test)]
 mod tests {
 
-    use graphx::{DiGraph, Edge, MergeStrategy, Node};
+    use graphx::{AttributeMergeStrategy, DiGraph, Edge, MissingNodeStrategy, Node};
     use std::collections::HashSet;
     use std::iter::FromIterator;
 
@@ -14,7 +14,10 @@ mod tests {
             "n1",
             vec![("a", &1.0), ("b", &2.0)],
         ));
-        let graph = graph.add_or_update_nodes(nodes, MergeStrategy::Replace);
+
+        let graph = graph.add_or_update_nodes(nodes, AttributeMergeStrategy::Replace);
+        assert!(graph.is_ok());
+        let graph = graph.unwrap();
 
         let node = graph.get_node(&"n1").unwrap();
         assert_eq!(node.attributes.as_ref().unwrap()["a"], &1.0);
@@ -34,7 +37,9 @@ mod tests {
             vec![("a", &2.0)],
         ));
 
-        let graph = graph.add_or_update_nodes(nodes, MergeStrategy::Replace);
+        let graph = graph.add_or_update_nodes(nodes, AttributeMergeStrategy::Replace);
+        assert!(graph.is_ok());
+        let graph = graph.unwrap();
 
         let node = graph.get_node(&"n1").unwrap();
         assert_eq!(graph.get_all_nodes().len(), 5);
@@ -51,7 +56,10 @@ mod tests {
             "n1",
             vec![("a", &1.0), ("b", &2.0)],
         ));
-        let graph = graph.add_or_update_nodes(nodes, MergeStrategy::Update);
+
+        let graph = graph.add_or_update_nodes(nodes, AttributeMergeStrategy::Update);
+        assert!(graph.is_ok());
+        let graph = graph.unwrap();
 
         let node = graph.get_node(&"n1").unwrap();
         assert_eq!(node.attributes.as_ref().unwrap()["a"], &1.0);
@@ -71,7 +79,9 @@ mod tests {
             vec![("a", &2.0)],
         ));
 
-        let graph = graph.add_or_update_nodes(nodes, MergeStrategy::Update);
+        let graph = graph.add_or_update_nodes(nodes, AttributeMergeStrategy::Update);
+        assert!(graph.is_ok());
+        let graph = graph.unwrap();
 
         let node = graph.get_node(&"n1").unwrap();
         assert_eq!(graph.get_all_nodes().len(), 5);
@@ -130,7 +140,9 @@ mod tests {
         edges.push(Edge::with_weight("n2", "n1", &2.0));
         edges.push(Edge::with_weight("n1", "n3", &3.0));
 
-        let graph = DiGraph::new_from_nodes_and_edges(nodes, edges);
+        let graph = DiGraph::new_from_nodes_and_edges(nodes, edges, MissingNodeStrategy::Error);
+        assert!(graph.is_ok());
+        let graph = graph.unwrap();
 
         assert_eq!(graph.get_all_nodes().len(), 3);
         assert_eq!(graph.get_all_edges().len(), 3);
@@ -148,6 +160,11 @@ mod tests {
         edges.push(Edge::with_weight("n1", "n3", &3.0));
         edges.push(Edge::with_weight("n2", "n3", &3.0));
 
-        DiGraph::<&str, &str, &f64>::new_from_nodes_and_edges(nodes, edges)
+        DiGraph::<&str, &str, &f64>::new_from_nodes_and_edges(
+            nodes,
+            edges,
+            MissingNodeStrategy::Error,
+        )
+        .unwrap()
     }
 }

@@ -1,12 +1,12 @@
-use crate::merge_attributes::{merge_attributes, MergeStrategy};
-use crate::{Edge, EdgeSide, Node};
+use crate::merge_attributes::{merge_attributes, AttributeMergeStrategy};
+use crate::{Edge, EdgeSide, Error, ErrorKind, Node};
 use std::collections::{HashMap, HashSet};
 use std::hash::Hash;
 
-// pub enum MissingNodeStrategy {
-//     Create,
-//     Err,
-// }
+pub enum MissingNodeStrategy {
+    Create,
+    Error,
+}
 
 pub struct DiGraph<T, K, V> {
     nodes: HashMap<T, Node<T, K, V>>,
@@ -16,7 +16,10 @@ pub struct DiGraph<T, K, V> {
 }
 
 impl<T, K, V> DiGraph<T, K, V> {
-    pub fn add_or_update_edges(mut self, edges: Vec<Edge<T, K, V>>) -> DiGraph<T, K, V>
+    pub fn add_or_update_edges(
+        mut self,
+        edges: Vec<Edge<T, K, V>>,
+    ) -> Result<DiGraph<T, K, V>, Error>
     where
         T: Hash + Eq + Copy,
         K: Hash + Eq + Copy,
@@ -26,17 +29,15 @@ impl<T, K, V> DiGraph<T, K, V> {
             add_edges_to_successors_or_predecessors(self.successors, &edges, EdgeSide::U);
         self.predecessors =
             add_edges_to_successors_or_predecessors(self.predecessors, &edges, EdgeSide::V);
+        
+        self.edges.extend(edges.into_iter().map(|e| ((e.u, e.v), e)));
 
-        for edge in edges {
-            self.edges.insert((edge.u, edge.v), edge);
-        }
-
-        DiGraph {
+        Ok(DiGraph {
             nodes: self.nodes,
             edges: self.edges,
             predecessors: self.predecessors,
             successors: self.successors,
-        }
+        })
     }
 
     /// Adds nodes to the DiGraph or updates the attributes of existing nodes.
@@ -44,17 +45,16 @@ impl<T, K, V> DiGraph<T, K, V> {
     pub fn add_or_update_nodes(
         self,
         nodes: Vec<Node<T, K, V>>,
-        merge_strategy: MergeStrategy,
-    ) -> DiGraph<T, K, V>
+        merge_strategy: AttributeMergeStrategy,
+    ) -> Result<DiGraph<T, K, V>, Error>
     where
         T: Hash + Eq + Copy,
         K: Hash + Eq + Copy,
         V: Copy,
     {
         let mut nodes_map = HashMap::with_capacity(nodes.len());
-        for (key, value) in self.nodes {
-            nodes_map.insert(key, value);
-        }
+        nodes_map.extend(self.nodes);
+
         for node in nodes {
             if nodes_map.contains_key(&node.name) {
                 let mut existing_node = nodes_map.get_mut(&node.name).unwrap();
@@ -65,12 +65,12 @@ impl<T, K, V> DiGraph<T, K, V> {
             }
         }
 
-        DiGraph {
+        Ok(DiGraph {
             nodes: nodes_map,
             edges: self.edges,
             predecessors: self.predecessors,
             successors: self.successors,
-        }
+        })
     }
 
     pub fn get_all_edges(&self) -> Vec<&Edge<T, K, V>> {
@@ -128,7 +128,8 @@ impl<T, K, V> DiGraph<T, K, V> {
     pub fn new_from_nodes_and_edges(
         nodes: Vec<Node<T, K, V>>,
         edges: Vec<Edge<T, K, V>>,
-    ) -> DiGraph<T, K, V>
+        missing_node_strategy: MissingNodeStrategy,
+    ) -> Result<DiGraph<T, K, V>, Error>
     where
         T: Hash + Eq + Copy,
         K: Hash + Eq + Copy,
@@ -144,15 +145,41 @@ impl<T, K, V> DiGraph<T, K, V> {
 
         let mut edges_map = HashMap::with_capacity(edges.len());
         for edge in edges {
+            if !nodes_map.contains_key(&edge.u.clone()) {
+                match missing_node_strategy {
+                    MissingNodeStrategy::Create => {
+                        nodes_map.insert(edge.u, Node::from_name(edge.u));
+                    }
+                    MissingNodeStrategy::Error => {
+                        return Err(Error {
+                            kind: ErrorKind::NodeMissing,
+                            message: "missing node".to_string(),
+                        })
+                    }
+                }
+            }
+            if !nodes_map.contains_key(&edge.v.clone()) {
+                match missing_node_strategy {
+                    MissingNodeStrategy::Create => {
+                        nodes_map.insert(edge.v, Node::from_name(edge.v));
+                    }
+                    MissingNodeStrategy::Error => {
+                        return Err(Error {
+                            kind: ErrorKind::NodeMissing,
+                            message: "missing node".to_string(),
+                        })
+                    }
+                }
+            }
             edges_map.insert((edge.u, edge.v), edge);
         }
 
-        DiGraph {
+        Ok(DiGraph {
             nodes: nodes_map,
             edges: edges_map,
             successors,
             predecessors,
-        }
+        })
     }
 
     // PRIVATE METHODS
