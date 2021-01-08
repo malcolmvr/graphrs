@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 use std::hash::Hash;
 
+#[derive(Clone)]
 pub struct Node<T, K, V> {
     pub name: T,
     pub attributes: Option<HashMap<K, V>>,

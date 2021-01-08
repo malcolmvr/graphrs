@@ -1,4 +1,4 @@
-use crate::merge_attributes::{merge_attributes, AttributeMergeStrategy};
+use crate::merge_attributes::{get_node_with_merged_attributes, AttributeMergeStrategy};
 use crate::{Edge, EdgeSide, Error, ErrorKind, Node};
 use std::collections::{HashMap, HashSet};
 use std::hash::Hash;
@@ -55,15 +55,19 @@ impl<T, K, V> DiGraph<T, K, V> {
         let mut nodes_map = HashMap::with_capacity(nodes.len());
         nodes_map.extend(self.nodes);
 
-        for node in nodes {
-            if nodes_map.contains_key(&node.name) {
-                let mut existing_node = nodes_map.get_mut(&node.name).unwrap();
-                existing_node.attributes =
-                    merge_attributes(&existing_node.attributes, &node.attributes, &merge_strategy);
-            } else {
-                nodes_map.insert(node.name, node);
-            }
-        }
+        let (existing, new): (Vec<Node<T, K, V>>, Vec<Node<T, K, V>>) = nodes.into_iter().partition(|n| nodes_map.contains_key(&n.name));
+        let nm = nodes_map.clone();
+        nodes_map.extend(new.into_iter().map(|n| (n.name, n)));
+        // Vec::<(&Node<T, K, V>, &Node<T, K, V>)>::
+        let old_new = existing.iter().map(|n| (nm.get(&n.name).unwrap(), n));
+        nodes_map.extend(old_new.map(|(old, new)| (new.name, get_node_with_merged_attributes(&old, &new, &merge_strategy))));
+        // nodes_map.extend(existing.into_iter().map(|n| (n.name, get_node_with_merged_attributes(&nodes_map.get(&n.name).unwrap(), &n, &merge_strategy))));
+
+        // for node in existing {
+        //     let mut existing_node = nodes_map.get_mut(&node.name).unwrap();
+        //     existing_node.attributes =
+        //         merge_attributes(&existing_node.attributes, &node.attributes, &merge_strategy);
+        // }
 
         Ok(DiGraph {
             nodes: nodes_map,
