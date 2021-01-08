@@ -44,7 +44,7 @@ impl<T, K, V> DiGraph<T, K, V> {
     /// Adds nodes to the DiGraph or updates the attributes of existing nodes.
     /// `merge_strategy` describes how existing and new attributes are to be merged.
     pub fn add_or_update_nodes(
-        self,
+        mut self,
         nodes: Vec<Node<T, K, V>>,
         merge_strategy: AttributeMergeStrategy,
     ) -> Result<DiGraph<T, K, V>, Error>
@@ -53,27 +53,20 @@ impl<T, K, V> DiGraph<T, K, V> {
         K: Hash + Eq + Copy,
         V: Copy,
     {
-        let current = self.nodes.clone();
-        let (to_be_merged, new): (Vec<Node<T, K, V>>, Vec<Node<T, K, V>>) = nodes
+        let (existing, new): (Vec<Node<T, K, V>>, Vec<Node<T, K, V>>) = nodes
             .into_iter()
-            .partition(|n| current.contains_key(&n.name));
-        let merged = to_be_merged.into_iter()
-            .map(|n| get_node_with_merged_attributes(current.get(&n.name).unwrap(), &n, &merge_strategy))
-            .collect::<Vec<Node<T, K, V>>>();
-        let merged_names = merged.clone().into_iter().map(|n| n.name).collect::<HashSet<T>>();
-        let unchanged = self.nodes
-            .into_iter()
-            .filter(|(name, _n)| merged_names.contains(name))
-            .into_iter()
-            .map(|(_name, n)| n);
-        let out = unchanged
-            .chain(merged)
-            .chain(new)
-            .map(|n| (n.name, n))
-            .collect::<HashMap<T, Node<T, K, V>>>();
+            .partition(|n| self.nodes.contains_key(&n.name));
+        let nm = self.nodes.clone();
+        self.nodes.extend(new.into_iter().map(|n| (n.name, n)));
+        self.nodes.extend(existing.iter().map(|n| {
+            (
+                n.name,
+                get_node_with_merged_attributes(nm.get(&n.name).unwrap(), &n, &merge_strategy),
+            )
+        }));
 
         Ok(DiGraph {
-            nodes: out,
+            nodes: self.nodes,
             edges: self.edges,
             predecessors: self.predecessors,
             successors: self.successors,
