@@ -29,8 +29,9 @@ impl<T, K, V> DiGraph<T, K, V> {
             add_edges_to_successors_or_predecessors(self.successors, &edges, EdgeSide::U);
         self.predecessors =
             add_edges_to_successors_or_predecessors(self.predecessors, &edges, EdgeSide::V);
-        
-        self.edges.extend(edges.into_iter().map(|e| ((e.u, e.v), e)));
+
+        self.edges
+            .extend(edges.into_iter().map(|e| ((e.u, e.v), e)));
 
         Ok(DiGraph {
             nodes: self.nodes,
@@ -43,7 +44,7 @@ impl<T, K, V> DiGraph<T, K, V> {
     /// Adds nodes to the DiGraph or updates the attributes of existing nodes.
     /// `merge_strategy` describes how existing and new attributes are to be merged.
     pub fn add_or_update_nodes(
-        self,
+        mut self,
         nodes: Vec<Node<T, K, V>>,
         merge_strategy: AttributeMergeStrategy,
     ) -> Result<DiGraph<T, K, V>, Error>
@@ -52,25 +53,20 @@ impl<T, K, V> DiGraph<T, K, V> {
         K: Hash + Eq + Copy,
         V: Copy,
     {
-        let mut nodes_map = HashMap::with_capacity(nodes.len());
-        nodes_map.extend(self.nodes);
-
-        let (existing, new): (Vec<Node<T, K, V>>, Vec<Node<T, K, V>>) = nodes.into_iter().partition(|n| nodes_map.contains_key(&n.name));
-        let nm = nodes_map.clone();
-        nodes_map.extend(new.into_iter().map(|n| (n.name, n)));
-        // Vec::<(&Node<T, K, V>, &Node<T, K, V>)>::
-        let old_new = existing.iter().map(|n| (nm.get(&n.name).unwrap(), n));
-        nodes_map.extend(old_new.map(|(old, new)| (new.name, get_node_with_merged_attributes(&old, &new, &merge_strategy))));
-        // nodes_map.extend(existing.into_iter().map(|n| (n.name, get_node_with_merged_attributes(&nodes_map.get(&n.name).unwrap(), &n, &merge_strategy))));
-
-        // for node in existing {
-        //     let mut existing_node = nodes_map.get_mut(&node.name).unwrap();
-        //     existing_node.attributes =
-        //         merge_attributes(&existing_node.attributes, &node.attributes, &merge_strategy);
-        // }
+        let (existing, new): (Vec<Node<T, K, V>>, Vec<Node<T, K, V>>) = nodes
+            .into_iter()
+            .partition(|n| self.nodes.contains_key(&n.name));
+        let nm = self.nodes.clone();
+        self.nodes.extend(new.into_iter().map(|n| (n.name, n)));
+        self.nodes.extend(existing.iter().map(|n| {
+            (
+                n.name,
+                get_node_with_merged_attributes(nm.get(&n.name).unwrap(), &n, &merge_strategy),
+            )
+        }));
 
         Ok(DiGraph {
-            nodes: nodes_map,
+            nodes: self.nodes,
             edges: self.edges,
             predecessors: self.predecessors,
             successors: self.successors,

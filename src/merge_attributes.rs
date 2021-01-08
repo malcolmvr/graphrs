@@ -1,6 +1,6 @@
+use crate::Node;
 use std::collections::HashMap;
 use std::hash::Hash;
-use crate::{Node};
 
 pub enum AttributeMergeStrategy {
     Replace,
@@ -67,9 +67,12 @@ where
     Some(merged)
 }
 
-
 // pub fn get_node_with_merged_attributes<'a, T, K, V>(existing_map: &HashMap<T, Node<T, K, V>>, new_node: &Node<T, K, V>, merge_strategy: &AttributeMergeStrategy) -> Node<T, K, V>
-pub fn get_node_with_merged_attributes<'a, T, K, V>(existing_node1: &Node<T, K, V>, new_node: &Node<T, K, V>, merge_strategy: &AttributeMergeStrategy) -> Node<T, K, V>
+pub fn get_node_with_merged_attributes<'a, T, K, V>(
+    existing_node1: &Node<T, K, V>,
+    new_node: &Node<T, K, V>,
+    merge_strategy: &AttributeMergeStrategy,
+) -> Node<T, K, V>
 where
     T: Hash + Eq + Copy,
     K: Hash + Eq + Copy,
@@ -77,7 +80,10 @@ where
 {
     // let mut existing_node = existing_map.get(&new_node.name).unwrap().clone();
     let mut existing_node = existing_node1.clone();
-    existing_node.attributes =
-        merge_attributes(&existing_node.attributes, &new_node.attributes, &merge_strategy);
+    existing_node.attributes = merge_attributes(
+        &existing_node.attributes,
+        &new_node.attributes,
+        &merge_strategy,
+    );
     existing_node
 }
