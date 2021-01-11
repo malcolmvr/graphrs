@@ -135,43 +135,38 @@ impl<T, K, V> DiGraph<T, K, V> {
         K: Hash + Eq + Copy,
         V: Copy,
     {
-        let mut nodes_map = HashMap::with_capacity(nodes.len());
-        for node in nodes {
-            nodes_map.insert(node.name, node);
-        }
+        let mut nodes_map = nodes
+            .into_iter()
+            .map(|n| (n.name, n))
+            .collect::<HashMap<T, Node<T, K, V>>>();
 
         let successors = dedupe_and_group_edges(&edges, EdgeSide::U);
         let predecessors = dedupe_and_group_edges(&edges, EdgeSide::V);
 
-        let mut edges_map = HashMap::with_capacity(edges.len());
-        for edge in edges {
-            if !nodes_map.contains_key(&edge.u.clone()) {
-                match missing_node_strategy {
-                    MissingNodeStrategy::Create => {
-                        nodes_map.insert(edge.u, Node::from_name(edge.u));
-                    }
-                    MissingNodeStrategy::Error => {
-                        return Err(Error {
-                            kind: ErrorKind::NodeMissing,
-                            message: "missing node".to_string(),
-                        })
-                    }
+        let edges_map = edges
+            .into_iter()
+            .map(|e| ((e.u, e.v), e))
+            .collect::<HashMap<(T, T), Edge<T, K, V>>>();
+
+        let missing_nodes = edges_map
+            .iter()
+            .flat_map(|(_k, e)| vec![e.u, e.v])
+            .filter(|name| !nodes_map.contains_key(name))
+            .map(|name| (name, Node::<T, K, V>::from_name(name)))
+            .collect::<Vec<(T, Node<T, K, V>)>>();
+
+        match missing_node_strategy {
+            MissingNodeStrategy::Create => {
+                nodes_map.extend(missing_nodes);
+            }
+            MissingNodeStrategy::Error => {
+                if missing_nodes.len() > 0 {
+                    return Err(Error {
+                        kind: ErrorKind::NodeMissing,
+                        message: "missing node".to_string(),
+                    });
                 }
             }
-            if !nodes_map.contains_key(&edge.v.clone()) {
-                match missing_node_strategy {
-                    MissingNodeStrategy::Create => {
-                        nodes_map.insert(edge.v, Node::from_name(edge.v));
-                    }
-                    MissingNodeStrategy::Error => {
-                        return Err(Error {
-                            kind: ErrorKind::NodeMissing,
-                            message: "missing node".to_string(),
-                        })
-                    }
-                }
-            }
-            edges_map.insert((edge.u, edge.v), edge);
         }
 
         Ok(DiGraph {
