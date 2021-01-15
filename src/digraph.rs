@@ -1,5 +1,6 @@
 use crate::merge_attributes::{get_node_with_merged_attributes, AttributeMergeStrategy};
 use crate::{Edge, EdgeSide, Error, ErrorKind, Node};
+use itertools::Itertools;
 use std::collections::{HashMap, HashSet};
 use std::hash::Hash;
 
@@ -21,7 +22,7 @@ impl<T, K, V> DiGraph<T, K, V> {
         edges: Vec<Edge<T, K, V>>,
     ) -> Result<DiGraph<T, K, V>, Error>
     where
-        T: Hash + Eq + Copy,
+        T: Hash + Eq + Copy + Ord,
         K: Hash + Eq + Copy,
         V: Copy,
     {
@@ -49,7 +50,7 @@ impl<T, K, V> DiGraph<T, K, V> {
         merge_strategy: AttributeMergeStrategy,
     ) -> Result<DiGraph<T, K, V>, Error>
     where
-        T: Hash + Eq + Copy,
+        T: Hash + Eq + Copy + Ord,
         K: Hash + Eq + Copy,
         V: Copy,
     {
@@ -83,14 +84,14 @@ impl<T, K, V> DiGraph<T, K, V> {
 
     pub fn get_edge(&self, u: T, v: T) -> Option<&Edge<T, K, V>>
     where
-        T: Hash + Eq + Copy,
+        T: Hash + Eq + Copy + Ord,
     {
         self.edges.get(&(u, v))
     }
 
     pub fn get_node(&self, name: &T) -> Option<&Node<T, K, V>>
     where
-        T: Hash + Eq + Copy,
+        T: Hash + Eq + Copy + Ord,
     {
         self.nodes.get(name)
     }
@@ -101,7 +102,7 @@ impl<T, K, V> DiGraph<T, K, V> {
 
     pub fn get_predecessor_nodes(&self, node_name: &T) -> Option<Vec<&Node<T, K, V>>>
     where
-        T: Hash + Eq + Copy,
+        T: Hash + Eq + Copy + Ord,
     {
         let pred = self.predecessors.get(node_name);
         match pred {
@@ -116,7 +117,7 @@ impl<T, K, V> DiGraph<T, K, V> {
 
     pub fn get_successor_nodes(&self, node_name: &T) -> Option<Vec<&Node<T, K, V>>>
     where
-        T: Hash + Eq + Copy,
+        T: Hash + Eq + Copy + Ord,
     {
         let pred = self.successors.get(node_name);
         match pred {
@@ -131,7 +132,7 @@ impl<T, K, V> DiGraph<T, K, V> {
         missing_node_strategy: MissingNodeStrategy,
     ) -> Result<DiGraph<T, K, V>, Error>
     where
-        T: Hash + Eq + Copy,
+        T: Hash + Eq + Copy + Ord,
         K: Hash + Eq + Copy,
         V: Copy,
     {
@@ -181,13 +182,12 @@ impl<T, K, V> DiGraph<T, K, V> {
 
     fn get_nodes_for_names(&self, names: &HashSet<T>) -> Vec<&Node<T, K, V>>
     where
-        T: Hash + Eq + Copy,
+        T: Hash + Eq + Copy + Ord,
     {
-        let mut nodes = Vec::new();
-        for node_name in names {
-            nodes.push(self.nodes.get(node_name).unwrap());
-        }
-        nodes
+        names
+            .into_iter()
+            .map(|n| self.nodes.get(n).unwrap())
+            .collect::<Vec<&Node<T, K, V>>>()
     }
 }
 
@@ -196,54 +196,58 @@ fn dedupe_and_group_edges<T, K, V>(
     by: EdgeSide,
 ) -> HashMap<T, HashSet<T>>
 where
-    T: Hash + Eq + Copy,
+    T: Hash + Eq + Copy + Ord,
     K: Hash + Eq + Copy,
     V: Copy,
 {
-    let mut hashmap = HashMap::<T, HashSet<T>>::new();
-    for edge in edges {
-        let key = match by {
-            EdgeSide::U => edge.u,
-            EdgeSide::V => edge.v,
-        };
-        let value = match by {
-            EdgeSide::U => edge.v,
-            EdgeSide::V => edge.u,
-        };
-        if !hashmap.contains_key(&key) {
-            hashmap.insert(key, HashSet::<T>::new());
-        }
-        let hashset = hashmap.get_mut(&key).unwrap();
-        hashset.insert(value.clone());
-    }
-    hashmap
+    let key_val = match by {
+        EdgeSide::U => |e: &Edge<T, K, V>| (e.u, e.v),
+        EdgeSide::V => |e: &Edge<T, K, V>| (e.v, e.u),
+    };
+    edges
+        .into_iter()
+        .map(key_val)
+        .sorted_by(|a, b| Ord::cmp(&a.0, &b.0))
+        .group_by(|t| t.0)
+        .into_iter()
+        .map(|(k, g)| (k, g.map(|t| t.1).collect::<HashSet<T>>()))
+        .collect::<HashMap<T, HashSet<T>>>()
+}
+
+fn get_adjacency_hashmap<T, I>(tuples: I, side: EdgeSide) -> HashMap<T, HashSet<T>>
+where
+    I: Iterator<Item = (T, T)>,
+    T: Hash + Eq + Copy + Ord,
+{
+    let get_key_val = match side {
+        EdgeSide::U => |t: (T, T)| (t.0, t.1),
+        EdgeSide::V => |t: (T, T)| (t.1, t.0),
+    };
+    tuples
+        .map(get_key_val)
+        .sorted_by(|a, b| Ord::cmp(&a.0, &b.0))
+        .group_by(|t| t.0)
+        .into_iter()
+        .map(|(k, g)| (k, g.map(|t| t.1).collect::<HashSet<T>>()))
+        .collect::<HashMap<T, HashSet<T>>>()
 }
 
 fn add_edges_to_successors_or_predecessors<T, K, V>(
-    mut pred_or_succ: HashMap<T, HashSet<T>>,
+    pred_or_succ: HashMap<T, HashSet<T>>,
     edges: &Vec<Edge<T, K, V>>,
     side: EdgeSide,
 ) -> HashMap<T, HashSet<T>>
 where
-    T: Hash + Eq + Copy,
+    T: Hash + Eq + Copy + Ord,
 {
-    for edge in edges {
-        let key = match side {
-            EdgeSide::U => edge.u,
-            EdgeSide::V => edge.v,
-        };
-        let e = pred_or_succ.get_mut(&key);
-        if e != None {
-            e.unwrap().insert(edge.v);
-        } else {
-            let mut hashset = HashSet::new();
-            let value = match side {
-                EdgeSide::U => edge.v,
-                EdgeSide::V => edge.u,
-            };
-            hashset.insert(value);
-            pred_or_succ.insert(edge.u, hashset);
-        }
-    }
-    pred_or_succ
+    let get_key_val = match side {
+        EdgeSide::U => |e: &Edge<T, K, V>| (e.u, e.v),
+        EdgeSide::V => |e: &Edge<T, K, V>| (e.v, e.u),
+    };
+    let x = pred_or_succ
+        .into_iter()
+        .map(|(k, v)| v.into_iter().map(move |x| (k, x)))
+        .flatten()
+        .chain(edges.into_iter().map(get_key_val));
+    get_adjacency_hashmap(x, side)
 }
