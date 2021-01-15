@@ -2,6 +2,7 @@ use std::hash::Hash;
 // use std::hash::{Hash, Hasher};
 use std::collections::HashMap;
 
+#[derive(Clone)]
 pub struct Edge<T, K, V> {
     pub u: T,
     pub v: T,
