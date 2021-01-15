@@ -18,34 +18,31 @@ pub struct DiGraph<T, K, V> {
 
 impl<T, K, V> DiGraph<T, K, V> {
     pub fn add_or_update_edges(
-        mut self,
+        self,
         edges: Vec<Edge<T, K, V>>,
+        missing_node_strategy: MissingNodeStrategy,
     ) -> Result<DiGraph<T, K, V>, Error>
     where
         T: Hash + Eq + Copy + Ord,
         K: Hash + Eq + Copy,
         V: Copy,
     {
-        self.successors =
-            add_edges_to_successors_or_predecessors(self.successors, &edges, EdgeSide::U);
-        self.predecessors =
-            add_edges_to_successors_or_predecessors(self.predecessors, &edges, EdgeSide::V);
+        let nodes = self.nodes.values().into_iter().map(|n| n.clone()).collect();
+        let new_edges = self
+            .edges
+            .values()
+            .into_iter()
+            .map(|n| n.clone())
+            .chain(edges)
+            .collect();
 
-        self.edges
-            .extend(edges.into_iter().map(|e| ((e.u, e.v), e)));
-
-        Ok(DiGraph {
-            nodes: self.nodes,
-            edges: self.edges,
-            predecessors: self.predecessors,
-            successors: self.successors,
-        })
+        DiGraph::new_from_nodes_and_edges(nodes, new_edges, missing_node_strategy)
     }
 
     /// Adds nodes to the DiGraph or updates the attributes of existing nodes.
     /// `merge_strategy` describes how existing and new attributes are to be merged.
     pub fn add_or_update_nodes(
-        mut self,
+        self,
         nodes: Vec<Node<T, K, V>>,
         merge_strategy: AttributeMergeStrategy,
     ) -> Result<DiGraph<T, K, V>, Error>
@@ -58,8 +55,9 @@ impl<T, K, V> DiGraph<T, K, V> {
             .into_iter()
             .partition(|n| self.nodes.contains_key(&n.name));
         let nm = self.nodes.clone();
-        self.nodes.extend(new.into_iter().map(|n| (n.name, n)));
-        self.nodes.extend(existing.iter().map(|n| {
+        let mut new_nodes = self.nodes.clone();
+        new_nodes.extend(new.into_iter().map(|n| (n.name, n)));
+        new_nodes.extend(existing.iter().map(|n| {
             (
                 n.name,
                 get_node_with_merged_attributes(nm.get(&n.name).unwrap(), &n, &merge_strategy),
@@ -67,7 +65,7 @@ impl<T, K, V> DiGraph<T, K, V> {
         }));
 
         Ok(DiGraph {
-            nodes: self.nodes,
+            nodes: new_nodes,
             edges: self.edges,
             predecessors: self.predecessors,
             successors: self.successors,
@@ -212,42 +210,4 @@ where
         .into_iter()
         .map(|(k, g)| (k, g.map(|t| t.1).collect::<HashSet<T>>()))
         .collect::<HashMap<T, HashSet<T>>>()
-}
-
-fn get_adjacency_hashmap<T, I>(tuples: I, side: EdgeSide) -> HashMap<T, HashSet<T>>
-where
-    I: Iterator<Item = (T, T)>,
-    T: Hash + Eq + Copy + Ord,
-{
-    let get_key_val = match side {
-        EdgeSide::U => |t: (T, T)| (t.0, t.1),
-        EdgeSide::V => |t: (T, T)| (t.1, t.0),
-    };
-    tuples
-        .map(get_key_val)
-        .sorted_by(|a, b| Ord::cmp(&a.0, &b.0))
-        .group_by(|t| t.0)
-        .into_iter()
-        .map(|(k, g)| (k, g.map(|t| t.1).collect::<HashSet<T>>()))
-        .collect::<HashMap<T, HashSet<T>>>()
-}
-
-fn add_edges_to_successors_or_predecessors<T, K, V>(
-    pred_or_succ: HashMap<T, HashSet<T>>,
-    edges: &Vec<Edge<T, K, V>>,
-    side: EdgeSide,
-) -> HashMap<T, HashSet<T>>
-where
-    T: Hash + Eq + Copy + Ord,
-{
-    let get_key_val = match side {
-        EdgeSide::U => |e: &Edge<T, K, V>| (e.u, e.v),
-        EdgeSide::V => |e: &Edge<T, K, V>| (e.v, e.u),
-    };
-    let x = pred_or_succ
-        .into_iter()
-        .map(|(k, v)| v.into_iter().map(move |x| (k, x)))
-        .flatten()
-        .chain(edges.into_iter().map(get_key_val));
-    get_adjacency_hashmap(x, side)
 }
