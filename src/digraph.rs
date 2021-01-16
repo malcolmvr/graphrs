@@ -19,7 +19,7 @@ pub struct DiGraph<T, K, V> {
 impl<T, K, V> DiGraph<T, K, V> {
     pub fn add_or_update_edges(
         self,
-        edges: Vec<Edge<T, K, V>>,
+        new_edges: Vec<Edge<T, K, V>>,
         missing_node_strategy: MissingNodeStrategy,
     ) -> Result<DiGraph<T, K, V>, Error>
     where
@@ -28,15 +28,15 @@ impl<T, K, V> DiGraph<T, K, V> {
         V: Copy,
     {
         let nodes = self.nodes.values().into_iter().map(|n| n.clone()).collect();
-        let new_edges = self
+        let combined_edges = self
             .edges
             .values()
             .into_iter()
             .map(|n| n.clone())
-            .chain(edges)
+            .chain(new_edges)
             .collect();
 
-        DiGraph::new_from_nodes_and_edges(nodes, new_edges, missing_node_strategy)
+        DiGraph::new_from_nodes_and_edges(nodes, combined_edges, missing_node_strategy)
     }
 
     /// Adds nodes to the DiGraph or updates the attributes of existing nodes.
@@ -87,22 +87,33 @@ impl<T, K, V> DiGraph<T, K, V> {
         self.edges.get(&(u, v))
     }
 
-    pub fn get_node(&self, name: &T) -> Option<&Node<T, K, V>>
+    pub fn get_node(&self, name: T) -> Option<&Node<T, K, V>>
     where
         T: Hash + Eq + Copy + Ord,
     {
-        self.nodes.get(name)
+        self.nodes.get(&name)
+    }
+
+    pub fn get_predecessor_nodes(&self, node_name: T) -> Option<Vec<&Node<T, K, V>>>
+    where
+        T: Hash + Eq + Copy + Ord,
+    {
+        let pred = self.predecessors.get(&node_name);
+        match pred {
+            None => None,
+            Some(hashset) => Some(self.get_nodes_for_names(&hashset)),
+        }
     }
 
     pub fn get_predecessors_map(&self) -> &HashMap<T, HashSet<T>> {
         &self.predecessors
     }
 
-    pub fn get_predecessor_nodes(&self, node_name: &T) -> Option<Vec<&Node<T, K, V>>>
+    pub fn get_successor_nodes(&self, node_name: T) -> Option<Vec<&Node<T, K, V>>>
     where
         T: Hash + Eq + Copy + Ord,
     {
-        let pred = self.predecessors.get(node_name);
+        let pred = self.successors.get(&node_name);
         match pred {
             None => None,
             Some(hashset) => Some(self.get_nodes_for_names(&hashset)),
@@ -111,17 +122,6 @@ impl<T, K, V> DiGraph<T, K, V> {
 
     pub fn get_successors_map(&self) -> &HashMap<T, HashSet<T>> {
         &self.successors
-    }
-
-    pub fn get_successor_nodes(&self, node_name: &T) -> Option<Vec<&Node<T, K, V>>>
-    where
-        T: Hash + Eq + Copy + Ord,
-    {
-        let pred = self.successors.get(node_name);
-        match pred {
-            None => None,
-            Some(hashset) => Some(self.get_nodes_for_names(&hashset)),
-        }
     }
 
     pub fn new_from_nodes_and_edges(
