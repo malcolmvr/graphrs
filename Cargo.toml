@@ -8,3 +8,4 @@ edition = "2018"
 
 [dependencies]
 itertools = "0.10.0"
+serde = { version = "1.0", optional = true, features = ["derive"] }

@@ -9,6 +9,7 @@ pub enum EdgeSide {
 }
 
 #[derive(Clone)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Edge<T, K, V> {
     pub u: T,
     pub v: T,
