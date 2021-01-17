@@ -21,13 +21,9 @@ impl<T, K, V> Node<T, K, V> {
         K: Hash + Eq + Copy,
         V: Copy,
     {
-        let mut attr = HashMap::new();
-        for (key, value) in attributes {
-            attr.insert(key, value);
-        }
         Node {
             name,
-            attributes: Some(attr),
+            attributes: Some(attributes.into_iter().collect::<HashMap<K, V>>()),
         }
     }
 }

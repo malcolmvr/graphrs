@@ -35,13 +35,7 @@ where
     if new_attributes.is_none() {
         None
     } else {
-        let mut merged = HashMap::new();
-        if new_attributes.is_some() {
-            for (key, value) in new_attributes.as_ref().unwrap() {
-                merged.insert(key.clone(), value.clone());
-            }
-        }
-        Some(merged)
+        new_attributes.clone()
     }
 }
 
@@ -53,21 +47,18 @@ where
     K: Hash + Eq + Copy,
     V: Copy,
 {
-    let mut merged = HashMap::new();
-    if existing_attributes.is_some() {
-        for (key, value) in existing_attributes.as_ref().unwrap() {
-            merged.insert(key.clone(), value.clone());
-        }
-    }
-    if new_attributes.is_some() {
-        for (key, value) in new_attributes.as_ref().unwrap() {
-            merged.insert(key.clone(), value.clone());
-        }
-    }
+    let existing = match existing_attributes {
+        None => vec![],
+        Some(a) => a.clone().into_iter().collect::<Vec<(K, V)>>(),
+    };
+    let new = match new_attributes {
+        None => vec![],
+        Some(a) => a.clone().into_iter().collect::<Vec<(K, V)>>(),
+    };
+    let merged = existing.into_iter().chain(new).collect::<HashMap<K, V>>();
     Some(merged)
 }
 
-// pub fn get_node_with_merged_attributes<'a, T, K, V>(existing_map: &HashMap<T, Node<T, K, V>>, new_node: &Node<T, K, V>, merge_strategy: &AttributeMergeStrategy) -> Node<T, K, V>
 pub fn get_node_with_merged_attributes<'a, T, K, V>(
     existing_node1: &Node<T, K, V>,
     new_node: &Node<T, K, V>,
@@ -78,12 +69,12 @@ where
     K: Hash + Eq + Copy,
     V: Copy,
 {
-    // let mut existing_node = existing_map.get(&new_node.name).unwrap().clone();
-    let mut existing_node = existing_node1.clone();
-    existing_node.attributes = merge_attributes(
-        &existing_node.attributes,
-        &new_node.attributes,
-        &merge_strategy,
-    );
-    existing_node
+    Node {
+        name: existing_node1.name,
+        attributes: merge_attributes(
+            &existing_node1.attributes,
+            &new_node.attributes,
+            &merge_strategy,
+        ),
+    }
 }

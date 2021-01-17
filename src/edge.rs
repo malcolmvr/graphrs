@@ -25,23 +25,6 @@ impl<T, K, V> Edge<T, K, V> {
     }
 }
 
-// impl<T, K, V>  Hash for Edge<T, K, V>
-//     where T: Hash
-// {
-//     fn hash<H: Hasher>(&self, state: &mut H) {
-//         self.u.hash(state);
-//         self.v.hash(state);
-//     }
-// }
-
-// impl<T, K, V> Clone for Edge<T, K, V>
-//     where T: Hash + Eq + Copy, K: Hash + Eq + Copy, V: Copy
-// {
-//     fn clone(&self) -> Edge<T, K, V> {
-//         Edge { }
-//     }
-// }
-
 pub enum EdgeSide {
     U,
     V,
