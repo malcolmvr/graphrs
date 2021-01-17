@@ -4,6 +4,7 @@ use itertools::Itertools;
 use std::collections::{HashMap, HashSet};
 use std::hash::Hash;
 
+#[derive(PartialEq)]
 pub enum MissingNodeStrategy {
     Create,
     Error,
@@ -54,15 +55,17 @@ impl<T, K, V> DiGraph<T, K, V> {
         let (existing, new): (Vec<Node<T, K, V>>, Vec<Node<T, K, V>>) = nodes
             .into_iter()
             .partition(|n| self.nodes.contains_key(&n.name));
-        let nm = self.nodes.clone();
-        let mut new_nodes = self.nodes.clone();
-        new_nodes.extend(new.into_iter().map(|n| (n.name, n)));
-        new_nodes.extend(existing.iter().map(|n| {
-            (
-                n.name,
-                get_node_with_merged_attributes(nm.get(&n.name).unwrap(), &n, &merge_strategy),
-            )
-        }));
+        let merged = existing.iter().map(|n| {
+            get_node_with_merged_attributes(self.nodes.get(&n.name).unwrap(), &n, &merge_strategy)
+        });
+        let new_nodes = self
+            .nodes
+            .values()
+            .clone()
+            .map(|n| (n.name, n.clone()))
+            .chain(new.into_iter().clone().map(|n| (n.name, n)))
+            .chain(merged.map(|n| (n.name, n)))
+            .collect::<HashMap<T, Node<T, K, V>>>();
 
         Ok(DiGraph {
             nodes: new_nodes,
@@ -134,10 +137,7 @@ impl<T, K, V> DiGraph<T, K, V> {
         K: Hash + Eq + Copy,
         V: Copy,
     {
-        let mut nodes_map = nodes
-            .into_iter()
-            .map(|n| (n.name, n))
-            .collect::<HashMap<T, Node<T, K, V>>>();
+        let node_names = nodes.iter().map(|n| n.name).collect::<HashSet<T>>();
 
         let successors = dedupe_and_group_edges(&edges, EdgeSide::U);
         let predecessors = dedupe_and_group_edges(&edges, EdgeSide::V);
@@ -150,23 +150,24 @@ impl<T, K, V> DiGraph<T, K, V> {
         let missing_nodes = edges_map
             .iter()
             .flat_map(|(_k, e)| vec![e.u, e.v])
-            .filter(|name| !nodes_map.contains_key(name))
-            .map(|name| (name, Node::<T, K, V>::from_name(name)))
-            .collect::<Vec<(T, Node<T, K, V>)>>();
+            .filter(|name| !node_names.contains(name))
+            .map(|name| Node::<T, K, V>::from_name(name))
+            .collect::<Vec<Node<T, K, V>>>();
 
-        match missing_node_strategy {
-            MissingNodeStrategy::Create => {
-                nodes_map.extend(missing_nodes);
-            }
-            MissingNodeStrategy::Error => {
-                if missing_nodes.len() > 0 {
-                    return Err(Error {
-                        kind: ErrorKind::NodeMissing,
-                        message: "missing node".to_string(),
-                    });
-                }
-            }
+        if missing_node_strategy == MissingNodeStrategy::Error && missing_nodes.len() > 0 {
+            return Err(Error {
+                kind: ErrorKind::NodeMissing,
+                message: "missing node".to_string(),
+            });
         }
+
+        // missing_node_strategy == MissingNodeStrategy::Create
+
+        let nodes_map = nodes
+            .into_iter()
+            .chain(missing_nodes)
+            .map(|n| (n.name, n))
+            .collect::<HashMap<T, Node<T, K, V>>>();
 
         Ok(DiGraph {
             nodes: nodes_map,
