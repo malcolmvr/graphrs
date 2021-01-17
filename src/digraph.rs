@@ -10,6 +10,7 @@ pub enum MissingNodeStrategy {
     Error,
 }
 
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct DiGraph<T, K, V> {
     nodes: HashMap<T, Node<T, K, V>>,
     edges: HashMap<(T, T), Edge<T, K, V>>,

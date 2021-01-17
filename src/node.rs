@@ -5,6 +5,7 @@ use std::fmt::{Debug, Display};
 use std::hash::{Hash, Hasher};
 
 #[derive(Clone)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Node<T, K, V> {
     pub name: T,
     pub attributes: Option<HashMap<K, V>>,
