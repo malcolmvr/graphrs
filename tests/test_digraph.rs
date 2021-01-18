@@ -1,7 +1,7 @@
 #[cfg(test)]
 mod tests {
 
-    use graphx::{AttributeMergeStrategy, DiGraph, Edge, MissingNodeStrategy, Node};
+    use graphrs::{AttributeMergeStrategy, Edge, Graph, GraphSpecs, MissingNodeStrategy, Node};
     use itertools::Itertools;
     use std::collections::HashSet;
     use std::iter::FromIterator;
@@ -267,7 +267,9 @@ mod tests {
             Edge::with_weight("n1", "n3", &3.0),
         ];
 
-        let graph = DiGraph::new_from_nodes_and_edges(nodes, edges, MissingNodeStrategy::Error);
+        let specs = GraphSpecs::new(false, true, false, false);
+        let graph =
+            Graph::new_from_nodes_and_edges(nodes, edges, specs, MissingNodeStrategy::Error);
         assert!(graph.is_ok());
         let graph = graph.unwrap();
 
@@ -275,11 +277,11 @@ mod tests {
         assert_eq!(graph.get_all_edges().len(), 3);
     }
 
-    fn get_basic_graph<'a>() -> DiGraph<&'a str, &'a str, &'a f64> {
+    fn get_basic_graph<'a>() -> Graph<&'a str, &'a str, &'a f64> {
         let nodes = vec![
             Node::from_name("n1"),
             Node::from_name("n2"),
-            Node::<&str, &str, &f64>::from_name("n3"),
+            Node::from_name("n3"),
         ];
 
         let edges = vec![
@@ -289,9 +291,10 @@ mod tests {
             Edge::with_weight("n2", "n3", &3.0),
         ];
 
-        DiGraph::<&str, &str, &f64>::new_from_nodes_and_edges(
+        Graph::new_from_nodes_and_edges(
             nodes,
             edges,
+            GraphSpecs::new(false, true, false, false),
             MissingNodeStrategy::Error,
         )
         .unwrap()

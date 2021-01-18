@@ -1,29 +1,24 @@
 use crate::merge_attributes::{get_node_with_merged_attributes, AttributeMergeStrategy};
-use crate::{Edge, EdgeSide, Error, ErrorKind, Node};
+use crate::{Edge, EdgeSide, Error, ErrorKind, GraphSpecs, MissingNodeStrategy, Node};
 use itertools::Itertools;
 use std::collections::{HashMap, HashSet};
 use std::hash::Hash;
 
-#[derive(PartialEq)]
-pub enum MissingNodeStrategy {
-    Create,
-    Error,
-}
-
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub struct DiGraph<T, K, V> {
+pub struct Graph<T, K, V> {
     nodes: HashMap<T, Node<T, K, V>>,
     edges: HashMap<(T, T), Edge<T, K, V>>,
+    specs: GraphSpecs,
     successors: HashMap<T, HashSet<T>>,
     predecessors: HashMap<T, HashSet<T>>,
 }
 
-impl<T, K, V> DiGraph<T, K, V> {
+impl<T, K, V> Graph<T, K, V> {
     pub fn add_or_update_edges(
         self,
         new_edges: Vec<Edge<T, K, V>>,
         missing_node_strategy: MissingNodeStrategy,
-    ) -> Result<DiGraph<T, K, V>, Error>
+    ) -> Result<Graph<T, K, V>, Error>
     where
         T: Hash + Eq + Copy + Ord,
         K: Hash + Eq + Copy,
@@ -38,16 +33,16 @@ impl<T, K, V> DiGraph<T, K, V> {
             .chain(new_edges)
             .collect();
 
-        DiGraph::new_from_nodes_and_edges(nodes, combined_edges, missing_node_strategy)
+        Graph::new_from_nodes_and_edges(nodes, combined_edges, self.specs, missing_node_strategy)
     }
 
-    /// Adds nodes to the DiGraph or updates the attributes of existing nodes.
+    /// Adds nodes to the Graph or updates the attributes of existing nodes.
     /// `merge_strategy` describes how existing and new attributes are to be merged.
     pub fn add_or_update_nodes(
         self,
         nodes: Vec<Node<T, K, V>>,
         merge_strategy: AttributeMergeStrategy,
-    ) -> Result<DiGraph<T, K, V>, Error>
+    ) -> Result<Graph<T, K, V>, Error>
     where
         T: Hash + Eq + Copy + Ord,
         K: Hash + Eq + Copy,
@@ -68,9 +63,10 @@ impl<T, K, V> DiGraph<T, K, V> {
             .chain(merged.map(|n| (n.name, n)))
             .collect::<HashMap<T, Node<T, K, V>>>();
 
-        Ok(DiGraph {
+        Ok(Graph {
             nodes: new_nodes,
             edges: self.edges,
+            specs: self.specs,
             predecessors: self.predecessors,
             successors: self.successors,
         })
@@ -131,8 +127,9 @@ impl<T, K, V> DiGraph<T, K, V> {
     pub fn new_from_nodes_and_edges(
         nodes: Vec<Node<T, K, V>>,
         edges: Vec<Edge<T, K, V>>,
+        specs: GraphSpecs,
         missing_node_strategy: MissingNodeStrategy,
-    ) -> Result<DiGraph<T, K, V>, Error>
+    ) -> Result<Graph<T, K, V>, Error>
     where
         T: Hash + Eq + Copy + Ord,
         K: Hash + Eq + Copy,
@@ -170,9 +167,10 @@ impl<T, K, V> DiGraph<T, K, V> {
             .map(|n| (n.name, n))
             .collect::<HashMap<T, Node<T, K, V>>>();
 
-        Ok(DiGraph {
+        Ok(Graph {
             nodes: nodes_map,
             edges: edges_map,
+            specs,
             successors,
             predecessors,
         })

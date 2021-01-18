@@ -1,5 +1,5 @@
 [package]
-name = "graphx"
+name = "graphrs"
 version = "0.1.0"
 authors = ["Malcolm van Raalte <malcolm@gainx.com>"]
 edition = "2018"
