@@ -185,9 +185,7 @@ impl<T, K, V> Graph<T, K, V> {
         };
 
         let edges_map = match get_edges_map_for_specs(edges, &specs) {
-            Err(e) => {
-                return Err(e);
-            }
+            Err(e) => return Err(e),
             Ok(em) => em,
         };
 
@@ -270,7 +268,16 @@ where
     K: Hash + Eq + Copy,
     V: Copy,
 {
-    let edges_len = edges.len();
+    let deduped = match specs.multi_edges {
+        true => edges,
+        false => edges
+            .into_iter()
+            .rev()
+            .dedup_by(|e1, e2| e1.u == e2.u && e1.v == e2.v)
+            .collect::<Vec<Edge<T, K, V>>>(),
+    };
+
+    let edges_len = deduped.len();
 
     let u_v_orderer = match specs.directed {
         true => |e| e,
@@ -284,33 +291,28 @@ where
     //   filter the edges if specs.self_loops_false_strategy is Drop
     //   return Err if self loops detected
 
-    let sorted_edges = edges
+    let sorted_edges = deduped
         .into_iter()
         .map(u_v_orderer)
         .sorted_by(|e1, e2| Ord::cmp(&e1.u, &e2.u));
 
-    let x =
+    let processed_for_self_loops =
         match specs.self_loops && specs.self_loops_false_strategy == SelfLoopsFalseStrategy::Drop {
             true => sorted_edges.collect::<Vec<Edge<T, K, V>>>(),
             false => sorted_edges
-                .filter(|e| e.u == e.v)
+                .filter(|e| e.u != e.v)
                 .into_iter()
                 .collect::<Vec<Edge<T, K, V>>>(),
         };
 
-    if x.len() < edges_len {
+    if processed_for_self_loops.len() < edges_len {
         return Err(Error {
             kind: ErrorKind::SelfLoopsFound,
             message: "edges contain self-loops and `specs.self_loops` is false".to_string(),
         });
     }
 
-    let deduped = match specs.multi_edges {
-        true => x,
-        false => x.into_iter().dedup().collect::<Vec<Edge<T, K, V>>>(),
-    };
-
-    let grouped = deduped
+    let grouped = processed_for_self_loops
         .into_iter()
         .group_by(|e| (e.u, e.v))
         .into_iter()

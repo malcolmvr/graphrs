@@ -7,16 +7,16 @@
         {
             "type": "lldb",
             "request": "launch",
-            "name": "Debug unit tests in library 'graphx'",
+            "name": "Debug unit tests in library 'graphrs'",
             "cargo": {
                 "args": [
                     "test",
                     "--no-run",
                     "--lib",
-                    "--package=graphx"
+                    "--package=graphrs"
                 ],
                 "filter": {
-                    "name": "graphx",
+                    "name": "graphrs",
                     "kind": "lib"
                 }
             },
@@ -32,7 +32,7 @@
                     "test",
                     "--no-run",
                     "--test=test_digraph",
-                    "--package=graphx"
+                    "--package=graphrs"
                 ],
                 "filter": {
                     "name": "test_digraph",
@@ -51,7 +51,7 @@
                     "test",
                     "--no-run",
                     "--test=test_node_attributes",
-                    "--package=graphx"
+                    "--package=graphrs"
                 ],
                 "filter": {
                     "name": "test_node_attributes",

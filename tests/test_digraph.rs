@@ -153,7 +153,7 @@ mod tests {
         assert_eq!(edge.v, "n2");
 
         let edge = graph.get_edge("n4", "n5");
-        assert!(edge.is_ok());
+        assert!(edge.is_err());
     }
 
     #[test]

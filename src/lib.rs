@@ -27,12 +27,7 @@ let edges = vec![
     Edge::with_weight("n2", "n3", &3.0),
 ];
 
-let specs = GraphSpecs {
-    acyclic: false,
-    directed: true,
-    multi_edges: false,
-    self_loops: false,
-};
+let specs = GraphSpecs::directed();
 
 let graph = Graph::<&str, &str, &f64>::new_from_nodes_and_edges(
     nodes,
