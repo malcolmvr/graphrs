@@ -27,10 +27,17 @@ let edges = vec![
     Edge::with_weight("n2", "n3", &3.0),
 ];
 
+let specs = GraphSpecs {
+    acyclic: false,
+    directed: true,
+    multi_edges: false,
+    self_loops: false,
+};
+
 let graph = Graph::<&str, &str, &f64>::new_from_nodes_and_edges(
     nodes,
     edges,
-    GraphSpecs::new(false, true, false, false),
+    specs,
     MissingNodeStrategy::Error,
 );
 ```
@@ -46,7 +53,7 @@ mod graph;
 pub use graph::Graph;
 
 mod graph_specs;
-pub use graph_specs::GraphSpecs;
+pub use graph_specs::{EdgeDedupeStrategy, GraphSpecs, SelfLoopsFalseStrategy};
 
 mod merge_attributes;
 pub use merge_attributes::AttributeMergeStrategy;

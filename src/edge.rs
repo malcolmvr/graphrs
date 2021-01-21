@@ -18,6 +18,14 @@ pub struct Edge<T, K, V> {
 }
 
 impl<T, K, V> Edge<T, K, V> {
+    pub fn reversed(self: Edge<T, K, V>) -> Edge<T, K, V> {
+        Edge {
+            u: self.v,
+            v: self.u,
+            ..self
+        }
+    }
+
     pub fn with_weight(u: T, v: T, weight: V) -> Edge<T, K, V>
     where
         K: Hash,
