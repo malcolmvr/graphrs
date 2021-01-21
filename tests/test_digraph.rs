@@ -146,13 +146,14 @@ mod tests {
     fn test_get_edge() {
         let graph = get_basic_graph();
 
-        let edge = graph.get_edge("n1", "n2");
-        assert!(edge.is_some());
-        assert_eq!(edge.unwrap().u, "n1");
-        assert_eq!(edge.unwrap().v, "n2");
+        let result = graph.get_edge("n1", "n2");
+        assert!(result.is_ok());
+        let edge = result.unwrap();
+        assert_eq!(edge.u, "n1");
+        assert_eq!(edge.v, "n2");
 
         let edge = graph.get_edge("n4", "n5");
-        assert!(edge.is_none());
+        assert!(edge.is_ok());
     }
 
     #[test]
@@ -267,7 +268,7 @@ mod tests {
             Edge::with_weight("n1", "n3", &3.0),
         ];
 
-        let specs = GraphSpecs::new(false, true, false, false);
+        let specs = GraphSpecs::directed();
         let graph =
             Graph::new_from_nodes_and_edges(nodes, edges, specs, MissingNodeStrategy::Error);
         assert!(graph.is_ok());
@@ -291,12 +292,7 @@ mod tests {
             Edge::with_weight("n2", "n3", &3.0),
         ];
 
-        Graph::new_from_nodes_and_edges(
-            nodes,
-            edges,
-            GraphSpecs::new(false, true, false, false),
-            MissingNodeStrategy::Error,
-        )
-        .unwrap()
+        let specs = GraphSpecs::directed();
+        Graph::new_from_nodes_and_edges(nodes, edges, specs, MissingNodeStrategy::Error).unwrap()
     }
 }
