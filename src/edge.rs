@@ -17,7 +17,23 @@ pub struct Edge<T, K, V> {
     pub attributes: Option<HashMap<K, V>>,
 }
 
-impl<T, K, V> Edge<T, K, V> {
+impl<T: std::cmp::PartialOrd, K, V> Edge<T, K, V> {
+    pub fn new(u: T, v: T) -> Edge<T, K, V> {
+        Edge {
+            u,
+            v,
+            weight: None,
+            attributes: None,
+        }
+    }
+
+    pub fn ordered(self: Edge<T, K, V>) -> Edge<T, K, V> {
+        return match self.u > self.v {
+            true => self.reversed(),
+            false => self,
+        };
+    }
+
     pub fn reversed(self: Edge<T, K, V>) -> Edge<T, K, V> {
         Edge {
             u: self.v,
@@ -45,6 +61,8 @@ impl<T: std::cmp::PartialEq, K, V> PartialEq for Edge<T, K, V> {
         self.u == other.u && self.v == other.v
     }
 }
+
+impl<T: Eq, K, V> Eq for Edge<T, K, V> {}
 
 impl<T: Debug, K, V> fmt::Debug for Edge<T, K, V> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {

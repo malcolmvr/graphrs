@@ -1,11 +1,45 @@
-use crate::merge_attributes::{get_node_with_merged_attributes, AttributeMergeStrategy};
 use crate::{
-    Edge, EdgeSide, Error, ErrorKind, GraphSpecs, MissingNodeStrategy, Node, SelfLoopsFalseStrategy,
+    Edge, EdgeDedupeStrategy, EdgeSide, Error, ErrorKind, GraphSpecs, MissingNodeStrategy, Node,
+    SelfLoopsFalseStrategy,
 };
 use itertools::Itertools;
 use std::collections::{HashMap, HashSet};
+use std::fmt::Display;
 use std::hash::Hash;
 
+/**
+The `Graph` struct represents a graph of nodes and vertices.
+It allows graphs to be created with support for:
+* directed and undirected edges
+* multiple edges between two nodes
+* self-loops
+* acyclic enforcement
+# Example
+```
+use graphrs::{Edge, Graph, GraphSpecs, MissingNodeStrategy, Node};
+
+let nodes = vec![
+    Node::from_name("n1"),
+    Node::from_name("n2"),
+    Node::from_name("n3"),
+];
+
+let edges = vec![
+    Edge::with_weight("n1", "n2", &1.0),
+    Edge::with_weight("n2", "n1", &2.0),
+    Edge::with_weight("n1", "n3", &3.0),
+    Edge::with_weight("n2", "n3", &3.0),
+];
+
+let specs = GraphSpecs::directed();
+
+let graph = Graph::<&str, &str, &f64>::new_from_nodes_and_edges(
+    nodes,
+    edges,
+    specs
+);
+```
+**/
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Graph<T, K, V> {
     nodes: HashMap<T, Node<T, K, V>>,
@@ -15,11 +49,14 @@ pub struct Graph<T, K, V> {
     predecessors: HashMap<T, HashSet<T>>,
 }
 
-impl<T, K, V> Graph<T, K, V> {
+impl<T: std::fmt::Display, K, V> Graph<T, K, V> {
+    /// Adds new edges to a `Graph`, or updates existing edges, or both.
+    /// If the new edges reference nodes that don't exist the `missing_node_strategy` argument determines what happens.
+    /// The constraints in the graph's `specs` field (e.g. `acyclic`) will be applied to the resulting set of edges.
+    /// The graph is not mutated; this method returns a new `Graph` instance.
     pub fn add_or_update_edges(
         self,
         new_edges: Vec<Edge<T, K, V>>,
-        missing_node_strategy: MissingNodeStrategy,
     ) -> Result<Graph<T, K, V>, Error>
     where
         T: Hash + Eq + Copy + Ord,
@@ -27,24 +64,25 @@ impl<T, K, V> Graph<T, K, V> {
         V: Copy,
     {
         let nodes = self.nodes.values().into_iter().map(|n| n.clone()).collect();
-        let combined_edges = self
+        let combined_edges: Vec<Edge<T, K, V>> = self
             .edges
             .values()
             .into_iter()
             .flatten()
-            .map(|n| n.clone())
+            .map(|e| e.clone())
             .chain(new_edges)
             .collect();
-
-        Graph::new_from_nodes_and_edges(nodes, combined_edges, self.specs, missing_node_strategy)
+        for edge in combined_edges.iter() {
+            println!("{}", edge);
+        }
+        Graph::new_from_nodes_and_edges(nodes, combined_edges, self.specs)
     }
 
     /// Adds nodes to the Graph or updates the attributes of existing nodes.
     /// `merge_strategy` describes how existing and new attributes are to be merged.
     pub fn add_or_update_nodes(
         self,
-        nodes: Vec<Node<T, K, V>>,
-        merge_strategy: AttributeMergeStrategy,
+        nodes: Vec<Node<T, K, V>>
     ) -> Result<Graph<T, K, V>, Error>
     where
         T: Hash + Eq + Copy + Ord,
@@ -54,16 +92,13 @@ impl<T, K, V> Graph<T, K, V> {
         let (existing, new): (Vec<Node<T, K, V>>, Vec<Node<T, K, V>>) = nodes
             .into_iter()
             .partition(|n| self.nodes.contains_key(&n.name));
-        let merged = existing.iter().map(|n| {
-            get_node_with_merged_attributes(self.nodes.get(&n.name).unwrap(), &n, &merge_strategy)
-        });
         let new_nodes = self
             .nodes
             .values()
             .clone()
             .map(|n| (n.name, n.clone()))
             .chain(new.into_iter().clone().map(|n| (n.name, n)))
-            .chain(merged.map(|n| (n.name, n)))
+            .chain(existing.into_iter().map(|n| (n.name, n)))
             .collect::<HashMap<T, Node<T, K, V>>>();
 
         Ok(Graph {
@@ -170,7 +205,6 @@ impl<T, K, V> Graph<T, K, V> {
         nodes: Vec<Node<T, K, V>>,
         edges: Vec<Edge<T, K, V>>,
         specs: GraphSpecs,
-        missing_node_strategy: MissingNodeStrategy,
     ) -> Result<Graph<T, K, V>, Error>
     where
         T: Hash + Eq + Copy + Ord,
@@ -199,7 +233,7 @@ impl<T, K, V> Graph<T, K, V> {
             .map(|name| Node::<T, K, V>::from_name(name))
             .collect::<Vec<Node<T, K, V>>>();
 
-        if missing_node_strategy == MissingNodeStrategy::Error && missing_nodes.len() > 0 {
+        if specs.missing_node_strategy == MissingNodeStrategy::Error && missing_nodes.len() > 0 {
             return Err(Error {
                 kind: ErrorKind::NodeMissing,
                 message: "missing node".to_string(),
@@ -264,19 +298,21 @@ fn get_edges_map_for_specs<T: std::cmp::Ord, K, V>(
     specs: &GraphSpecs,
 ) -> Result<HashMap<(T, T), Vec<Edge<T, K, V>>>, Error>
 where
-    T: Hash + Eq + Copy + Ord,
+    T: Hash + Eq + Copy + Ord + Display,
     K: Hash + Eq + Copy,
     V: Copy,
 {
-    let deduped = match specs.multi_edges {
-        true => edges,
-        false => edges
-            .into_iter()
-            .rev()
-            .dedup_by(|e1, e2| e1.u == e2.u && e1.v == e2.v)
-            .collect::<Vec<Edge<T, K, V>>>(),
+    let deduped_result = match specs.multi_edges {
+        true => Ok(edges),
+        false => get_deduped_edges(edges, &specs.edge_dedupe_strategy, &specs.directed),
     };
 
+    match &deduped_result {
+        Err(e) => return Err(e.clone()),
+        Ok(_r) => {}
+    }
+
+    let deduped = deduped_result.unwrap();
     let edges_len = deduped.len();
 
     let u_v_orderer = match specs.directed {
@@ -352,16 +388,43 @@ where
         .into_iter()
         .map(|(k, g)| (k, g.map(|t| t.1).collect::<HashSet<T>>()))
         .collect::<HashMap<T, HashSet<T>>>();
-
-    // (1,2)
-    // (1,3)
-    // (4,1)
-    // (4,2)
-
-    // 1: 2, 3, 4
-    // 2: 1, 5
-    // 3: 1
-    // 4: 1, 2
-
     (neighbors, HashMap::new())
+}
+
+fn get_deduped_edges<T, K, V>(
+    edges: Vec<Edge<T, K, V>>,
+    edge_dedupe_strategy: &EdgeDedupeStrategy,
+    directed: &bool,
+) -> Result<Vec<Edge<T, K, V>>, Error>
+where
+    T: Hash + Eq + Copy + Ord + Display,
+    K: Hash + Eq + Copy,
+    V: Copy,
+{
+    let mut hash_set = HashSet::<Edge<T, K, V>>::new();
+    for edge in edges {
+        let ordered = match directed {
+            true => edge,
+            false => edge.ordered(),
+        };
+        let existing_edge_option = hash_set.get(&ordered);
+        if existing_edge_option.is_some() {
+            match edge_dedupe_strategy {
+                EdgeDedupeStrategy::Error => {
+                    return Err(Error {
+                        kind: ErrorKind::DuplicateEdge,
+                        message: format!("duplicate edge found: {}", &ordered),
+                    })
+                }
+                EdgeDedupeStrategy::KeepFirst => {}
+                EdgeDedupeStrategy::KeepLast => {
+                    hash_set.remove(&ordered);
+                    hash_set.insert(ordered);
+                }
+            }
+        } else {
+            hash_set.insert(ordered);
+        }
+    }
+    Ok(hash_set.into_iter().collect::<Vec<Edge<T, K, V>>>())
 }
