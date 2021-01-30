@@ -39,7 +39,7 @@ where
     }
 }
 
-fn merge_attributes_update<'a, K, V>(
+pub fn merge_attributes_update<'a, K, V>(
     existing_attributes: &Option<HashMap<K, V>>,
     new_attributes: &Option<HashMap<K, V>>,
 ) -> Option<HashMap<K, V>>

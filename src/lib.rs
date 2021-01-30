@@ -10,7 +10,7 @@ It allows graphs to be created with support for:
 * [Graph](./struct.Graph.html)
 * [Node](./struct.Node.html)
 * [Edge](./struct.Edge.html)
-## Example
+## Examples
 ```
 use graphrs::{Edge, Graph, GraphSpecs, MissingNodeStrategy, Node};
 
@@ -32,8 +32,7 @@ let specs = GraphSpecs::directed();
 let graph = Graph::<&str, &str, &f64>::new_from_nodes_and_edges(
     nodes,
     edges,
-    specs,
-    MissingNodeStrategy::Error,
+    specs
 );
 ```
 !*/
@@ -47,14 +46,11 @@ pub use error::{Error, ErrorKind};
 mod graph;
 pub use graph::Graph;
 
+mod generators;
+pub use generators::*;
+
 mod graph_specs;
-pub use graph_specs::{EdgeDedupeStrategy, GraphSpecs, SelfLoopsFalseStrategy};
-
-mod merge_attributes;
-pub use merge_attributes::AttributeMergeStrategy;
-
-mod missing_node_strategy;
-pub use missing_node_strategy::MissingNodeStrategy;
+pub use graph_specs::{EdgeDedupeStrategy, GraphSpecs, MissingNodeStrategy, SelfLoopsFalseStrategy};
 
 mod node;
 pub use node::Node;

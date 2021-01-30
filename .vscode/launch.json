@@ -45,6 +45,25 @@
         {
             "type": "lldb",
             "request": "launch",
+            "name": "Debug integration test 'test_generators'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--test=test_generators",
+                    "--package=graphrs"
+                ],
+                "filter": {
+                    "name": "test_generators",
+                    "kind": "test"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
             "name": "Debug integration test 'test_node_attributes'",
             "cargo": {
                 "args": [
