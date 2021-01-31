@@ -12,8 +12,14 @@ pub fn complete_graph<'a>(num_nodes: i32, directed: bool) -> Graph<i32, &'a str,
         .map(|x| Edge::new(x[0], x[1]))
         .collect::<Vec<Edge<i32, &str, i32>>>();
     let specs = match directed {
-        false => GraphSpecs { missing_node_strategy: MissingNodeStrategy::Create, ..GraphSpecs::undirected() },
-        true => GraphSpecs { missing_node_strategy: MissingNodeStrategy::Create, ..GraphSpecs::directed() },
+        false => GraphSpecs {
+            missing_node_strategy: MissingNodeStrategy::Create,
+            ..GraphSpecs::undirected()
+        },
+        true => GraphSpecs {
+            missing_node_strategy: MissingNodeStrategy::Create,
+            ..GraphSpecs::directed()
+        },
     };
     Graph::new_from_nodes_and_edges(nodes, edges, specs).unwrap()
 }

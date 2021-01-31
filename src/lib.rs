@@ -50,7 +50,9 @@ mod generators;
 pub use generators::*;
 
 mod graph_specs;
-pub use graph_specs::{EdgeDedupeStrategy, GraphSpecs, MissingNodeStrategy, SelfLoopsFalseStrategy};
+pub use graph_specs::{
+    EdgeDedupeStrategy, GraphSpecs, MissingNodeStrategy, SelfLoopsFalseStrategy,
+};
 
 mod node;
 pub use node::Node;

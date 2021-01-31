@@ -43,14 +43,26 @@ impl GraphSpecs {
     }
 
     pub fn undirected() -> GraphSpecs {
-        GraphSpecs { directed: false, ..DEFAULT_GRAPH_SPECS }
+        GraphSpecs {
+            directed: false,
+            ..DEFAULT_GRAPH_SPECS
+        }
     }
 
     pub fn multi_directed() -> GraphSpecs {
-        GraphSpecs { multi_edges: true, self_loops: true, ..DEFAULT_GRAPH_SPECS }
+        GraphSpecs {
+            multi_edges: true,
+            self_loops: true,
+            ..DEFAULT_GRAPH_SPECS
+        }
     }
 
     pub fn multi_undirected() -> GraphSpecs {
-        GraphSpecs { directed: false, multi_edges: true, self_loops: true, ..DEFAULT_GRAPH_SPECS }
+        GraphSpecs {
+            directed: false,
+            multi_edges: true,
+            self_loops: true,
+            ..DEFAULT_GRAPH_SPECS
+        }
     }
 }

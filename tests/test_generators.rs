@@ -2,9 +2,7 @@
 mod tests {
 
     use graphrs::{complete_graph, Edge};
-    use itertools::Itertools;
     use std::collections::HashSet;
-    use std::iter::FromIterator;
 
     #[test]
     fn test_complete_graph_directed() {

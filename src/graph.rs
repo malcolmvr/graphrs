@@ -54,10 +54,7 @@ impl<T: std::fmt::Display, K, V> Graph<T, K, V> {
     /// If the new edges reference nodes that don't exist the `missing_node_strategy` argument determines what happens.
     /// The constraints in the graph's `specs` field (e.g. `acyclic`) will be applied to the resulting set of edges.
     /// The graph is not mutated; this method returns a new `Graph` instance.
-    pub fn add_or_update_edges(
-        self,
-        new_edges: Vec<Edge<T, K, V>>,
-    ) -> Result<Graph<T, K, V>, Error>
+    pub fn add_or_update_edges(self, new_edges: Vec<Edge<T, K, V>>) -> Result<Graph<T, K, V>, Error>
     where
         T: Hash + Eq + Copy + Ord,
         K: Hash + Eq + Copy,
@@ -80,10 +77,7 @@ impl<T: std::fmt::Display, K, V> Graph<T, K, V> {
 
     /// Adds nodes to the Graph or updates the attributes of existing nodes.
     /// `merge_strategy` describes how existing and new attributes are to be merged.
-    pub fn add_or_update_nodes(
-        self,
-        nodes: Vec<Node<T, K, V>>
-    ) -> Result<Graph<T, K, V>, Error>
+    pub fn add_or_update_nodes(self, nodes: Vec<Node<T, K, V>>) -> Result<Graph<T, K, V>, Error>
     where
         T: Hash + Eq + Copy + Ord,
         K: Hash + Eq + Copy,
@@ -133,7 +127,12 @@ impl<T: std::fmt::Display, K, V> Graph<T, K, V> {
             });
         }
 
-        let edges = self.edges.get(&(u, v));
+        let ordered = match !self.specs.directed && u > v {
+            false => (u, v),
+            true => (v, u),
+        };
+
+        let edges = self.edges.get(&ordered);
         match edges {
             None => Err(Error {
                 kind: ErrorKind::NoEdge,
@@ -164,6 +163,23 @@ impl<T: std::fmt::Display, K, V> Graph<T, K, V> {
         }
     }
 
+    pub fn get_neighbor_nodes(&self, node_name: T) -> Result<Vec<&Node<T, K, V>>, Error>
+    where
+        T: Hash + Eq + Copy + Ord,
+    {
+        if !self.nodes.contains_key(&node_name) {
+            return Err(Error {
+                kind: ErrorKind::NodeNotFound,
+                message: format!("node '{}' not found in the graph", node_name),
+            });
+        }
+
+        let pred_nodes = self._get_predecessor_nodes(node_name).unwrap();
+        let succ_nodes = self._get_successor_nodes(node_name).unwrap();
+
+        Ok(pred_nodes.into_iter().chain(succ_nodes).collect())
+    }
+
     pub fn get_node(&self, name: T) -> Option<&Node<T, K, V>>
     where
         T: Hash + Eq + Copy + Ord,
@@ -171,14 +187,34 @@ impl<T: std::fmt::Display, K, V> Graph<T, K, V> {
         self.nodes.get(&name)
     }
 
-    pub fn get_predecessor_nodes(&self, node_name: T) -> Option<Vec<&Node<T, K, V>>>
+    pub fn get_predecessor_nodes(&self, node_name: T) -> Result<Vec<&Node<T, K, V>>, Error>
     where
         T: Hash + Eq + Copy + Ord,
     {
+        if !self.specs.directed {
+            return Err(Error {
+                kind: ErrorKind::WrongMethod,
+                message: "for undirected graphs use the `get_neighbor_nodes` method instead of `get_predecessor_nodes`".to_string(),
+            });
+        }
+
+        self._get_predecessor_nodes(node_name)
+    }
+
+    pub fn _get_predecessor_nodes(&self, node_name: T) -> Result<Vec<&Node<T, K, V>>, Error>
+    where
+        T: Hash + Eq + Copy + Ord,
+    {
+        if !self.nodes.contains_key(&node_name) {
+            return Err(Error {
+                kind: ErrorKind::NodeNotFound,
+                message: format!("node '{}' not found in the graph", node_name),
+            });
+        }
         let pred = self.predecessors.get(&node_name);
         match pred {
-            None => None,
-            Some(hashset) => Some(self.get_nodes_for_names(&hashset)),
+            None => Ok(vec![]),
+            Some(hashset) => Ok(self.get_nodes_for_names(&hashset)),
         }
     }
 
@@ -186,14 +222,34 @@ impl<T: std::fmt::Display, K, V> Graph<T, K, V> {
         &self.predecessors
     }
 
-    pub fn get_successor_nodes(&self, node_name: T) -> Option<Vec<&Node<T, K, V>>>
+    pub fn get_successor_nodes(&self, node_name: T) -> Result<Vec<&Node<T, K, V>>, Error>
     where
         T: Hash + Eq + Copy + Ord,
     {
-        let pred = self.successors.get(&node_name);
-        match pred {
-            None => None,
-            Some(hashset) => Some(self.get_nodes_for_names(&hashset)),
+        if !self.specs.directed {
+            return Err(Error {
+                kind: ErrorKind::WrongMethod,
+                message: "for undirected graphs use the `get_neighbor_nodes` method instead of `get_successor_nodes`".to_string(),
+            });
+        }
+
+        self._get_successor_nodes(node_name)
+    }
+
+    pub fn _get_successor_nodes(&self, node_name: T) -> Result<Vec<&Node<T, K, V>>, Error>
+    where
+        T: Hash + Eq + Copy + Ord,
+    {
+        if !self.nodes.contains_key(&node_name) {
+            return Err(Error {
+                kind: ErrorKind::NodeNotFound,
+                message: format!("node '{}' not found in the graph", node_name),
+            });
+        }
+        let succ = self.successors.get(&node_name);
+        match succ {
+            None => Ok(vec![]),
+            Some(hashset) => Ok(self.get_nodes_for_names(&hashset)),
         }
     }
 
@@ -213,14 +269,20 @@ impl<T: std::fmt::Display, K, V> Graph<T, K, V> {
     {
         let node_names = nodes.iter().map(|n| n.name).collect::<HashSet<T>>();
 
-        let (successors, predecessors) = match specs.directed {
-            true => get_directed_successors_predecessors(&edges),
-            false => get_undirected_successors_predecessors(&edges),
-        };
-
         let edges_map = match get_edges_map_for_specs(edges, &specs) {
             Err(e) => return Err(e),
             Ok(em) => em,
+        };
+
+        let edges_for_specs = &edges_map
+            .values()
+            .into_iter()
+            .flatten()
+            .collect::<Vec<&Edge<T, K, V>>>();
+
+        let (successors, predecessors) = match specs.directed {
+            true => get_directed_successors_predecessors(edges_for_specs),
+            false => get_undirected_successors_predecessors(edges_for_specs),
         };
 
         let missing_nodes = edges_map
@@ -235,7 +297,7 @@ impl<T: std::fmt::Display, K, V> Graph<T, K, V> {
 
         if specs.missing_node_strategy == MissingNodeStrategy::Error && missing_nodes.len() > 0 {
             return Err(Error {
-                kind: ErrorKind::NodeMissing,
+                kind: ErrorKind::NodeNotFound,
                 message: "missing node".to_string(),
             });
         }
@@ -271,7 +333,7 @@ impl<T: std::fmt::Display, K, V> Graph<T, K, V> {
 }
 
 fn dedupe_and_group_edges<T, K, V>(
-    edges: &Vec<Edge<T, K, V>>,
+    edges: &Vec<&Edge<T, K, V>>,
     by: EdgeSide,
 ) -> HashMap<T, HashSet<T>>
 where
@@ -280,8 +342,8 @@ where
     V: Copy,
 {
     let key_val = match by {
-        EdgeSide::U => |e: &Edge<T, K, V>| (e.u, e.v),
-        EdgeSide::V => |e: &Edge<T, K, V>| (e.v, e.u),
+        EdgeSide::U => |e: &&Edge<T, K, V>| (e.u, e.v),
+        EdgeSide::V => |e: &&Edge<T, K, V>| (e.v, e.u),
     };
     edges
         .into_iter()
@@ -359,7 +421,7 @@ where
 }
 
 fn get_directed_successors_predecessors<T, K, V>(
-    edges: &Vec<Edge<T, K, V>>,
+    edges: &Vec<&Edge<T, K, V>>,
 ) -> (HashMap<T, HashSet<T>>, HashMap<T, HashSet<T>>)
 where
     T: Hash + Eq + Copy + Ord,
@@ -372,7 +434,7 @@ where
 }
 
 fn get_undirected_successors_predecessors<T, K, V>(
-    edges: &Vec<Edge<T, K, V>>,
+    edges: &Vec<&Edge<T, K, V>>,
 ) -> (HashMap<T, HashSet<T>>, HashMap<T, HashSet<T>>)
 where
     T: Hash + Eq + Copy + Ord,
