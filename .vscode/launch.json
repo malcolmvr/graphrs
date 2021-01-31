@@ -26,16 +26,35 @@
         {
             "type": "lldb",
             "request": "launch",
-            "name": "Debug integration test 'test_digraph'",
+            "name": "Debug integration test 'test_directed'",
             "cargo": {
                 "args": [
                     "test",
                     "--no-run",
-                    "--test=test_digraph",
+                    "--test=test_directed",
                     "--package=graphrs"
                 ],
                 "filter": {
-                    "name": "test_digraph",
+                    "name": "test_directed",
+                    "kind": "test"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug integration test 'test_undirected'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--test=test_undirected",
+                    "--package=graphrs"
+                ],
+                "filter": {
+                    "name": "test_undirected",
                     "kind": "test"
                 }
             },

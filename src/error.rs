@@ -15,7 +15,7 @@ impl Display for Error {
 #[derive(Clone, Debug)]
 pub enum ErrorKind {
     DuplicateEdge,
-    NodeMissing,
+    NodeNotFound,
     NoEdge,
     SelfLoopsFound,
     WrongMethod,
@@ -25,7 +25,7 @@ impl Display for ErrorKind {
     fn fmt(&self, f: &mut Formatter) -> Result {
         match self {
             ErrorKind::DuplicateEdge => write!(f, "duplicate edge"),
-            ErrorKind::NodeMissing => write!(f, "node missing"),
+            ErrorKind::NodeNotFound => write!(f, "node not found"),
             ErrorKind::NoEdge => write!(f, "no edge"),
             ErrorKind::SelfLoopsFound => write!(f, "self loops found"),
             ErrorKind::WrongMethod => write!(f, "wrong method"),
