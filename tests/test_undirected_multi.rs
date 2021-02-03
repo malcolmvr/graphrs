@@ -1,10 +1,27 @@
 #[cfg(test)]
 mod tests {
 
-    use graphrs::{Edge, EdgeDedupeStrategy, Graph, GraphSpecs, MissingNodeStrategy, Node};
-    use itertools::Itertools;
-    use std::collections::HashSet;
-    use std::iter::FromIterator;
+    use graphrs::{Edge, Graph, GraphSpecs, Node};
+
+    #[test]
+    fn test_add_or_update_edges_add_zzz() {
+        // test addition of a new edge
+        let graph = get_basic_graph(None);
+
+        let new_edges = vec![Edge::with_weight("n3", "n1", &4.4)];
+
+        let graph = graph.add_or_update_edges(new_edges);
+        assert!(graph.is_ok());
+        let graph = graph.unwrap();
+
+        let edges = graph.get_all_edges();
+        assert_eq!(edges.len(), 6);
+        let weights: f64 = edges.into_iter().map(|e| e.weight.unwrap()).sum();
+        assert_eq!((weights * 10.0).round() / 10.0, 13.6);
+
+        let nodes = graph.get_all_nodes();
+        assert_eq!(nodes.len(), 4);
+    }
 
     #[test]
     fn test_get_edge() {
@@ -20,7 +37,9 @@ mod tests {
 
         let result = graph.get_edges("n1", "n2");
         assert!(result.is_ok());
-        let weights: f64 = result.unwrap().into_iter().map(|e| e.weight.unwrap()).sum();
+        let edges = result.unwrap();
+        assert_eq!(edges.len(), 2);
+        let weights: f64 = edges.into_iter().map(|e| e.weight.unwrap()).sum();
         assert_eq!(weights, 3.0);
 
         let result = graph.get_edges("n1", "n3");

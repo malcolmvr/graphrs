@@ -6,6 +6,7 @@ use itertools::Itertools;
 use std::collections::{HashMap, HashSet};
 use std::fmt::Display;
 use std::hash::Hash;
+use std::cmp::Ordering;
 
 /**
 The `Graph` struct represents a graph of nodes and vertices.
@@ -177,7 +178,12 @@ impl<T: std::fmt::Display, K, V> Graph<T, K, V> {
         let pred_nodes = self._get_predecessor_nodes(node_name).unwrap();
         let succ_nodes = self._get_successor_nodes(node_name).unwrap();
 
-        Ok(pred_nodes.into_iter().chain(succ_nodes).collect())
+        let all_nodes = pred_nodes.into_iter().chain(succ_nodes)
+            .sorted_by(|a, b| Ord::cmp(&a, &b))
+            .dedup_by(|a, b| a == b)
+            .collect();
+
+        Ok(all_nodes)
     }
 
     pub fn get_node(&self, name: T) -> Option<&Node<T, K, V>>
@@ -392,12 +398,12 @@ where
     let sorted_edges = deduped
         .into_iter()
         .map(u_v_orderer)
-        .sorted_by(|e1, e2| Ord::cmp(&e1.u, &e2.u));
+        .sorted_by(|e1, e2| sort_edges(e1, e2));
 
     let processed_for_self_loops =
-        match specs.self_loops && specs.self_loops_false_strategy == SelfLoopsFalseStrategy::Drop {
-            true => sorted_edges.collect::<Vec<Edge<T, K, V>>>(),
-            false => sorted_edges
+        match !specs.self_loops && specs.self_loops_false_strategy == SelfLoopsFalseStrategy::Drop {
+            false => sorted_edges.collect::<Vec<Edge<T, K, V>>>(),
+            true => sorted_edges
                 .filter(|e| e.u != e.v)
                 .into_iter()
                 .collect::<Vec<Edge<T, K, V>>>(),
@@ -418,6 +424,21 @@ where
         .collect::<HashMap<(T, T), Vec<Edge<T, K, V>>>>();
 
     Ok(grouped)
+}
+
+fn sort_edges<T: std::cmp::PartialOrd, K, V>(e1: &Edge<T, K, V>, e2: &Edge<T, K, V>) -> Ordering {
+    if e1.u < e2.u {
+        return Ordering::Less;
+    } else if e1.u > e2.u {
+        return Ordering::Greater;
+    } else { // e1.u equals e2.u
+        if e1.v < e2.v {
+            return Ordering::Less;
+        } else if e1.v > e2.v {
+            return Ordering::Greater;
+        }
+    }
+    return Ordering::Equal;
 }
 
 fn get_directed_successors_predecessors<T, K, V>(

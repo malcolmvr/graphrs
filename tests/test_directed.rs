@@ -215,6 +215,32 @@ mod tests {
     }
 
     #[test]
+    fn test_get_neighbor_nodes() {
+        let graph = get_basic_graph(None);
+
+        let nodes = graph.get_neighbor_nodes("n1").unwrap();
+        let hashset = HashSet::<&str>::from_iter(nodes.iter().map(|n| n.name));
+        assert_eq!(nodes.len(), 2);
+        assert!(hashset.contains("n2"));
+        assert!(hashset.contains("n3"));
+
+        let nodes = graph.get_neighbor_nodes("n2").unwrap();
+        let hashset = HashSet::<&str>::from_iter(nodes.iter().map(|n| n.name));
+        assert_eq!(nodes.len(), 2);
+        assert!(hashset.contains("n1"));
+        assert!(hashset.contains("n3"));
+
+        let nodes = graph.get_neighbor_nodes("n3").unwrap();
+        let hashset = HashSet::<&str>::from_iter(nodes.iter().map(|n| n.name));
+        assert_eq!(nodes.len(), 2);
+        assert!(hashset.contains("n1"));
+        assert!(hashset.contains("n2"));
+
+        let nodes = graph.get_neighbor_nodes("n4");
+        assert!(nodes.is_err());
+    }
+
+    #[test]
     fn test_get_predecessor_nodes() {
         let graph = get_basic_graph(None);
 
