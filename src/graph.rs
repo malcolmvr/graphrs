@@ -6,7 +6,6 @@ use itertools::Itertools;
 use std::collections::{HashMap, HashSet};
 use std::fmt::Display;
 use std::hash::Hash;
-use std::cmp::Ordering;
 
 /**
 The `Graph` struct represents a graph of nodes and vertices.
@@ -42,7 +41,7 @@ let graph = Graph::<&str, &str, &f64>::new_from_nodes_and_edges(
 ```
 **/
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub struct Graph<T, K, V> {
+pub struct Graph<T: PartialOrd, K, V> {
     nodes: HashMap<T, Node<T, K, V>>,
     edges: HashMap<(T, T), Vec<Edge<T, K, V>>>,
     specs: GraphSpecs,
@@ -50,7 +49,7 @@ pub struct Graph<T, K, V> {
     predecessors: HashMap<T, HashSet<T>>,
 }
 
-impl<T: std::fmt::Display, K, V> Graph<T, K, V> {
+impl<T: Display + PartialOrd, K, V> Graph<T, K, V> {
     /// Adds new edges to a `Graph`, or updates existing edges, or both.
     /// If the new edges reference nodes that don't exist the `missing_node_strategy` argument determines what happens.
     /// The constraints in the graph's `specs` field (e.g. `acyclic`) will be applied to the resulting set of edges.
@@ -398,7 +397,7 @@ where
     let sorted_edges = deduped
         .into_iter()
         .map(u_v_orderer)
-        .sorted_by(|e1, e2| sort_edges(e1, e2));
+        .sorted();
 
     let processed_for_self_loops =
         match !specs.self_loops && specs.self_loops_false_strategy == SelfLoopsFalseStrategy::Drop {
@@ -424,21 +423,6 @@ where
         .collect::<HashMap<(T, T), Vec<Edge<T, K, V>>>>();
 
     Ok(grouped)
-}
-
-fn sort_edges<T: std::cmp::PartialOrd, K, V>(e1: &Edge<T, K, V>, e2: &Edge<T, K, V>) -> Ordering {
-    if e1.u < e2.u {
-        return Ordering::Less;
-    } else if e1.u > e2.u {
-        return Ordering::Greater;
-    } else { // e1.u equals e2.u
-        if e1.v < e2.v {
-            return Ordering::Less;
-        } else if e1.v > e2.v {
-            return Ordering::Greater;
-        }
-    }
-    return Ordering::Equal;
 }
 
 fn get_directed_successors_predecessors<T, K, V>(
