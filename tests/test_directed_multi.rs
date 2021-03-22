@@ -45,7 +45,7 @@ mod tests {
         let result = graph.get_edges("n1", "n3");
         assert!(result.is_ok());
         let weights: f64 = result.unwrap().into_iter().map(|e| e.attributes.as_ref().unwrap()["weight"]).sum();
-        assert_eq!(weights, 3.2);
+        assert_eq!(weights, 1.1);
     }
 
     #[test]
@@ -74,7 +74,7 @@ mod tests {
 
         let final_specs = match specs {
             Some(s) => s,
-            None => GraphSpecs::multi_undirected(),
+            None => GraphSpecs::multi_directed(),
         };
 
         Graph::new_from_nodes_and_edges(nodes, edges, final_specs).unwrap()

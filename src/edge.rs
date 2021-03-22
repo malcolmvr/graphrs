@@ -14,7 +14,6 @@ pub enum EdgeSide {
 pub struct Edge<T, K, V> where T: PartialOrd {
     pub u: T,
     pub v: T,
-    pub weight: Option<V>,
     pub attributes: Option<HashMap<K, V>>,
 }
 
@@ -23,7 +22,6 @@ impl<T: std::cmp::PartialOrd, K, V> Edge<T, K, V> {
         Edge {
             u,
             v,
-            weight: None,
             attributes: None,
         }
     }
@@ -43,16 +41,16 @@ impl<T: std::cmp::PartialOrd, K, V> Edge<T, K, V> {
         }
     }
 
-    pub fn with_weight(u: T, v: T, weight: V) -> Edge<T, K, V>
+    pub fn with_attribute(u: T, v: T, name: K, value: V) -> Edge<T, K, V>
     where
         K: Hash,
         K: Eq,
     {
+        let attr = vec![(name, value)].into_iter().collect::<HashMap::<K, V>>();
         Edge {
             u,
             v,
-            weight: Some(weight),
-            attributes: None,
+            attributes: Some(attr),
         }
     }
 }

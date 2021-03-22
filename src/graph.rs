@@ -25,10 +25,10 @@ let nodes = vec![
 ];
 
 let edges = vec![
-    Edge::with_weight("n1", "n2", &1.0),
-    Edge::with_weight("n2", "n1", &2.0),
-    Edge::with_weight("n1", "n3", &3.0),
-    Edge::with_weight("n2", "n3", &3.0),
+    Edge::with_attribute("n1", "n2", "weight", &1.0),
+    Edge::with_attribute("n2", "n1", "weight", &2.0),
+    Edge::with_attribute("n1", "n3", "weight", &3.0),
+    Edge::with_attribute("n2", "n3", "weight", &3.0),
 ];
 
 let specs = GraphSpecs::directed();

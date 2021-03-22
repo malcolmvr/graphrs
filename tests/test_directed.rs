@@ -11,7 +11,7 @@ mod tests {
         // test addition of a new edge
         let graph = get_basic_graph(None);
 
-        let new_edges = vec![Edge::with_weight("n3", "n1", &4.4)];
+        let new_edges = vec![Edge::with_attribute("n3", "n1", "weight", &4.4)];
 
         let graph = graph.add_or_update_edges(new_edges);
         assert!(graph.is_ok());
@@ -29,7 +29,7 @@ mod tests {
         // test that when an existing edge is added and EdgeDedupeStrategy is Error
         let graph = get_basic_graph(None);
 
-        let new_edges = vec![Edge::with_weight("n1", "n3", &4.4)];
+        let new_edges = vec![Edge::with_attribute("n1", "n3", "weight", &4.4)];
 
         let graph = graph.add_or_update_edges(new_edges);
         assert!(graph.is_err());
@@ -44,14 +44,14 @@ mod tests {
         };
         let graph = get_basic_graph(Some(specs));
 
-        let new_edges = vec![Edge::with_weight("n1", "n3", &4.4)];
+        let new_edges = vec![Edge::with_attribute("n1", "n3", "weight", &4.4)];
 
         let graph = graph.add_or_update_edges(new_edges);
         assert!(graph.is_ok());
         let graph = graph.unwrap();
 
         let edge = graph.get_edge("n1", "n3");
-        assert_eq!(edge.unwrap().weight.unwrap(), &3.0);
+        assert_eq!(edge.unwrap().attributes.as_ref().unwrap()["weight"], &3.0);
     }
 
     #[test]
@@ -63,14 +63,14 @@ mod tests {
         };
         let graph = get_basic_graph(Some(specs));
 
-        let new_edges = vec![Edge::with_weight("n1", "n3", &4.4)];
+        let new_edges = vec![Edge::with_attribute("n1", "n3", "weight", &4.4)];
 
         let graph = graph.add_or_update_edges(new_edges);
         assert!(graph.is_ok());
         let graph = graph.unwrap();
 
         let edge = graph.get_edge("n1", "n3");
-        assert_eq!(edge.unwrap().weight.unwrap(), &4.4);
+        assert_eq!(edge.unwrap().attributes.as_ref().unwrap()["weight"], &4.4);
     }
 
     #[test]
@@ -78,7 +78,7 @@ mod tests {
         // test edge addition with MissingNodeStrategy::Error
         let graph = get_basic_graph(None);
 
-        let new_edges = vec![Edge::with_weight("n4", "n5", &4.4)];
+        let new_edges = vec![Edge::with_attribute("n4", "n5", "weight", &4.4)];
 
         let graph = graph.add_or_update_edges(new_edges);
         assert!(graph.is_err());
@@ -93,7 +93,7 @@ mod tests {
         };
         let graph = get_basic_graph(Some(specs));
 
-        let new_edges = vec![Edge::with_weight("n4", "n5", &4.4)];
+        let new_edges = vec![Edge::with_attribute("n4", "n5", "weight", &4.4)];
 
         let graph = graph.add_or_update_edges(new_edges);
         assert!(graph.is_ok());
@@ -336,9 +336,9 @@ mod tests {
         ];
 
         let edges = vec![
-            Edge::with_weight("n1", "n2", &1.0),
-            Edge::with_weight("n2", "n1", &2.0),
-            Edge::with_weight("n1", "n3", &3.0),
+            Edge::with_attribute("n1", "n2", "weight", &1.0),
+            Edge::with_attribute("n2", "n1", "weight", &2.0),
+            Edge::with_attribute("n1", "n3", "weight", &3.0),
         ];
 
         let specs = GraphSpecs::directed();
@@ -358,10 +358,10 @@ mod tests {
         ];
 
         let edges = vec![
-            Edge::with_weight("n1", "n2", &1.0),
-            Edge::with_weight("n2", "n1", &2.0),
-            Edge::with_weight("n1", "n3", &3.0),
-            Edge::with_weight("n2", "n3", &3.0),
+            Edge::with_attribute("n1", "n2", "weight", &1.0),
+            Edge::with_attribute("n2", "n1", "weight", &2.0),
+            Edge::with_attribute("n1", "n3", "weight", &3.0),
+            Edge::with_attribute("n2", "n3", "weight", &3.0),
         ];
 
         let final_specs = match specs {
