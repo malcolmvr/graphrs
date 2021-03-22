@@ -177,7 +177,9 @@ impl<T: Display + PartialOrd, K, V> Graph<T, K, V> {
         let pred_nodes = self._get_predecessor_nodes(node_name).unwrap();
         let succ_nodes = self._get_successor_nodes(node_name).unwrap();
 
-        let all_nodes = pred_nodes.into_iter().chain(succ_nodes)
+        let all_nodes = pred_nodes
+            .into_iter()
+            .chain(succ_nodes)
             .sorted_by(|a, b| Ord::cmp(&a, &b))
             .dedup_by(|a, b| a == b)
             .collect();
@@ -394,19 +396,17 @@ where
     //   filter the edges if specs.self_loops_false_strategy is Drop
     //   return Err if self loops detected
 
-    let sorted_edges = deduped
-        .into_iter()
-        .map(u_v_orderer)
-        .sorted();
+    let sorted_edges = deduped.into_iter().map(u_v_orderer).sorted();
 
-    let processed_for_self_loops =
-        match !specs.self_loops && specs.self_loops_false_strategy == SelfLoopsFalseStrategy::Drop {
-            false => sorted_edges.collect::<Vec<Edge<T, K, V>>>(),
-            true => sorted_edges
-                .filter(|e| e.u != e.v)
-                .into_iter()
-                .collect::<Vec<Edge<T, K, V>>>(),
-        };
+    let processed_for_self_loops = match !specs.self_loops
+        && specs.self_loops_false_strategy == SelfLoopsFalseStrategy::Drop
+    {
+        false => sorted_edges.collect::<Vec<Edge<T, K, V>>>(),
+        true => sorted_edges
+            .filter(|e| e.u != e.v)
+            .into_iter()
+            .collect::<Vec<Edge<T, K, V>>>(),
+    };
 
     if processed_for_self_loops.len() < edges_len {
         return Err(Error {

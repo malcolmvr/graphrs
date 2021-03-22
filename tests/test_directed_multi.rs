@@ -16,7 +16,10 @@ mod tests {
 
         let edges = graph.get_all_edges();
         assert_eq!(edges.len(), 6);
-        let weights: f64 = edges.into_iter().map(|e| e.attributes.as_ref().unwrap()["weight"]).sum();
+        let weights: f64 = edges
+            .into_iter()
+            .map(|e| e.attributes.as_ref().unwrap()["weight"])
+            .sum();
         assert_eq!((weights * 10.0).round() / 10.0, 13.6);
 
         let nodes = graph.get_all_nodes();
@@ -39,12 +42,19 @@ mod tests {
         assert!(result.is_ok());
         let edges = result.unwrap();
         assert_eq!(edges.len(), 2);
-        let weights: f64 = edges.into_iter().map(|e| e.attributes.as_ref().unwrap()["weight"]).sum();
+        let weights: f64 = edges
+            .into_iter()
+            .map(|e| e.attributes.as_ref().unwrap()["weight"])
+            .sum();
         assert_eq!(weights, 3.0);
 
         let result = graph.get_edges("n1", "n3");
         assert!(result.is_ok());
-        let weights: f64 = result.unwrap().into_iter().map(|e| e.attributes.as_ref().unwrap()["weight"]).sum();
+        let weights: f64 = result
+            .unwrap()
+            .into_iter()
+            .map(|e| e.attributes.as_ref().unwrap()["weight"])
+            .sum();
         assert_eq!(weights, 1.1);
     }
 

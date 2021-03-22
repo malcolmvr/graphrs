@@ -1,8 +1,8 @@
+use std::cmp::{Ord, Ordering, PartialOrd};
 use std::collections::HashMap;
 use std::fmt;
 use std::fmt::{Debug, Display};
 use std::hash::{Hash, Hasher};
-use std::cmp::{PartialOrd, Ord, Ordering};
 
 pub enum EdgeSide {
     U,
@@ -11,7 +11,10 @@ pub enum EdgeSide {
 
 #[derive(Clone)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub struct Edge<T, K, V> where T: PartialOrd {
+pub struct Edge<T, K, V>
+where
+    T: PartialOrd,
+{
     pub u: T,
     pub v: T,
     pub attributes: Option<HashMap<K, V>>,
@@ -46,7 +49,7 @@ impl<T: std::cmp::PartialOrd, K, V> Edge<T, K, V> {
         K: Hash,
         K: Eq,
     {
-        let attr = vec![(name, value)].into_iter().collect::<HashMap::<K, V>>();
+        let attr = vec![(name, value)].into_iter().collect::<HashMap<K, V>>();
         Edge {
             u,
             v,
