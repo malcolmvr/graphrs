@@ -104,6 +104,7 @@ impl<T: Display + PartialOrd, K, V> Graph<T, K, V> {
         })
     }
 
+    /// Gets a `Vec` of all the edges in the graph.
     pub fn get_all_edges(&self) -> Vec<&Edge<T, K, V>> {
         self.edges
             .values()
@@ -112,10 +113,14 @@ impl<T: Display + PartialOrd, K, V> Graph<T, K, V> {
             .collect::<Vec<&Edge<T, K, V>>>()
     }
 
+    /// Gets a `Vec` of all the nodes in the graph.
     pub fn get_all_nodes(&self) -> Vec<&Node<T, K, V>> {
         self.nodes.values().collect::<Vec<&Node<T, K, V>>>()
     }
 
+    /// Gets the `Edge` between `u` and `v` nodes.
+    /// If no edge exists between `u` and `v`, `Err` is returned.
+    /// If `specs.multi_edges` is true then the `get_edges` method should be used instead.
     pub fn get_edge(&self, u: T, v: T) -> Result<&Edge<T, K, V>, Error>
     where
         T: Hash + Eq + Copy + Ord,
@@ -142,6 +147,8 @@ impl<T: Display + PartialOrd, K, V> Graph<T, K, V> {
         }
     }
 
+    /// Gets the edges between `u` and `v` nodes.
+    /// If `specs.multi_edges` is false then the `get_edge` method should be used instead.
     pub fn get_edges(&self, u: T, v: T) -> Result<&Vec<Edge<T, K, V>>, Error>
     where
         T: Hash + Eq + Copy + Ord,
@@ -163,6 +170,8 @@ impl<T: Display + PartialOrd, K, V> Graph<T, K, V> {
         }
     }
 
+    /// Returns all the nodes that connect to `node_name`.
+    /// For a directed graph this returns predecessor and successor nodes.
     pub fn get_neighbor_nodes(&self, node_name: T) -> Result<Vec<&Node<T, K, V>>, Error>
     where
         T: Hash + Eq + Copy + Ord,
@@ -187,6 +196,7 @@ impl<T: Display + PartialOrd, K, V> Graph<T, K, V> {
         Ok(all_nodes)
     }
 
+    /// Gets the `Node` for the specified node `name`.
     pub fn get_node(&self, name: T) -> Option<&Node<T, K, V>>
     where
         T: Hash + Eq + Copy + Ord,
@@ -194,6 +204,7 @@ impl<T: Display + PartialOrd, K, V> Graph<T, K, V> {
         self.nodes.get(&name)
     }
 
+    /// Gets the (u, v) edges where `node_name` is v.
     pub fn get_predecessor_nodes(&self, node_name: T) -> Result<Vec<&Node<T, K, V>>, Error>
     where
         T: Hash + Eq + Copy + Ord,
@@ -225,10 +236,12 @@ impl<T: Display + PartialOrd, K, V> Graph<T, K, V> {
         }
     }
 
+    /// Gets a `HashMap` of all the predecessor edges.
     pub fn get_predecessors_map(&self) -> &HashMap<T, HashSet<T>> {
         &self.predecessors
     }
 
+    /// Gets the (u, v) edges where `node_name` is u.
     pub fn get_successor_nodes(&self, node_name: T) -> Result<Vec<&Node<T, K, V>>, Error>
     where
         T: Hash + Eq + Copy + Ord,
@@ -260,10 +273,13 @@ impl<T: Display + PartialOrd, K, V> Graph<T, K, V> {
         }
     }
 
+    /// Gets a `HashMap` of all the successor edges.
     pub fn get_successors_map(&self) -> &HashMap<T, HashSet<T>> {
         &self.successors
     }
 
+    /// Create a new `Graph` from the specified `nodes` and `edges`.
+    /// The `specs` determined the characteristics and constraints of the graph.
     pub fn new_from_nodes_and_edges(
         nodes: Vec<Node<T, K, V>>,
         edges: Vec<Edge<T, K, V>>,

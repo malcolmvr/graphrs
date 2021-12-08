@@ -21,6 +21,8 @@ where
 }
 
 impl<T: std::cmp::PartialOrd, K, V> Edge<T, K, V> {
+
+    /// Creates a new `Edge` with no attributes.
     pub fn new(u: T, v: T) -> Edge<T, K, V> {
         Edge {
             u,
@@ -29,6 +31,7 @@ impl<T: std::cmp::PartialOrd, K, V> Edge<T, K, V> {
         }
     }
 
+    /// Returns (v, u) if u > v
     pub fn ordered(self: Edge<T, K, V>) -> Edge<T, K, V> {
         return match self.u > self.v {
             true => self.reversed(),
