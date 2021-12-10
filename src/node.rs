@@ -4,6 +4,9 @@ use std::fmt;
 use std::fmt::{Debug, Display};
 use std::hash::{Hash, Hasher};
 
+/**
+Represents a graph node, with `name` and `attributes`.
+**/
 #[derive(Clone)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Node<T, K, V> {
@@ -12,6 +15,15 @@ pub struct Node<T, K, V> {
 }
 
 impl<T, K, V> Node<T, K, V> {
+
+    /**
+    Returns a `Node` with the specified `name` and no attributes.
+
+    ```
+    use graphrs::Node;
+    let node = Node::<&str, &str, &f64>::from_name("n1");
+    ```
+    **/
     pub fn from_name(name: T) -> Node<T, K, V> {
         Node {
             name,
@@ -19,6 +31,15 @@ impl<T, K, V> Node<T, K, V> {
         }
     }
 
+    /**
+    Returns a `Node` with the specified `name` and populates the `Node.attributes`
+    `HashMap` with the attributes tuples in the `attributes` parameter.
+
+    ```
+    use graphrs::Node;
+    let node = Node::from_name_and_attribute_tuples("n1", vec![("a", 1.0), ("b", 1.0)]);
+    ```
+    **/
     pub fn from_name_and_attribute_tuples(name: T, attributes: Vec<(K, V)>) -> Node<T, K, V>
     where
         T: Hash + Eq + Copy,

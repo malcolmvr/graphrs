@@ -46,8 +46,8 @@ pub use error::{Error, ErrorKind};
 mod graph;
 pub use graph::Graph;
 
-mod generators;
-pub use generators::*;
+mod mod_generators;
+pub use mod_generators::generators;
 
 mod graph_specs;
 pub use graph_specs::{

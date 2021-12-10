@@ -14,6 +14,7 @@ It allows graphs to be created with support for:
 * multiple edges between two nodes
 * self-loops
 * acyclic enforcement
+
 # Example
 ```
 use graphrs::{Edge, Graph, GraphSpecs, MissingNodeStrategy, Node};
@@ -50,11 +51,19 @@ pub struct Graph<T: PartialOrd, K, V> {
 }
 
 impl<T: Display + PartialOrd, K, V> Graph<T, K, V> {
-    /// Adds new edges to a `Graph`, or updates existing edges, or both.
-    /// If the new edges reference nodes that don't exist the `missing_node_strategy` argument determines what happens.
-    /// The constraints in the graph's `specs` field (e.g. `acyclic`) will be applied to the resulting set of edges.
-    /// The graph is not mutated; this method returns a new `Graph` instance.
-    pub fn add_or_update_edges(self, new_edges: Vec<Edge<T, K, V>>) -> Result<Graph<T, K, V>, Error>
+
+    /**
+    Adds new edges to a `Graph`, or updates existing edges, or both.
+
+    If the new edges reference nodes that don't exist the graph's `specs.missing_node_strategy`
+    determines what happens.
+
+    The constraints in the graph's `specs` field (e.g. `acyclic`) will be applied to the
+    resulting set of edges.
+
+    Returns a new `Graph` with the new edges.
+    **/
+    pub fn add_edges(self, new_edges: Vec<Edge<T, K, V>>) -> Result<Graph<T, K, V>, Error>
     where
         T: Hash + Eq + Copy + Ord,
         K: Hash + Eq + Copy,
@@ -76,8 +85,7 @@ impl<T: Display + PartialOrd, K, V> Graph<T, K, V> {
     }
 
     /// Adds nodes to the Graph or updates the attributes of existing nodes.
-    /// `merge_strategy` describes how existing and new attributes are to be merged.
-    pub fn add_or_update_nodes(self, nodes: Vec<Node<T, K, V>>) -> Result<Graph<T, K, V>, Error>
+    pub fn add_nodes(self, nodes: Vec<Node<T, K, V>>) -> Result<Graph<T, K, V>, Error>
     where
         T: Hash + Eq + Copy + Ord,
         K: Hash + Eq + Copy,
@@ -118,9 +126,13 @@ impl<T: Display + PartialOrd, K, V> Graph<T, K, V> {
         self.nodes.values().collect::<Vec<&Node<T, K, V>>>()
     }
 
-    /// Gets the `Edge` between `u` and `v` nodes.
-    /// If no edge exists between `u` and `v`, `Err` is returned.
-    /// If `specs.multi_edges` is true then the `get_edges` method should be used instead.
+    /**
+    Gets the `Edge` between `u` and `v` nodes.
+
+    If no edge exists between `u` and `v`, `Err` is returned.
+
+    If `specs.multi_edges` is true then the `get_edges` method should be used instead.
+    **/
     pub fn get_edge(&self, u: T, v: T) -> Result<&Edge<T, K, V>, Error>
     where
         T: Hash + Eq + Copy + Ord,
@@ -140,15 +152,18 @@ impl<T: Display + PartialOrd, K, V> Graph<T, K, V> {
         let edges = self.edges.get(&ordered);
         match edges {
             None => Err(Error {
-                kind: ErrorKind::NoEdge,
+                kind: ErrorKind::EdgeNotFound,
                 message: "the requested edge does not exist".to_string(),
             }),
             Some(e) => Ok(&e[0]),
         }
     }
 
-    /// Gets the edges between `u` and `v` nodes.
-    /// If `specs.multi_edges` is false then the `get_edge` method should be used instead.
+    /**
+    Gets the edges between `u` and `v` nodes.
+
+    If `specs.multi_edges` is false then the `get_edge` method should be used instead.
+    **/
     pub fn get_edges(&self, u: T, v: T) -> Result<&Vec<Edge<T, K, V>>, Error>
     where
         T: Hash + Eq + Copy + Ord,
@@ -163,15 +178,18 @@ impl<T: Display + PartialOrd, K, V> Graph<T, K, V> {
         let edges = self.edges.get(&(u, v));
         match edges {
             None => Err(Error {
-                kind: ErrorKind::NoEdge,
+                kind: ErrorKind::EdgeNotFound,
                 message: "the requested edge does not exist".to_string(),
             }),
             Some(e) => Ok(&e),
         }
     }
 
-    /// Returns all the nodes that connect to `node_name`.
-    /// For a directed graph this returns predecessor and successor nodes.
+    /**
+    Returns all the nodes that connect to `node_name`.
+    
+    For a directed graph this returns predecessor and successor nodes.
+    **/
     pub fn get_neighbor_nodes(&self, node_name: T) -> Result<Vec<&Node<T, K, V>>, Error>
     where
         T: Hash + Eq + Copy + Ord,
@@ -278,8 +296,11 @@ impl<T: Display + PartialOrd, K, V> Graph<T, K, V> {
         &self.successors
     }
 
-    /// Create a new `Graph` from the specified `nodes` and `edges`.
-    /// The `specs` determined the characteristics and constraints of the graph.
+    /**
+    Create a new `Graph` from the specified `nodes` and `edges`.
+    
+    The `specs` determined the characteristics and constraints of the graph.
+    **/
     pub fn new_from_nodes_and_edges(
         nodes: Vec<Node<T, K, V>>,
         edges: Vec<Edge<T, K, V>>,

@@ -1,12 +1,12 @@
 #[cfg(test)]
 mod tests {
 
-    use graphrs::{complete_graph, Edge};
+    use graphrs::{generators, Edge};
     use std::collections::HashSet;
 
     #[test]
     fn test_complete_graph_directed() {
-        let graph = complete_graph(3, true);
+        let graph = generators::complete_graph(3, true);
         let all_edges = graph.get_all_edges();
         assert_eq!(all_edges.len(), 6);
         let hashset = all_edges
@@ -22,7 +22,7 @@ mod tests {
 
     #[test]
     fn test_complete_graph_undirected() {
-        let graph = complete_graph(3, false);
+        let graph = generators::complete_graph(3, false);
         let all_edges = graph.get_all_edges();
         assert_eq!(all_edges.len(), 3);
         let hashset = all_edges

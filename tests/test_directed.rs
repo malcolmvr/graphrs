@@ -7,13 +7,13 @@ mod tests {
     use std::iter::FromIterator;
 
     #[test]
-    fn test_add_or_update_edges_add() {
+    fn test_add_edges_add() {
         // test addition of a new edge
         let graph = get_basic_graph(None);
 
         let new_edges = vec![Edge::with_attribute("n3", "n1", "weight", &4.4)];
 
-        let graph = graph.add_or_update_edges(new_edges);
+        let graph = graph.add_edges(new_edges);
         assert!(graph.is_ok());
         let graph = graph.unwrap();
 
@@ -25,18 +25,18 @@ mod tests {
     }
 
     #[test]
-    fn test_add_or_update_edges_update_error() {
+    fn test_add_edges_update_error() {
         // test that when an existing edge is added and EdgeDedupeStrategy is Error
         let graph = get_basic_graph(None);
 
         let new_edges = vec![Edge::with_attribute("n1", "n3", "weight", &4.4)];
 
-        let graph = graph.add_or_update_edges(new_edges);
+        let graph = graph.add_edges(new_edges);
         assert!(graph.is_err());
     }
 
     #[test]
-    fn test_add_or_update_edges_update_keep_first() {
+    fn test_add_edges_update_keep_first() {
         // test addition of an existing edge is added and EdgeDedupeStrategy is KeepFirst
         let specs = GraphSpecs {
             edge_dedupe_strategy: EdgeDedupeStrategy::KeepFirst,
@@ -46,7 +46,7 @@ mod tests {
 
         let new_edges = vec![Edge::with_attribute("n1", "n3", "weight", &4.4)];
 
-        let graph = graph.add_or_update_edges(new_edges);
+        let graph = graph.add_edges(new_edges);
         assert!(graph.is_ok());
         let graph = graph.unwrap();
 
@@ -55,7 +55,7 @@ mod tests {
     }
 
     #[test]
-    fn test_add_or_update_edges_update_keep_last() {
+    fn test_add_edges_update_keep_last() {
         // test addition of an existing edge is added and EdgeDedupeStrategy is KeepLast
         let specs = GraphSpecs {
             edge_dedupe_strategy: EdgeDedupeStrategy::KeepLast,
@@ -65,7 +65,7 @@ mod tests {
 
         let new_edges = vec![Edge::with_attribute("n1", "n3", "weight", &4.4)];
 
-        let graph = graph.add_or_update_edges(new_edges);
+        let graph = graph.add_edges(new_edges);
         assert!(graph.is_ok());
         let graph = graph.unwrap();
 
@@ -74,18 +74,18 @@ mod tests {
     }
 
     #[test]
-    fn test_add_or_update_edges_add_nodes_error() {
+    fn test_add_edges_add_nodes_error() {
         // test edge addition with MissingNodeStrategy::Error
         let graph = get_basic_graph(None);
 
         let new_edges = vec![Edge::with_attribute("n4", "n5", "weight", &4.4)];
 
-        let graph = graph.add_or_update_edges(new_edges);
+        let graph = graph.add_edges(new_edges);
         assert!(graph.is_err());
     }
 
     #[test]
-    fn test_add_or_update_edges_add_nodes_create() {
+    fn test_add_edges_add_nodes_create() {
         // test edge addition with MissingNodeStrategy::Create
         let specs = GraphSpecs {
             missing_node_strategy: MissingNodeStrategy::Create,
@@ -95,7 +95,7 @@ mod tests {
 
         let new_edges = vec![Edge::with_attribute("n4", "n5", "weight", &4.4)];
 
-        let graph = graph.add_or_update_edges(new_edges);
+        let graph = graph.add_edges(new_edges);
         assert!(graph.is_ok());
         let graph = graph.unwrap();
 
@@ -113,8 +113,7 @@ mod tests {
     }
 
     #[test]
-    fn test_add_or_update_nodes_replace() {
-        // test node addition with replace strategy
+    fn test_add_nodes() {
         let graph = get_basic_graph(None);
 
         let nodes = vec![Node::from_name_and_attribute_tuples(
@@ -122,7 +121,7 @@ mod tests {
             vec![("a", &1.0), ("b", &2.0)],
         )];
 
-        let graph = graph.add_or_update_nodes(nodes);
+        let graph = graph.add_nodes(nodes);
         assert!(graph.is_ok());
         let graph = graph.unwrap();
 
@@ -136,41 +135,7 @@ mod tests {
             Node::from_name_and_attribute_tuples("n11", vec![("a", &2.0)]),
         ];
 
-        let graph = graph.add_or_update_nodes(nodes);
-        assert!(graph.is_ok());
-        let graph = graph.unwrap();
-
-        let node = graph.get_node("n1").unwrap();
-        assert_eq!(graph.get_all_nodes().len(), 5);
-        assert_eq!(node.attributes.as_ref().unwrap()["a"], &2.0);
-        assert_eq!(node.attributes.as_ref().unwrap().contains_key("b"), false);
-    }
-
-    #[test]
-    fn test_add_or_update_nodes_update() {
-        // test node addition with update strategy
-        let graph = get_basic_graph(None);
-
-        let nodes = vec![Node::from_name_and_attribute_tuples(
-            "n1",
-            vec![("a", &1.0), ("b", &2.0)],
-        )];
-
-        let graph = graph.add_or_update_nodes(nodes);
-        assert!(graph.is_ok());
-        let graph = graph.unwrap();
-
-        let node = graph.get_node("n1").unwrap();
-        assert_eq!(node.attributes.as_ref().unwrap()["a"], &1.0);
-        assert_eq!(node.attributes.as_ref().unwrap()["b"], &2.0);
-
-        let nodes = vec![
-            Node::from_name_and_attribute_tuples("n1", vec![("a", &2.0)]),
-            Node::from_name_and_attribute_tuples("n10", vec![("a", &1.0)]),
-            Node::from_name_and_attribute_tuples("n11", vec![("a", &2.0)]),
-        ];
-
-        let graph = graph.add_or_update_nodes(nodes);
+        let graph = graph.add_nodes(nodes);
         assert!(graph.is_ok());
         let graph = graph.unwrap();
 

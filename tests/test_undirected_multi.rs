@@ -4,13 +4,13 @@ mod tests {
     use graphrs::{Edge, Graph, GraphSpecs, Node};
 
     #[test]
-    fn test_add_or_update_edges_add_zzz() {
-        // test addition of a new edge
+    fn test_add_edges_add_multi() {
+        // test addition of a new edge that already exists
         let graph = get_basic_graph(None);
 
         let new_edges = vec![Edge::with_attribute("n3", "n1", "weight", &4.4)];
 
-        let graph = graph.add_or_update_edges(new_edges);
+        let graph = graph.add_edges(new_edges);
         assert!(graph.is_ok());
         let graph = graph.unwrap();
 
