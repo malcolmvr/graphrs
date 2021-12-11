@@ -8,6 +8,8 @@ license = "MIT"
 homepage = "https://github.com/malcolmvr/graphrs"
 repository = "https://github.com/malcolmvr/graphrs"
 readme = "README.md"
+keywords = ["graph", "network", "network analysis", "nodes", "edges", "vertex", "vertices", "directed", "undirected", "acyclic", "multigraph", "graph theory", "weighted graph", "social network analysis"]
+categories = ["data-structures", "algorithms", "mathematics", "science"]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
