@@ -8,7 +8,7 @@ license = "MIT"
 homepage = "https://github.com/malcolmvr/graphrs"
 repository = "https://github.com/malcolmvr/graphrs"
 readme = "README.md"
-keywords = ["graph", "network", "network analysis", "nodes", "edges", "vertex", "vertices", "directed", "undirected", "acyclic", "multigraph", "graph theory", "weighted graph", "social network analysis"]
+keywords = ["graph", "network", "analysis", "nodes", "edges", "vertex", "vertices", "directed", "undirected", "acyclic", "multigraph"]
 categories = ["data-structures", "algorithms", "mathematics", "science"]
 exclude = [".vscode/*", "tests/*"]
 
