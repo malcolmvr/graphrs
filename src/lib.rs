@@ -1,16 +1,22 @@
 /*!
-# GraphRS
-GraphRS is a Rust crate for the analysis of [graphs](https://en.wikipedia.org/wiki/Graph_(discrete_mathematics)).
+# graphrs
+
+`graphrs` is a Rust package for the creation, manipulation and analysis of [graphs](https://en.wikipedia.org/wiki/Graph_(discrete_mathematics)).
+
 It allows graphs to be created with support for:
 * directed and undirected edges
 * multiple edges between two nodes
 * self-loops
 * acyclic enforcement
+
 ## Major structs
+
 * [Graph](./struct.Graph.html)
 * [Node](./struct.Node.html)
 * [Edge](./struct.Edge.html)
+
 ## Examples
+
 ```
 use graphrs::{Edge, Graph, GraphSpecs, MissingNodeStrategy, Node};
 
@@ -35,6 +41,7 @@ let graph = Graph::<&str, &str, &f64>::new_from_nodes_and_edges(
     specs
 );
 ```
+
 !*/
 
 mod edge;
