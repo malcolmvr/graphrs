@@ -1,53 +1,55 @@
 use std::cmp::{Ord, Ordering, PartialOrd};
-use std::collections::HashMap;
 use std::fmt;
 use std::fmt::{Debug, Display};
 use std::hash::{Hash, Hasher};
 
 /**
-An enumeration that specifies which way to look at an edge side.
-`U` treats edges as (u, v). `V` treats edges as (v, u).
-**/
-pub enum EdgeSide {
-    U,
-    V,
-}
-
-/**
 Represents a graph edge as (`u`, `v`).
 
 Also allows `attributes`, as a `HashMap`, to be stored on an edge.
-**/
+*/
 #[derive(Clone)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub struct Edge<T, K, V>
+pub struct Edge<T, A>
 where
     T: PartialOrd,
 {
+    /// The name of the first node of the edge.
     pub u: T,
+    /// The name of the second node of the edge.
     pub v: T,
-    pub attributes: Option<HashMap<K, V>>,
+    /// Any attributes of the edge.
+    pub attributes: Option<A>,
+    /// The edge weight. For weighted `Graph` this should be a real number.
+    /// For an unweighted `Graph` this should be `f64:NAN`.
+    pub weight: f64,
 }
 
-impl<T: std::cmp::PartialOrd, K, V> Edge<T, K, V> {
-
-    /// Creates a new `Edge` with no attributes.
+impl<T: std::cmp::PartialOrd, A> Edge<T, A> {
     /**
-    Creates a (`u`, `v`) `Edge` with a {`name`: `value`} attribute.
+    Creates a new `Edge` with no attributes.
+
+    # Arguments
+
+    * `u`: The name of the first node of the edge.
+    * `v`: The name of the second node of the edge.
+
+    # Examples
 
     ```
     use graphrs::Edge;
     let edges = vec![
-        Edge::<&str, &str, &f64>::new("n1", "n2"),
-        Edge::<&str, &str, &f64>::new("n2", "n1"),
+        Edge::<&str, ()>::new("n1", "n2"),
+        Edge::<&str, ()>::new("n2", "n1"),
     ];
     ```
-    **/
-    pub fn new(u: T, v: T) -> Edge<T, K, V> {
+    */
+    pub fn new(u: T, v: T) -> Edge<T, A> {
         Edge {
             u,
             v,
             attributes: None,
+            weight: f64::NAN,
         }
     }
 
@@ -56,12 +58,13 @@ impl<T: std::cmp::PartialOrd, K, V> Edge<T, K, V> {
 
     ```
     use graphrs::Edge;
-    let edge1 = Edge::<&str, &str, &f64>::new("n2", "n1");
+    let edge1 = Edge::<&str, ()>::new("n2", "n1");
     let edge2 = edge1.ordered();
-    // edge2 is ("n1", "n2")
+    assert_eq!(edge2.u, "n1");
+    assert_eq!(edge2.v, "n2");
     ```
-    **/
-    pub fn ordered(self: Edge<T, K, V>) -> Edge<T, K, V> {
+    */
+    pub fn ordered(self: Edge<T, A>) -> Edge<T, A> {
         return match self.u > self.v {
             true => self.reversed(),
             false => self,
@@ -72,12 +75,13 @@ impl<T: std::cmp::PartialOrd, K, V> Edge<T, K, V> {
     Reverses the edge. (u, v) -> (v, u)
     ```
     use graphrs::Edge;
-    let edge1 = Edge::<&str, &str, &f64>::new("n2", "n1");
+    let edge1 = Edge::<&str, ()>::new("n2", "n1");
     let edge2 = edge1.reversed();
-    // edge2 is ("n1", "n2")
+    assert_eq!(edge2.u, "n1");
+    assert_eq!(edge2.v, "n2");
     ```
-    **/
-    pub fn reversed(self: Edge<T, K, V>) -> Edge<T, K, V> {
+    */
+    pub fn reversed(self: Edge<T, A>) -> Edge<T, A> {
         Edge {
             u: self.v,
             v: self.u,
@@ -86,39 +90,43 @@ impl<T: std::cmp::PartialOrd, K, V> Edge<T, K, V> {
     }
 
     /**
-    Creates a (`u`, `v`) `Edge` with a {`name`: `value`} attribute.
+    Creates a (`u`, `v`) `Edge` with a specified `weight`.
+
+    # Arguments
+
+    * `u`: The name of the first node of the edge.
+    * `v`: The name of the second node of the edge.
+    * `weight`: The weight of the edge.
+
+    # Examples
 
     ```
     use graphrs::Edge;
     let edges = vec![
-        Edge::with_attribute("n1", "n2", "weight", &1.0),
-        Edge::with_attribute("n2", "n1", "weight", &2.0),
+        Edge::<&str, ()>::with_weight("n1", "n2", 1.0),
+        Edge::<&str, ()>::with_weight("n2", "n1", 2.0),
     ];
     ```
-    **/
-    pub fn with_attribute(u: T, v: T, name: K, value: V) -> Edge<T, K, V>
-    where
-        K: Hash,
-        K: Eq,
-    {
-        let attr = vec![(name, value)].into_iter().collect::<HashMap<K, V>>();
+    */
+    pub fn with_weight(u: T, v: T, weight: f64) -> Edge<T, A> {
         Edge {
             u,
             v,
-            attributes: Some(attr),
+            attributes: None,
+            weight: weight,
         }
     }
 }
 
-impl<T: PartialEq + PartialOrd, K, V> PartialEq for Edge<T, K, V> {
+impl<T: PartialEq + PartialOrd, A> PartialEq for Edge<T, A> {
     fn eq(&self, other: &Self) -> bool {
         self.u == other.u && self.v == other.v
     }
 }
 
-impl<T: Eq + PartialOrd, K, V> Eq for Edge<T, K, V> {}
+impl<T: Eq + PartialOrd, A> Eq for Edge<T, A> {}
 
-impl<T: Debug + PartialOrd, K, V> fmt::Debug for Edge<T, K, V> {
+impl<T: Debug + PartialOrd, A> fmt::Debug for Edge<T, A> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("Node")
             .field("u", &self.u)
@@ -127,26 +135,26 @@ impl<T: Debug + PartialOrd, K, V> fmt::Debug for Edge<T, K, V> {
     }
 }
 
-impl<T: Display + PartialOrd, K, V> fmt::Display for Edge<T, K, V> {
+impl<T: Display + PartialOrd, A> fmt::Display for Edge<T, A> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "({}, {})", self.u, self.v)
     }
 }
 
-impl<T: Hash + PartialOrd, K, V> Hash for Edge<T, K, V> {
+impl<T: Hash + PartialOrd, A> Hash for Edge<T, A> {
     fn hash<H: Hasher>(&self, state: &mut H) {
         self.u.hash(state);
         self.v.hash(state);
     }
 }
 
-impl<T: Eq + PartialEq + PartialOrd, K, V> PartialOrd for Edge<T, K, V> {
+impl<T: Eq + PartialEq + PartialOrd, A> PartialOrd for Edge<T, A> {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         Some(self.cmp(other))
     }
 }
 
-impl<T: Eq + PartialOrd, K, V> Ord for Edge<T, K, V> {
+impl<T: Eq + PartialOrd, A> Ord for Edge<T, A> {
     fn cmp(&self, other: &Self) -> Ordering {
         let u_cmp = self.u.partial_cmp(&other.u).unwrap();
         match u_cmp {

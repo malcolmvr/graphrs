@@ -7,64 +7,7 @@
         {
             "type": "lldb",
             "request": "launch",
-            "name": "Debug unit tests in library 'graphrs'",
-            "cargo": {
-                "args": [
-                    "test",
-                    "--no-run",
-                    "--lib",
-                    "--package=graphrs"
-                ],
-                "filter": {
-                    "name": "graphrs",
-                    "kind": "lib"
-                }
-            },
-            "args": [],
-            "cwd": "${workspaceFolder}"
-        },
-        {
-            "type": "lldb",
-            "request": "launch",
-            "name": "Debug integration test 'test_directed'",
-            "cargo": {
-                "args": [
-                    "test",
-                    "--no-run",
-                    "--test=test_directed",
-                    "--package=graphrs"
-                ],
-                "filter": {
-                    "name": "test_directed",
-                    "kind": "test"
-                }
-            },
-            "args": [],
-            "cwd": "${workspaceFolder}"
-        },
-        {
-            "type": "lldb",
-            "request": "launch",
-            "name": "Debug integration test 'test_undirected'",
-            "cargo": {
-                "args": [
-                    "test",
-                    "--no-run",
-                    "--test=test_undirected",
-                    "--package=graphrs"
-                ],
-                "filter": {
-                    "name": "test_undirected",
-                    "kind": "test"
-                }
-            },
-            "args": [],
-            "cwd": "${workspaceFolder}"
-        },
-        {
-            "type": "lldb",
-            "request": "launch",
-            "name": "Debug integration test 'test_undirected_multi'",
+            "name": "Debug unit tests 'test_undirected_multi'",
             "cargo": {
                 "args": [
                     "test",
@@ -74,44 +17,6 @@
                 ],
                 "filter": {
                     "name": "test_undirected_multi",
-                    "kind": "test"
-                }
-            },
-            "args": [],
-            "cwd": "${workspaceFolder}"
-        },
-        {
-            "type": "lldb",
-            "request": "launch",
-            "name": "Debug integration test 'test_generators'",
-            "cargo": {
-                "args": [
-                    "test",
-                    "--no-run",
-                    "--test=test_generators",
-                    "--package=graphrs"
-                ],
-                "filter": {
-                    "name": "test_generators",
-                    "kind": "test"
-                }
-            },
-            "args": [],
-            "cwd": "${workspaceFolder}"
-        },
-        {
-            "type": "lldb",
-            "request": "launch",
-            "name": "Debug integration test 'test_node_attributes'",
-            "cargo": {
-                "args": [
-                    "test",
-                    "--no-run",
-                    "--test=test_node_attributes",
-                    "--package=graphrs"
-                ],
-                "filter": {
-                    "name": "test_node_attributes",
                     "kind": "test"
                 }
             },

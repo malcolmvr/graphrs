@@ -2,7 +2,7 @@ use std::fmt::{Display, Formatter, Result};
 
 /**
 If errors occur when creating or processing a `Graph` this `Error` struct will be returned.
-**/
+*/
 #[derive(Clone, Debug)]
 pub struct Error {
     pub kind: ErrorKind,
@@ -16,36 +16,44 @@ impl Display for Error {
 }
 
 /**
-An enumeration of different kinds of errors that can occur.
-
-`DuplicateEdge`: a redundant `Edge` was added to a `Graph` that doesn't support multi `Edge`s.
-
-`NodeNotFound`: a `Node` was requested from the `Graph` but the `Node` doesn't exist.
-
-`EdgeNotFound`: an `Edge` was requested from the `Graph` but the `Edge` doesn't exist.
-
-`SelfLoopsFound`: `Edge`s were added to an `Graph`, resulting in self-loops, and the `Graph`
-does not allow self-loops.
-
-`WrongMethod`: a method was invoked on a `Graph` whose `specs` don't support that method.
-**/
+An enumeration of different kinds of errors that can occur while creating and
+analyzing [Graph](./struct.Graph.html) objects.
+*/
 #[derive(Clone, Debug)]
 pub enum ErrorKind {
+    /// Contradictory paths were found when computing shortest paths.
+    ContradictoryPaths,
+    /// A duplicate `Edge` was added to a [Graph](./struct.Graph.html) that doesn't
+    /// support multi `Edge`s.
     DuplicateEdge,
+    /// A [Node](./struct.Node.html) was requested from a [Graph](./struct.Graph.html) but the
+    /// [Node](./struct.Node.html) doesn't exist.
     NodeNotFound,
+    /// An [Edge](./struct.Edge.html) was requested from a [Graph](./struct.Graph.html) but the
+    /// [Edge](./struct.Edge.html) doesn't exist.
     EdgeNotFound,
+    /// An algorithm requiring an [Edge](./struct.Edge.html) to have a weight was invoked
+    /// but an [Edge](./struct.Edge.html) that did not have a weight value (was f64::NAN) was
+    /// found in the [Graph](./struct.Graph.html).
+    EdgeWeightNotSpecified,
+    /// An [Edge](./struct.Edge.html) where `u` and `v` were the same was added to a
+    /// [Graph](./struct.Graph.html) that doesn't allow self-loops.
     SelfLoopsFound,
+    /// A method was invoked on a [Graph](./struct.Graph.html) whose
+    /// [GraphSpecs](./struct.GraphSpecs.html) are not supported by the method.
     WrongMethod,
 }
 
 impl Display for ErrorKind {
     fn fmt(&self, f: &mut Formatter) -> Result {
         match self {
-            ErrorKind::DuplicateEdge => write!(f, "duplicate edge"),
+            ErrorKind::ContradictoryPaths => write!(f, "contradictory paths"),
+            ErrorKind::DuplicateEdge => write!(f, "duplicate edge detected"),
             ErrorKind::NodeNotFound => write!(f, "node not found"),
             ErrorKind::EdgeNotFound => write!(f, "edge not found"),
+            ErrorKind::EdgeWeightNotSpecified => write!(f, "edge weight not found"),
             ErrorKind::SelfLoopsFound => write!(f, "self loops found"),
-            ErrorKind::WrongMethod => write!(f, "wrong method"),
+            ErrorKind::WrongMethod => write!(f, "wrong method was used"),
         }
     }
 }

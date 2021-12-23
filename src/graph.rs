@@ -1,5 +1,5 @@
 use crate::{
-    Edge, EdgeDedupeStrategy, EdgeSide, Error, ErrorKind, GraphSpecs, MissingNodeStrategy, Node,
+    Edge, EdgeDedupeStrategy, Error, ErrorKind, GraphSpecs, MissingNodeStrategy, Node,
     SelfLoopsFalseStrategy,
 };
 use itertools::Itertools;
@@ -13,11 +13,18 @@ It allows graphs to be created with support for:
 * directed and undirected edges
 * multiple edges between two nodes
 * self-loops
-* acyclic enforcement
+
+A `Graph` has two generic arguments:
+* `T`: Specifies the type to use for node names.
+* `A`: Specifies the type to use for node and edge attributes. Attributes are *optional*
+extra data that are associated with a node or an edge. For example, if nodes represent
+people and `T` is an `i32` of their employee ID then the node attributes might store
+their first and last names.
 
 # Example
+
 ```
-use graphrs::{Edge, Graph, GraphSpecs, MissingNodeStrategy, Node};
+use graphrs::{Edge, Graph, GraphSpecs, Node};
 
 let nodes = vec![
     Node::from_name("n1"),
@@ -26,31 +33,148 @@ let nodes = vec![
 ];
 
 let edges = vec![
-    Edge::with_attribute("n1", "n2", "weight", &1.0),
-    Edge::with_attribute("n2", "n1", "weight", &2.0),
-    Edge::with_attribute("n1", "n3", "weight", &3.0),
-    Edge::with_attribute("n2", "n3", "weight", &3.0),
+    Edge::with_weight("n1", "n2", 1.0),
+    Edge::with_weight("n2", "n1", 2.0),
+    Edge::with_weight("n1", "n3", 3.0),
+    Edge::with_weight("n2", "n3", 3.0),
 ];
 
 let specs = GraphSpecs::directed();
 
-let graph = Graph::<&str, &str, &f64>::new_from_nodes_and_edges(
+let graph = Graph::<&str, ()>::new_from_nodes_and_edges(
     nodes,
     edges,
     specs
 );
 ```
-**/
+*/
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub struct Graph<T: PartialOrd, K, V> {
-    nodes: HashMap<T, Node<T, K, V>>,
-    edges: HashMap<(T, T), Vec<Edge<T, K, V>>>,
-    specs: GraphSpecs,
+pub struct Graph<T: PartialOrd, A: Copy> {
+    /// The graph's nodes, stored as a `HashMap` keyed by the node names.
+    nodes: HashMap<T, Node<T, A>>,
+    /// The graph's edges, stored as a `HashMap` keyed by a tuple of node names.
+    edges: HashMap<(T, T), Vec<Edge<T, A>>>,
+    /// The [GraphSpecs](./struct.GraphSpecs.html) for the graph.
+    pub specs: GraphSpecs,
+    /// Stores the successors of nodes. A successor of u is a node v such that there
+    /// exists a directed edge from u to v. For an undirected graph `successors` stores
+    /// all the adjacent nodes. An adjacent node to u is a node v such that there exists
+    /// an edge from u to v *or* from v to u.
     successors: HashMap<T, HashSet<T>>,
+    /// Stores the predecessors of nodes. A predecessor of v is a node u such that there
+    /// exists a directed edge from u to v. For an undirected graph `precessors` is not used.
     predecessors: HashMap<T, HashSet<T>>,
 }
 
-impl<T: Display + PartialOrd, K, V> Graph<T, K, V> {
+impl<T: Display + PartialOrd, A: Copy> Graph<T, A> {
+    /**
+    Adds an `edge` to the `Graph`.
+
+    If the new edge references nodes that don't exist the graph's `specs.missing_node_strategy`
+    determines what happens.
+
+    ```
+    use graphrs::{Edge, Graph, GraphSpecs};
+
+    let mut graph: Graph<&str, ()> = Graph::new(GraphSpecs::directed());
+    let result = graph.add_edge(Edge::new("n1", "n2"));
+    assert!(result.is_err());
+    ```
+    */
+    pub fn add_edge(&mut self, edge: Edge<T, A>) -> Result<(), Error>
+    where
+        T: Hash + Eq + Copy + Ord + Display,
+        A: Copy,
+    {
+        // check for self loops
+        if !self.specs.self_loops && edge.u == edge.v {
+            match self.specs.self_loops_false_strategy {
+                SelfLoopsFalseStrategy::Error => {
+                    return Err(Error {
+                        kind: ErrorKind::SelfLoopsFound,
+                        message: format!(
+                            "Edge ({}, {}) is a self-loop and `specs.self_loops` is false.",
+                            edge.u, edge.v
+                        ),
+                    });
+                }
+                SelfLoopsFalseStrategy::Drop => {
+                    return Ok(());
+                }
+            }
+        }
+
+        // add nodes
+        if self.specs.missing_node_strategy == MissingNodeStrategy::Error
+            && (!self.nodes.contains_key(&edge.u) || !self.nodes.contains_key(&edge.v))
+        {
+            return Err(Error {
+                kind: ErrorKind::NodeNotFound,
+                message: format!(
+                    "While adding edge ({}, {}) one or both of the nodes was not \
+                    found in the graph. Either add the nodes or set \
+                    GraphSpecs.missing_node_strategy to `Create`.",
+                    edge.u, edge.v
+                ),
+            });
+        }
+        if !self.nodes.contains_key(&edge.u) {
+            self.nodes.insert(edge.u, Node::from_name(edge.u));
+        }
+        if !self.nodes.contains_key(&edge.v) {
+            self.nodes.insert(edge.v, Node::from_name(edge.v));
+        }
+
+        // add successors and predecessors
+        self.successors.entry(edge.u).or_default().insert(edge.v);
+        match self.specs.directed {
+            true => {
+                self.predecessors.entry(edge.v).or_default().insert(edge.u);
+            }
+            false => {
+                self.successors.entry(edge.v).or_default().insert(edge.u);
+            }
+        }
+
+        let ordered = match self.specs.directed {
+            false => edge.ordered(),
+            true => edge,
+        };
+
+        // add edge
+        match self.specs.multi_edges {
+            true => {
+                self.edges
+                    .entry((ordered.u, ordered.v))
+                    .or_default()
+                    .push(ordered);
+            }
+            false => match self.get_edge(ordered.u, ordered.v).is_ok() {
+                false => {
+                    self.edges.insert((ordered.u, ordered.v), vec![ordered]);
+                }
+                true => match self.specs.edge_dedupe_strategy {
+                    EdgeDedupeStrategy::Error => {
+                        return Err(Error {
+                            kind: ErrorKind::DuplicateEdge,
+                            message: format!(
+                                "A duplicate edge was found: {}. \
+                                Set the `GraphSpecs.edge_dedupe_strategy` if a different
+                                behavior is desired.",
+                                ordered
+                            ),
+                        });
+                    }
+                    EdgeDedupeStrategy::KeepLast => {
+                        self.edges.insert((ordered.u, ordered.v), vec![ordered]);
+                    }
+                    _ => {}
+                },
+            },
+        }
+
+        Ok(())
+    }
 
     /**
     Adds new edges to a `Graph`, or updates existing edges, or both.
@@ -58,89 +182,172 @@ impl<T: Display + PartialOrd, K, V> Graph<T, K, V> {
     If the new edges reference nodes that don't exist the graph's `specs.missing_node_strategy`
     determines what happens.
 
-    The constraints in the graph's `specs` field (e.g. `acyclic`) will be applied to the
-    resulting set of edges.
+    # Arguments
 
-    Returns a new `Graph` with the new edges.
-    **/
-    pub fn add_edges(self, new_edges: Vec<Edge<T, K, V>>) -> Result<Graph<T, K, V>, Error>
+    * `edges`: the new edges to add to the graph
+
+    ```
+    use graphrs::{Edge, Graph, GraphSpecs};
+
+    let mut graph: Graph<&str, ()> = Graph::new(GraphSpecs::directed_create_missing());
+    let result = graph.add_edges(vec![
+        Edge::new("n1", "n2"),
+        Edge::new("n2", "n3"),
+    ]);
+    assert!(result.is_ok());
+    ```
+    */
+    pub fn add_edges(&mut self, edges: Vec<Edge<T, A>>) -> Result<(), Error>
     where
-        T: Hash + Eq + Copy + Ord,
-        K: Hash + Eq + Copy,
-        V: Copy,
+        T: Hash + Eq + Copy + Ord + Display,
+        A: Copy,
     {
-        let nodes = self.nodes.values().into_iter().map(|n| n.clone()).collect();
-        let combined_edges: Vec<Edge<T, K, V>> = self
-            .edges
-            .values()
-            .into_iter()
-            .flatten()
-            .map(|e| e.clone())
-            .chain(new_edges)
-            .collect();
-        for edge in combined_edges.iter() {
-            println!("{}", edge);
+        for edge in edges {
+            let result = self.add_edge(edge);
+            if result.is_err() {
+                return result;
+            }
         }
-        Graph::new_from_nodes_and_edges(nodes, combined_edges, self.specs)
+
+        Ok(())
     }
 
-    /// Adds nodes to the Graph or updates the attributes of existing nodes.
-    pub fn add_nodes(self, nodes: Vec<Node<T, K, V>>) -> Result<Graph<T, K, V>, Error>
+    /**
+    Adds a node to the graph or updates the node's attributes if the node already exists.
+
+    # Arguments
+
+    `node`: the new node to add to the graph
+
+    ```
+    use graphrs::{Node, Graph, GraphSpecs};
+
+    let mut graph: Graph<&str, ()> = Graph::new(GraphSpecs::multi_directed());
+    graph.add_node(Node::from_name("n1"));
+    ```
+    */
+    pub fn add_node(&mut self, node: Node<T, A>)
     where
         T: Hash + Eq + Copy + Ord,
-        K: Hash + Eq + Copy,
-        V: Copy,
+        A: Copy,
     {
-        let (existing, new): (Vec<Node<T, K, V>>, Vec<Node<T, K, V>>) = nodes
-            .into_iter()
-            .partition(|n| self.nodes.contains_key(&n.name));
-        let new_nodes = self
-            .nodes
-            .values()
-            .clone()
-            .map(|n| (n.name, n.clone()))
-            .chain(new.into_iter().clone().map(|n| (n.name, n)))
-            .chain(existing.into_iter().map(|n| (n.name, n)))
-            .collect::<HashMap<T, Node<T, K, V>>>();
-
-        Ok(Graph {
-            nodes: new_nodes,
-            edges: self.edges,
-            specs: self.specs,
-            predecessors: self.predecessors,
-            successors: self.successors,
-        })
+        self.nodes.insert(node.name, node);
     }
 
-    /// Gets a `Vec` of all the edges in the graph.
-    pub fn get_all_edges(&self) -> Vec<&Edge<T, K, V>> {
+    /**
+    Adds a nodes to the graph or updates the nodes' attributes if they already exist.
+
+    # Arguments
+
+    `nodes`: the new nodes to add to the graph
+
+    ```
+    use graphrs::{Node, Graph, GraphSpecs};
+
+    let mut graph: Graph<&str, ()> = Graph::new(GraphSpecs::multi_directed());
+    graph.add_nodes(vec![
+        Node::from_name("n1"),
+        Node::from_name("n2"),
+    ]);
+    ```
+    */
+    pub fn add_nodes(&mut self, nodes: Vec<Node<T, A>>)
+    where
+        T: Hash + Eq + Copy + Ord,
+        A: Copy,
+    {
+        for node in nodes {
+            self.add_node(node);
+        }
+    }
+
+    /**
+    Gets a `Vec` of all the edges in the graph.
+
+    # Examples
+
+    ```
+    use graphrs::{Edge, Graph, GraphSpecs};
+
+    let mut graph: Graph<&str, ()> = Graph::new(GraphSpecs::directed_create_missing());
+    let result = graph.add_edges(vec![
+        Edge::new("n1", "n2"),
+        Edge::new("n2", "n3"),
+    ]);
+    let all_edges = graph.get_all_edges();
+    assert_eq!(all_edges.len(), 2);
+    ```
+    **/
+    pub fn get_all_edges(&self) -> Vec<&Edge<T, A>>
+    where
+        T: Hash + Eq + Copy + Ord,
+        A: Copy,
+    {
         self.edges
             .values()
             .into_iter()
             .flatten()
-            .collect::<Vec<&Edge<T, K, V>>>()
+            .collect::<Vec<&Edge<T, A>>>()
     }
 
-    /// Gets a `Vec` of all the nodes in the graph.
-    pub fn get_all_nodes(&self) -> Vec<&Node<T, K, V>> {
-        self.nodes.values().collect::<Vec<&Node<T, K, V>>>()
+    /**
+    Gets a `Vec` of all the nodes in the graph.
+
+    # Examples
+
+    ```
+    use graphrs::{Node, Graph, GraphSpecs};
+
+    let mut graph: Graph<&str, ()> = Graph::new(GraphSpecs::multi_undirected());
+    graph.add_nodes(vec![
+        Node::from_name("n1"),
+        Node::from_name("n2"),
+    ]);
+    let all_nodes = graph.get_all_nodes();
+    assert_eq!(all_nodes.len(), 2);
+    ```
+    */
+    pub fn get_all_nodes(&self) -> Vec<&Node<T, A>>
+    where
+        T: Hash + Eq + Copy + Ord,
+        A: Copy,
+    {
+        self.nodes.values().collect::<Vec<&Node<T, A>>>()
     }
 
     /**
     Gets the `Edge` between `u` and `v` nodes.
 
+    If `specs.multi_edges` is true then the `get_edges` method should be used instead.
+
+    # Arguments
+
+    `u`: The name of the first node of the edge.
+    `v`: The name of the second node of the edge.
+
+    # Returns
+
     If no edge exists between `u` and `v`, `Err` is returned.
 
-    If `specs.multi_edges` is true then the `get_edges` method should be used instead.
-    **/
-    pub fn get_edge(&self, u: T, v: T) -> Result<&Edge<T, K, V>, Error>
+    # Examples
+
+    ```
+    use graphrs::{algorithms::{shortest_path::{unweighted}}, generators};
+    let graph = generators::social::karate_club_graph();
+    let edge = graph.get_edge(0, 1);
+    assert!(edge.is_ok());
+    ```
+    */
+    pub fn get_edge(&self, u: T, v: T) -> Result<&Edge<T, A>, Error>
     where
         T: Hash + Eq + Copy + Ord,
+        A: Copy,
     {
         if self.specs.multi_edges {
             return Err(Error {
                 kind: ErrorKind::WrongMethod,
-                message: "use the `get_edges` method when `multi_edges` is true".to_string(),
+                message: "Use the `get_edges` method when `GraphSpecs.multi_edges` is `true`."
+                    .to_string(),
             });
         }
 
@@ -153,7 +360,7 @@ impl<T: Display + PartialOrd, K, V> Graph<T, K, V> {
         match edges {
             None => Err(Error {
                 kind: ErrorKind::EdgeNotFound,
-                message: "the requested edge does not exist".to_string(),
+                message: format!("The requested edge ({}, {}) does not exist.", u, v),
             }),
             Some(e) => Ok(&e[0]),
         }
@@ -163,41 +370,96 @@ impl<T: Display + PartialOrd, K, V> Graph<T, K, V> {
     Gets the edges between `u` and `v` nodes.
 
     If `specs.multi_edges` is false then the `get_edge` method should be used instead.
-    **/
-    pub fn get_edges(&self, u: T, v: T) -> Result<&Vec<Edge<T, K, V>>, Error>
+
+    # Arguments
+
+    `u`: The name of the first node of the edge.
+    `v`: The name of the second node of the edge.
+
+    # Returns
+
+    If no edge exists between `u` and `v`, `Err` is returned.
+
+    # Examples
+
+    ```
+    use graphrs::{Edge, Graph, GraphSpecs, MissingNodeStrategy};
+
+    let mut graph: Graph<&str, ()> = Graph::new(GraphSpecs {
+        missing_node_strategy: MissingNodeStrategy::Create,
+        ..GraphSpecs::multi_undirected()
+    });
+    let result = graph.add_edges(vec![
+        Edge::new("n1", "n2"),
+        Edge::new("n2", "n1"),
+    ]);
+    let edges = graph.get_edges("n1", "n2");
+    assert_eq!(edges.unwrap().len(), 2);
+    ```
+    */
+    pub fn get_edges(&self, u: T, v: T) -> Result<Vec<&Edge<T, A>>, Error>
     where
         T: Hash + Eq + Copy + Ord,
+        A: Copy,
     {
         if !self.specs.multi_edges {
             return Err(Error {
                 kind: ErrorKind::WrongMethod,
-                message: "use the `get_edge` method when `multi_edges` is false".to_string(),
+                message: "Use the `get_edge` method when `multi_edges` is `false`".to_string(),
             });
         }
 
-        let edges = self.edges.get(&(u, v));
+        let ordered = match !self.specs.directed && u > v {
+            false => (u, v),
+            true => (v, u),
+        };
+
+        let edges = self.edges.get(&ordered);
         match edges {
             None => Err(Error {
                 kind: ErrorKind::EdgeNotFound,
-                message: "the requested edge does not exist".to_string(),
+                message: format!("No edges found for the requested ({}, {})", u, v),
             }),
-            Some(e) => Ok(&e),
+            Some(e) => Ok(e.iter().collect::<Vec<&Edge<T, A>>>()),
         }
     }
 
     /**
     Returns all the nodes that connect to `node_name`.
-    
-    For a directed graph this returns predecessor and successor nodes.
-    **/
-    pub fn get_neighbor_nodes(&self, node_name: T) -> Result<Vec<&Node<T, K, V>>, Error>
+
+    # Arguments
+
+    * `node_name`: The name of the node to find neighbors for.
+
+    # Returns
+
+    For an undirected graph adjacent nodes are returned.
+    For a directed graph predecessor and successor nodes are returned.
+
+    # Examples
+
+    ```
+    use graphrs::{Edge, Graph, GraphSpecs};
+
+    let mut graph: Graph<&str, ()> = Graph::new(GraphSpecs::directed_create_missing());
+    let result = graph.add_edges(vec![
+        Edge::new("n1", "n2"),
+        Edge::new("n2", "n3"),
+    ]);
+    assert!(result.is_ok());
+    let neighbors = graph.get_neighbor_nodes("n2");
+    assert_eq!(neighbors.unwrap().len(), 2);
+    ```
+    */
+    pub fn get_neighbor_nodes(&self, node_name: T) -> Result<Vec<&Node<T, A>>, Error>
     where
         T: Hash + Eq + Copy + Ord,
+        A: Copy,
     {
         if !self.nodes.contains_key(&node_name) {
             return Err(Error {
                 kind: ErrorKind::NodeNotFound,
-                message: format!("node '{}' not found in the graph", node_name),
+                message: format!("Requested node '{}' was not found in the graph.", node_name),
             });
         }
 
@@ -214,37 +476,85 @@ impl<T: Display + PartialOrd, K, V> Graph<T, K, V> {
         Ok(all_nodes)
     }
 
-    /// Gets the `Node` for the specified node `name`.
-    pub fn get_node(&self, name: T) -> Option<&Node<T, K, V>>
+    /**
+    Gets the `Node` for the specified node `name`.
+
+    # Arguments
+
+    * `name`: The name of the [Node](./struct.Node.html) to return.
+
+    # Examples
+
+    ```
+    use graphrs::{Node, Graph, GraphSpecs};
+
+    let mut graph: Graph<&str, i32> = Graph::new(GraphSpecs::directed());
+    graph.add_node(Node::from_name_and_attributes("n1", 99));
+    let node = graph.get_node("n1");
+    assert_eq!(node.unwrap().attributes.unwrap(), 99);
+    ```
+    */
+    pub fn get_node(&self, name: T) -> Option<&Node<T, A>>
     where
         T: Hash + Eq + Copy + Ord,
+        A: Copy,
     {
         self.nodes.get(&name)
     }
 
-    /// Gets the (u, v) edges where `node_name` is v.
-    pub fn get_predecessor_nodes(&self, node_name: T) -> Result<Vec<&Node<T, K, V>>, Error>
+    /**
+    Gets all u for (u, v) edges where `node_name` is v.
+
+    # Arguments
+
+    * `name`: The name of the [Node](./struct.Node.html) to return predecessors for.
+
+    # Returns
+
+    Returns an error if called on an undirected graph. Use `get_neighbor_nodes` for
+    undirected graphs.
+
+    # Examples
+
+    ```
+    use graphrs::{Edge, Graph, GraphSpecs};
+
+    let mut graph: Graph<&str, ()> = Graph::new(GraphSpecs::directed_create_missing());
+    let result = graph.add_edges(vec![
+        Edge::new("n1", "n3"),
+        Edge::new("n2", "n3"),
+    ]);
+    assert!(result.is_ok());
+    let predecessors = graph.get_predecessor_nodes("n3");
+    assert_eq!(predecessors.unwrap().len(), 2);
+    ```
+    */
+    pub fn get_predecessor_nodes(&self, node_name: T) -> Result<Vec<&Node<T, A>>, Error>
     where
         T: Hash + Eq + Copy + Ord,
+        A: Copy,
     {
         if !self.specs.directed {
             return Err(Error {
                 kind: ErrorKind::WrongMethod,
-                message: "for undirected graphs use the `get_neighbor_nodes` method instead of `get_predecessor_nodes`".to_string(),
+                message: "For undirected graphs use the `get_neighbor_nodes` method instead \
+                of `get_predecessor_nodes`"
+                    .to_string(),
             });
         }
 
         self._get_predecessor_nodes(node_name)
     }
 
-    pub fn _get_predecessor_nodes(&self, node_name: T) -> Result<Vec<&Node<T, K, V>>, Error>
+    fn _get_predecessor_nodes(&self, node_name: T) -> Result<Vec<&Node<T, A>>, Error>
     where
         T: Hash + Eq + Copy + Ord,
+        A: Copy,
     {
         if !self.nodes.contains_key(&node_name) {
             return Err(Error {
                 kind: ErrorKind::NodeNotFound,
-                message: format!("node '{}' not found in the graph", node_name),
+                message: format!("Requested node '{}' was not found in the graph", node_name),
             });
         }
         let pred = self.predecessors.get(&node_name);
@@ -255,33 +565,67 @@ impl<T: Display + PartialOrd, K, V> Graph<T, K, V> {
     }
 
     /// Gets a `HashMap` of all the predecessor edges.
-    pub fn get_predecessors_map(&self) -> &HashMap<T, HashSet<T>> {
+    pub fn get_predecessors_map(&self) -> &HashMap<T, HashSet<T>>
+    where
+        T: Hash + Eq + Copy + Ord,
+        A: Copy,
+    {
         &self.predecessors
     }
 
-    /// Gets the (u, v) edges where `node_name` is u.
-    pub fn get_successor_nodes(&self, node_name: T) -> Result<Vec<&Node<T, K, V>>, Error>
+    /**
+    Gets all v for (u, v) edges where `node_name` is u.
+
+    # Arguments
+
+    * `name`: The name of the [Node](./struct.Node.html) to return predecessors for.
+
+    # Returns
+
+    Returns an error if called on an undirected graph. Use `get_neighbor_nodes` for
+    undirected graphs.
+
+    # Examples
+
+    ```
+    use graphrs::{Edge, Graph, GraphSpecs};
+
+    let mut graph: Graph<&str, ()> = Graph::new(GraphSpecs::directed_create_missing());
+    let result = graph.add_edges(vec![
+        Edge::new("n1", "n3"),
+        Edge::new("n2", "n3"),
+    ]);
+    assert!(result.is_ok());
+    let successors = graph.get_predecessor_nodes("n3");
+    assert_eq!(successors.unwrap().len(), 2);
+    ```
+    */
+    pub fn get_successor_nodes(&self, node_name: T) -> Result<Vec<&Node<T, A>>, Error>
     where
         T: Hash + Eq + Copy + Ord,
+        A: Copy,
     {
         if !self.specs.directed {
             return Err(Error {
                 kind: ErrorKind::WrongMethod,
-                message: "for undirected graphs use the `get_neighbor_nodes` method instead of `get_successor_nodes`".to_string(),
+                message: "For undirected graphs use the `get_neighbor_nodes` method instead \
+                of `get_successor_nodes`"
+                    .to_string(),
             });
         }
 
         self._get_successor_nodes(node_name)
     }
 
-    pub fn _get_successor_nodes(&self, node_name: T) -> Result<Vec<&Node<T, K, V>>, Error>
+    fn _get_successor_nodes(&self, node_name: T) -> Result<Vec<&Node<T, A>>, Error>
     where
         T: Hash + Eq + Copy + Ord,
+        A: Copy,
     {
         if !self.nodes.contains_key(&node_name) {
             return Err(Error {
                 kind: ErrorKind::NodeNotFound,
-                message: format!("node '{}' not found in the graph", node_name),
+                message: format!("Requested node '{}' was not found in the graph.", node_name),
             });
         }
         let succ = self.successors.get(&node_name);
@@ -292,243 +636,124 @@ impl<T: Display + PartialOrd, K, V> Graph<T, K, V> {
     }
 
     /// Gets a `HashMap` of all the successor edges.
-    pub fn get_successors_map(&self) -> &HashMap<T, HashSet<T>> {
+    pub fn get_successors_map(&self) -> &HashMap<T, HashSet<T>>
+    where
+        T: Hash + Eq + Copy + Ord,
+        A: Copy,
+    {
         &self.successors
     }
 
     /**
-    Create a new `Graph` from the specified `nodes` and `edges`.
-    
-    The `specs` determined the characteristics and constraints of the graph.
-    **/
-    pub fn new_from_nodes_and_edges(
-        nodes: Vec<Node<T, K, V>>,
-        edges: Vec<Edge<T, K, V>>,
-        specs: GraphSpecs,
-    ) -> Result<Graph<T, K, V>, Error>
+    Determines if all edges have a weight value.
+
+    # Returns
+
+    `true` if all edges have a `weight` value and the value isn't NAN, false otherwise.
+    */
+    pub fn edges_have_weight(&self) -> bool
     where
         T: Hash + Eq + Copy + Ord,
-        K: Hash + Eq + Copy,
-        V: Copy,
+        A: Copy,
     {
-        let node_names = nodes.iter().map(|n| n.name).collect::<HashSet<T>>();
-
-        let edges_map = match get_edges_map_for_specs(edges, &specs) {
-            Err(e) => return Err(e),
-            Ok(em) => em,
-        };
-
-        let edges_for_specs = &edges_map
-            .values()
-            .into_iter()
-            .flatten()
-            .collect::<Vec<&Edge<T, K, V>>>();
-
-        let (successors, predecessors) = match specs.directed {
-            true => get_directed_successors_predecessors(edges_for_specs),
-            false => get_undirected_successors_predecessors(edges_for_specs),
-        };
-
-        let missing_nodes = edges_map
-            .values()
-            .into_iter()
-            .flatten()
-            .map(|e| vec![e.u, e.v])
-            .flatten()
-            .filter(|name| !node_names.contains(name))
-            .map(|name| Node::<T, K, V>::from_name(name))
-            .collect::<Vec<Node<T, K, V>>>();
-
-        if specs.missing_node_strategy == MissingNodeStrategy::Error && missing_nodes.len() > 0 {
-            return Err(Error {
-                kind: ErrorKind::NodeNotFound,
-                message: "missing node".to_string(),
-            });
+        for edge in self.get_all_edges() {
+            if edge.weight.is_nan() {
+                return false;
+            }
         }
+        true
+    }
 
-        // missing_node_strategy == MissingNodeStrategy::Create
+    /**
+    Creates an empty graph, according to the `specs`.
 
-        let nodes_map = nodes
-            .into_iter()
-            .chain(missing_nodes)
-            .map(|n| (n.name, n))
-            .collect::<HashMap<T, Node<T, K, V>>>();
+    # Arguments
 
-        Ok(Graph {
-            nodes: nodes_map,
-            edges: edges_map,
-            specs,
-            successors,
-            predecessors,
-        })
+    * `specs`: An instance of [GraphSpecs](./struct.GraphSpecs.html) that determines the
+    characteristics and constraints of the graph.
+
+    # Examples
+
+    ```
+    use graphrs::{Graph, GraphSpecs};
+    let mut graph: Graph<&str, ()> = Graph::new(GraphSpecs::directed_create_missing());
+    ```
+    */
+    pub fn new(specs: GraphSpecs) -> Graph<T, A> {
+        Graph {
+            nodes: HashMap::<T, Node<T, A>>::new(),
+            edges: HashMap::<(T, T), Vec<Edge<T, A>>>::new(),
+            specs: specs,
+            successors: HashMap::<T, HashSet<T>>::new(),
+            predecessors: HashMap::<T, HashSet<T>>::new(),
+        }
+    }
+
+    /**
+    Create a new `Graph` from the specified `nodes` and `edges`.
+
+    # Arguments
+
+    * `nodes`: The [Node](./struct.Node.html) objects to add to the graph.
+    * `edge`: The [Edge](./struct.Edge.html) objects to add to the graph.
+    * `specs`: An instance of [GraphSpecs](./struct.GraphSpecs.html) that determines the
+    characteristics and constraints of the graph.
+
+    # Examples
+
+    ```
+    use graphrs::{Edge, Graph, GraphSpecs, Node};
+
+    let nodes = vec![
+        Node::from_name("n1"),
+        Node::from_name("n2"),
+        Node::from_name("n3"),
+    ];
+
+    let edges = vec![
+        Edge::with_weight("n1", "n2", 1.0),
+        Edge::with_weight("n2", "n1", 2.0),
+        Edge::with_weight("n1", "n3", 3.0),
+        Edge::with_weight("n2", "n3", 3.0),
+    ];
+
+    let specs = GraphSpecs::directed();
+
+    let graph = Graph::<&str, ()>::new_from_nodes_and_edges(
+        nodes,
+        edges,
+        specs
+    );
+    ```
+    */
+    pub fn new_from_nodes_and_edges(
+        nodes: Vec<Node<T, A>>,
+        edges: Vec<Edge<T, A>>,
+        specs: GraphSpecs,
+    ) -> Result<Graph<T, A>, Error>
+    where
+        T: Hash + Eq + Copy + Ord,
+        A: Copy,
+    {
+        let mut graph = Graph::new(specs);
+        graph.add_nodes(nodes);
+        let result = graph.add_edges(edges);
+        if result.is_err() {
+            return Err(result.unwrap_err());
+        }
+        Ok(graph)
     }
 
     // PRIVATE METHODS
 
-    fn get_nodes_for_names(&self, names: &HashSet<T>) -> Vec<&Node<T, K, V>>
+    fn get_nodes_for_names(&self, names: &HashSet<T>) -> Vec<&Node<T, A>>
     where
         T: Hash + Eq + Copy + Ord,
+        A: Copy,
     {
         names
             .into_iter()
             .map(|n| self.nodes.get(n).unwrap())
-            .collect::<Vec<&Node<T, K, V>>>()
+            .collect::<Vec<&Node<T, A>>>()
     }
-}
-
-fn dedupe_and_group_edges<T, K, V>(
-    edges: &Vec<&Edge<T, K, V>>,
-    by: EdgeSide,
-) -> HashMap<T, HashSet<T>>
-where
-    T: Hash + Eq + Copy + Ord,
-    K: Hash + Eq + Copy,
-    V: Copy,
-{
-    let key_val = match by {
-        EdgeSide::U => |e: &&Edge<T, K, V>| (e.u, e.v),
-        EdgeSide::V => |e: &&Edge<T, K, V>| (e.v, e.u),
-    };
-    edges
-        .into_iter()
-        .map(key_val)
-        .sorted_by(|a, b| Ord::cmp(&a.0, &b.0))
-        .group_by(|t| t.0)
-        .into_iter()
-        .map(|(k, g)| (k, g.map(|t| t.1).collect::<HashSet<T>>()))
-        .collect::<HashMap<T, HashSet<T>>>()
-}
-
-fn get_edges_map_for_specs<T: std::cmp::Ord, K, V>(
-    edges: Vec<Edge<T, K, V>>,
-    specs: &GraphSpecs,
-) -> Result<HashMap<(T, T), Vec<Edge<T, K, V>>>, Error>
-where
-    T: Hash + Eq + Copy + Ord + Display,
-    K: Hash + Eq + Copy,
-    V: Copy,
-{
-    let deduped_result = match specs.multi_edges {
-        true => Ok(edges),
-        false => get_deduped_edges(edges, &specs.edge_dedupe_strategy, &specs.directed),
-    };
-
-    match &deduped_result {
-        Err(e) => return Err(e.clone()),
-        Ok(_r) => {}
-    }
-
-    let deduped = deduped_result.unwrap();
-    let edges_len = deduped.len();
-
-    let u_v_orderer = match specs.directed {
-        true => |e| e,
-        false => |e: Edge<T, K, V>| match e.u > e.v {
-            true => e.reversed(),
-            false => e,
-        },
-    };
-
-    // if specs.self_loops is false:
-    //   filter the edges if specs.self_loops_false_strategy is Drop
-    //   return Err if self loops detected
-
-    let sorted_edges = deduped.into_iter().map(u_v_orderer).sorted();
-
-    let processed_for_self_loops = match !specs.self_loops
-        && specs.self_loops_false_strategy == SelfLoopsFalseStrategy::Drop
-    {
-        false => sorted_edges.collect::<Vec<Edge<T, K, V>>>(),
-        true => sorted_edges
-            .filter(|e| e.u != e.v)
-            .into_iter()
-            .collect::<Vec<Edge<T, K, V>>>(),
-    };
-
-    if processed_for_self_loops.len() < edges_len {
-        return Err(Error {
-            kind: ErrorKind::SelfLoopsFound,
-            message: "edges contain self-loops and `specs.self_loops` is false".to_string(),
-        });
-    }
-
-    let grouped = processed_for_self_loops
-        .into_iter()
-        .group_by(|e| (e.u, e.v))
-        .into_iter()
-        .map(|(k, g)| (k, g.collect::<Vec<Edge<T, K, V>>>()))
-        .collect::<HashMap<(T, T), Vec<Edge<T, K, V>>>>();
-
-    Ok(grouped)
-}
-
-fn get_directed_successors_predecessors<T, K, V>(
-    edges: &Vec<&Edge<T, K, V>>,
-) -> (HashMap<T, HashSet<T>>, HashMap<T, HashSet<T>>)
-where
-    T: Hash + Eq + Copy + Ord,
-    K: Hash + Eq + Copy,
-    V: Copy,
-{
-    let successors = dedupe_and_group_edges(edges, EdgeSide::U);
-    let predecessors = dedupe_and_group_edges(edges, EdgeSide::V);
-    (successors, predecessors)
-}
-
-fn get_undirected_successors_predecessors<T, K, V>(
-    edges: &Vec<&Edge<T, K, V>>,
-) -> (HashMap<T, HashSet<T>>, HashMap<T, HashSet<T>>)
-where
-    T: Hash + Eq + Copy + Ord,
-    K: Hash + Eq + Copy,
-    V: Copy,
-{
-    let neighbors = edges
-        .into_iter()
-        .map(|e| (e.u, e.v))
-        .chain(edges.into_iter().map(|e| (e.v, e.u)))
-        .sorted_by(|a, b| Ord::cmp(&a.0, &b.0))
-        .group_by(|t| t.0)
-        .into_iter()
-        .map(|(k, g)| (k, g.map(|t| t.1).collect::<HashSet<T>>()))
-        .collect::<HashMap<T, HashSet<T>>>();
-    (neighbors, HashMap::new())
-}
-
-fn get_deduped_edges<T, K, V>(
-    edges: Vec<Edge<T, K, V>>,
-    edge_dedupe_strategy: &EdgeDedupeStrategy,
-    directed: &bool,
-) -> Result<Vec<Edge<T, K, V>>, Error>
-where
-    T: Hash + Eq + Copy + Ord + Display,
-    K: Hash + Eq + Copy,
-    V: Copy,
-{
-    let mut hash_set = HashSet::<Edge<T, K, V>>::new();
-    for edge in edges {
-        let ordered = match directed {
-            true => edge,
-            false => edge.ordered(),
-        };
-        let existing_edge_option = hash_set.get(&ordered);
-        if existing_edge_option.is_some() {
-            match edge_dedupe_strategy {
-                EdgeDedupeStrategy::Error => {
-                    return Err(Error {
-                        kind: ErrorKind::DuplicateEdge,
-                        message: format!("duplicate edge found: {}", &ordered),
-                    })
-                }
-                EdgeDedupeStrategy::KeepFirst => {}
-                EdgeDedupeStrategy::KeepLast => {
-                    hash_set.remove(&ordered);
-                    hash_set.insert(ordered);
-                }
-            }
-        } else {
-            hash_set.insert(ordered);
-        }
-    }
-    Ok(hash_set.into_iter().collect::<Vec<Edge<T, K, V>>>())
 }

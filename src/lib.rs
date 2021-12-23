@@ -7,7 +7,6 @@ It allows graphs to be created with support for:
 * directed and undirected edges
 * multiple edges between two nodes
 * self-loops
-* acyclic enforcement
 
 ## Major structs
 
@@ -15,10 +14,10 @@ It allows graphs to be created with support for:
 * [Node](./struct.Node.html)
 * [Edge](./struct.Edge.html)
 
-## Examples
+## Example: create a graph
 
 ```
-use graphrs::{Edge, Graph, GraphSpecs, MissingNodeStrategy, Node};
+use graphrs::{Edge, Graph, GraphSpecs, Node};
 
 let nodes = vec![
     Node::from_name("n1"),
@@ -27,25 +26,56 @@ let nodes = vec![
 ];
 
 let edges = vec![
-    Edge::with_attribute("n1", "n2", "weight", &1.0),
-    Edge::with_attribute("n2", "n1", "weight", &2.0),
-    Edge::with_attribute("n1", "n3", "weight", &3.0),
-    Edge::with_attribute("n2", "n3", "weight", &3.0),
+    Edge::with_weight("n1", "n2", 1.0),
+    Edge::with_weight("n2", "n1", 2.0),
+    Edge::with_weight("n1", "n3", 3.0),
+    Edge::with_weight("n2", "n3", 3.0),
 ];
 
-let specs = GraphSpecs::directed();
+let specs = GraphSpecs::directed(); // change this to `::undirected()` to get an undirected graph
 
-let graph = Graph::<&str, &str, &f64>::new_from_nodes_and_edges(
+let graph = Graph::<&str, ()>::new_from_nodes_and_edges(
     nodes,
     edges,
     specs
 );
 ```
 
+## Example: create a graph from just edges
+
+```
+use graphrs::{Edge, Graph, GraphSpecs, Node};
+
+let mut graph = Graph::<&str, ()>::new(GraphSpecs::directed_create_missing());
+graph.add_edges(vec![
+    Edge::with_weight("n1", "n2", 1.0),
+    Edge::with_weight("n2", "n1", 2.0),
+    Edge::with_weight("n1", "n3", 3.0),
+    Edge::with_weight("n2", "n3", 3.0),
+]);
+```
+
+## Example: create a graph with nodes that have attributes
+
+```
+use graphrs::{Edge, Graph, GraphSpecs, Node};
+
+#[derive(Copy, Clone)]
+struct NodeAttribute<'a> {
+    first_name: &'a str,
+    last_name: &'a str,
+};
+
+let mut graph: Graph<i32, NodeAttribute> = Graph::new(GraphSpecs::undirected());
+graph.add_node(Node {
+    name: 1,
+    attributes: Some(NodeAttribute {first_name: "Jane", last_name: "Smith"})
+});
+```
 !*/
 
 mod edge;
-pub use edge::{Edge, EdgeSide};
+pub use edge::Edge;
 
 mod error;
 pub use error::{Error, ErrorKind};
@@ -53,8 +83,9 @@ pub use error::{Error, ErrorKind};
 mod graph;
 pub use graph::Graph;
 
-mod mod_generators;
-pub use mod_generators::generators;
+pub mod algorithms;
+
+pub mod generators;
 
 mod graph_specs;
 pub use graph_specs::{

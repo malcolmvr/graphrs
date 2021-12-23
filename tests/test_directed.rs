@@ -1,148 +1,191 @@
 #[cfg(test)]
 mod tests {
 
-    use graphrs::{Edge, EdgeDedupeStrategy, Graph, GraphSpecs, MissingNodeStrategy, Node};
+    use graphrs::{
+        Edge, EdgeDedupeStrategy, Graph, GraphSpecs, MissingNodeStrategy, Node,
+        SelfLoopsFalseStrategy,
+    };
     use itertools::Itertools;
     use std::collections::HashSet;
     use std::iter::FromIterator;
 
     #[test]
-    fn test_add_edges_add() {
-        // test addition of a new edge
-        let graph = get_basic_graph(None);
-
-        let new_edges = vec![Edge::with_attribute("n3", "n1", "weight", &4.4)];
-
-        let graph = graph.add_edges(new_edges);
-        assert!(graph.is_ok());
-        let graph = graph.unwrap();
-
-        let edges = graph.get_all_edges();
-        assert_eq!(edges.len(), 5);
-
-        let nodes = graph.get_all_nodes();
-        assert_eq!(nodes.len(), 3);
+    fn test_add_edge_1() {
+        let mut graph: Graph<&str, ()> = Graph::new(GraphSpecs::directed());
+        let result = graph.add_edge(Edge::new("n1", "n2"));
+        assert!(result.is_err());
     }
 
     #[test]
-    fn test_add_edges_update_error() {
-        // test that when an existing edge is added and EdgeDedupeStrategy is Error
-        let graph = get_basic_graph(None);
-
-        let new_edges = vec![Edge::with_attribute("n1", "n3", "weight", &4.4)];
-
-        let graph = graph.add_edges(new_edges);
-        assert!(graph.is_err());
-    }
-
-    #[test]
-    fn test_add_edges_update_keep_first() {
-        // test addition of an existing edge is added and EdgeDedupeStrategy is KeepFirst
-        let specs = GraphSpecs {
-            edge_dedupe_strategy: EdgeDedupeStrategy::KeepFirst,
-            ..GraphSpecs::directed()
-        };
-        let graph = get_basic_graph(Some(specs));
-
-        let new_edges = vec![Edge::with_attribute("n1", "n3", "weight", &4.4)];
-
-        let graph = graph.add_edges(new_edges);
-        assert!(graph.is_ok());
-        let graph = graph.unwrap();
-
-        let edge = graph.get_edge("n1", "n3");
-        assert_eq!(edge.unwrap().attributes.as_ref().unwrap()["weight"], &3.0);
-    }
-
-    #[test]
-    fn test_add_edges_update_keep_last() {
-        // test addition of an existing edge is added and EdgeDedupeStrategy is KeepLast
-        let specs = GraphSpecs {
-            edge_dedupe_strategy: EdgeDedupeStrategy::KeepLast,
-            ..GraphSpecs::directed()
-        };
-        let graph = get_basic_graph(Some(specs));
-
-        let new_edges = vec![Edge::with_attribute("n1", "n3", "weight", &4.4)];
-
-        let graph = graph.add_edges(new_edges);
-        assert!(graph.is_ok());
-        let graph = graph.unwrap();
-
-        let edge = graph.get_edge("n1", "n3");
-        assert_eq!(edge.unwrap().attributes.as_ref().unwrap()["weight"], &4.4);
-    }
-
-    #[test]
-    fn test_add_edges_add_nodes_error() {
-        // test edge addition with MissingNodeStrategy::Error
-        let graph = get_basic_graph(None);
-
-        let new_edges = vec![Edge::with_attribute("n4", "n5", "weight", &4.4)];
-
-        let graph = graph.add_edges(new_edges);
-        assert!(graph.is_err());
-    }
-
-    #[test]
-    fn test_add_edges_add_nodes_create() {
-        // test edge addition with MissingNodeStrategy::Create
-        let specs = GraphSpecs {
+    fn test_add_edge_2() {
+        let mut graph: Graph<&str, ()> = Graph::new(GraphSpecs {
             missing_node_strategy: MissingNodeStrategy::Create,
             ..GraphSpecs::directed()
-        };
-        let graph = get_basic_graph(Some(specs));
+        });
+        let result = graph.add_edge(Edge::new("n1", "n2"));
+        assert!(result.is_ok());
+        assert!(graph.get_edge("n2", "n1").is_err());
+        assert!(graph.get_edge("n1", "n2").is_ok());
+        assert_eq!(graph.get_all_edges().len(), 1);
+        assert_eq!(graph.get_predecessor_nodes("n1").unwrap().len(), 0);
+        assert_eq!(graph.get_predecessor_nodes("n2").unwrap().len(), 1);
+        assert_eq!(graph.get_predecessor_nodes("n2").unwrap()[0].name, "n1");
+        assert_eq!(graph.get_successor_nodes("n1").unwrap().len(), 1);
+        assert_eq!(graph.get_successor_nodes("n1").unwrap()[0].name, "n2");
+        assert_eq!(graph.get_successor_nodes("n2").unwrap().len(), 0);
+    }
 
-        let new_edges = vec![Edge::with_attribute("n4", "n5", "weight", &4.4)];
+    #[test]
+    fn test_add_edge_3() {
+        let mut graph: Graph<&str, ()> = Graph::new(GraphSpecs {
+            missing_node_strategy: MissingNodeStrategy::Create,
+            ..GraphSpecs::directed()
+        });
+        let result = graph.add_edge(Edge::new("n1", "n2"));
+        assert!(result.is_ok());
+        let result = graph.add_edge(Edge::new("n1", "n3"));
+        assert!(result.is_ok());
 
-        let graph = graph.add_edges(new_edges);
-        assert!(graph.is_ok());
-        let graph = graph.unwrap();
+        assert_eq!(graph.get_all_edges().len(), 2);
+        assert!(graph.get_edge("n1", "n2").is_ok());
+        assert!(graph.get_edge("n2", "n1").is_err());
+        assert!(graph.get_edge("n1", "n3").is_ok());
 
-        let edges = graph.get_all_edges();
-        assert_eq!(edges.len(), 5);
+        assert_eq!(graph.get_predecessor_nodes("n1").unwrap().len(), 0);
+        assert_eq!(graph.get_predecessor_nodes("n2").unwrap().len(), 1);
+        assert_eq!(graph.get_predecessor_nodes("n2").unwrap()[0].name, "n1");
+        assert_eq!(graph.get_predecessor_nodes("n3").unwrap().len(), 1);
+        assert_eq!(graph.get_predecessor_nodes("n3").unwrap()[0].name, "n1");
 
-        let nodes = graph.get_all_nodes();
-        assert_eq!(nodes.len(), 5);
-        let names = nodes
-            .into_iter()
-            .map(|n| n.name)
-            .sorted()
-            .collect::<Vec<&str>>();
-        assert_eq!(names, vec!["n1", "n2", "n3", "n4", "n5"]);
+        assert_eq!(graph.get_successor_nodes("n1").unwrap().len(), 2);
+        assert_eq!(
+            graph
+                .get_successor_nodes("n1")
+                .unwrap()
+                .iter()
+                .map(|n| n.name)
+                .sorted()
+                .collect::<Vec<&str>>(),
+            vec!["n2", "n3"]
+        );
+        assert_eq!(graph.get_successor_nodes("n2").unwrap().len(), 0);
+        assert_eq!(graph.get_successor_nodes("n3").unwrap().len(), 0);
+    }
+
+    #[test]
+    fn test_add_edge_4() {
+        let mut graph: Graph<&str, ()> = Graph::new(GraphSpecs {
+            edge_dedupe_strategy: EdgeDedupeStrategy::Error,
+            missing_node_strategy: MissingNodeStrategy::Create,
+            ..GraphSpecs::directed()
+        });
+        let result = graph.add_edge(Edge::new("n1", "n2"));
+        assert!(result.is_ok());
+        let result = graph.add_edge(Edge::new("n1", "n2"));
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_add_edge_5() {
+        let mut graph: Graph<&str, ()> = Graph::new(GraphSpecs {
+            edge_dedupe_strategy: EdgeDedupeStrategy::KeepFirst,
+            missing_node_strategy: MissingNodeStrategy::Create,
+            ..GraphSpecs::directed()
+        });
+        let result = graph.add_edge(Edge::with_weight("n1", "n2", 1.0));
+        assert!(result.is_ok());
+        let result = graph.add_edge(Edge::with_weight("n1", "n2", 2.0));
+        assert!(result.is_ok());
+        assert!(graph.get_edge("n1", "n2").is_ok());
+        assert_eq!(graph.get_edge("n1", "n2").unwrap().weight, 1.0);
+    }
+
+    #[test]
+    fn test_add_edge_6() {
+        let mut graph: Graph<&str, ()> = Graph::new(GraphSpecs {
+            edge_dedupe_strategy: EdgeDedupeStrategy::KeepLast,
+            missing_node_strategy: MissingNodeStrategy::Create,
+            ..GraphSpecs::directed()
+        });
+        let result = graph.add_edge(Edge::with_weight("n1", "n2", 1.0));
+        assert!(result.is_ok());
+        let result = graph.add_edge(Edge::with_weight("n1", "n2", 2.0));
+        assert!(result.is_ok());
+        assert!(graph.get_edge("n1", "n2").is_ok());
+        assert_eq!(graph.get_edge("n1", "n2").unwrap().weight, 2.0);
+    }
+
+    #[test]
+    fn test_add_edge_7() {
+        let mut graph: Graph<&str, ()> = Graph::new(GraphSpecs {
+            self_loops: false,
+            missing_node_strategy: MissingNodeStrategy::Create,
+            ..GraphSpecs::directed()
+        });
+        let result = graph.add_edge(Edge::new("n1", "n1"));
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_add_edge_8() {
+        let mut graph: Graph<&str, ()> = Graph::new(GraphSpecs {
+            self_loops: false,
+            self_loops_false_strategy: SelfLoopsFalseStrategy::Drop,
+            missing_node_strategy: MissingNodeStrategy::Create,
+            ..GraphSpecs::directed()
+        });
+        let result = graph.add_edge(Edge::new("n1", "n1"));
+        assert!(result.is_ok());
+        assert_eq!(graph.get_all_edges().len(), 0);
+    }
+
+    #[test]
+    fn test_add_edge_9() {
+        let mut graph: Graph<&str, ()> = Graph::new(GraphSpecs {
+            self_loops: true,
+            missing_node_strategy: MissingNodeStrategy::Create,
+            ..GraphSpecs::directed()
+        });
+        let result = graph.add_edge(Edge::new("n1", "n1"));
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_add_edges_1() {
+        let mut graph: Graph<&str, ()> = Graph::new(GraphSpecs {
+            missing_node_strategy: MissingNodeStrategy::Create,
+            ..GraphSpecs::directed()
+        });
+        let result = graph.add_edges(vec![Edge::new("n1", "n2"), Edge::new("n2", "n3")]);
+        assert!(result.is_ok());
+        assert!(graph.get_edge("n1", "n2").is_ok());
+        assert!(graph.get_edge("n2", "n3").is_ok());
     }
 
     #[test]
     fn test_add_nodes() {
-        let graph = get_basic_graph(None);
+        let nodes = vec![Node::from_name_and_attributes("n1", 100)];
 
-        let nodes = vec![Node::from_name_and_attribute_tuples(
-            "n1",
-            vec![("a", &1.0), ("b", &2.0)],
-        )];
+        let mut graph =
+            Graph::new_from_nodes_and_edges(vec![], vec![], GraphSpecs::directed()).unwrap();
+        graph.add_nodes(nodes);
 
-        let graph = graph.add_nodes(nodes);
-        assert!(graph.is_ok());
-        let graph = graph.unwrap();
+        assert_eq!(graph.get_all_nodes().len(), 1);
 
         let node = graph.get_node("n1").unwrap();
-        assert_eq!(node.attributes.as_ref().unwrap()["a"], &1.0);
-        assert_eq!(node.attributes.as_ref().unwrap()["b"], &2.0);
+        assert_eq!(node.attributes.unwrap(), 100);
 
         let nodes = vec![
-            Node::from_name_and_attribute_tuples("n1", vec![("a", &2.0)]),
-            Node::from_name_and_attribute_tuples("n10", vec![("a", &1.0)]),
-            Node::from_name_and_attribute_tuples("n11", vec![("a", &2.0)]),
+            Node::from_name_and_attributes("n1", 100),
+            Node::from_name_and_attributes("n10", 110),
+            Node::from_name_and_attributes("n11", 111),
         ];
 
-        let graph = graph.add_nodes(nodes);
-        assert!(graph.is_ok());
-        let graph = graph.unwrap();
-
-        let node = graph.get_node("n1").unwrap();
-        assert_eq!(graph.get_all_nodes().len(), 5);
-        assert_eq!(node.attributes.as_ref().unwrap()["a"], &2.0);
-        assert!(!node.attributes.as_ref().unwrap().contains_key("b"));
+        graph.add_nodes(nodes);
+        assert_eq!(graph.get_all_nodes().len(), 3);
+        assert_eq!(graph.get_node("n1").unwrap().attributes.unwrap(), 100);
+        assert_eq!(graph.get_node("n10").unwrap().attributes.unwrap(), 110);
+        assert_eq!(graph.get_node("n11").unwrap().attributes.unwrap(), 111);
     }
 
     #[test]
@@ -154,6 +197,7 @@ mod tests {
         let edge = result.unwrap();
         assert_eq!(edge.u, "n1");
         assert_eq!(edge.v, "n2");
+        assert_eq!(edge.weight, 1.0);
 
         let edge = graph.get_edge("n4", "n5");
         assert!(edge.is_err());
@@ -288,7 +332,7 @@ mod tests {
         assert!(hashset.contains("n3"));
 
         let nodes = graph.get_successor_nodes("n3");
-        let expected: Vec<&Node<&str, &str, &f64>> = vec![];
+        let expected: Vec<&Node<&str, ()>> = vec![];
         assert_eq!(nodes.unwrap(), expected);
     }
 
@@ -297,13 +341,13 @@ mod tests {
         let nodes = vec![
             Node::from_name("n1"),
             Node::from_name("n2"),
-            Node::<&str, &str, &f64>::from_name("n3"),
+            Node::<&str, ()>::from_name("n3"),
         ];
 
         let edges = vec![
-            Edge::with_attribute("n1", "n2", "weight", &1.0),
-            Edge::with_attribute("n2", "n1", "weight", &2.0),
-            Edge::with_attribute("n1", "n3", "weight", &3.0),
+            Edge::with_weight("n1", "n2", 1.0),
+            Edge::with_weight("n2", "n1", 2.0),
+            Edge::with_weight("n1", "n3", 3.0),
         ];
 
         let specs = GraphSpecs::directed();
@@ -315,7 +359,7 @@ mod tests {
         assert_eq!(graph.get_all_edges().len(), 3);
     }
 
-    fn get_basic_graph<'a>(specs: Option<GraphSpecs>) -> Graph<&'a str, &'a str, &'a f64> {
+    fn get_basic_graph<'a>(specs: Option<GraphSpecs>) -> Graph<&'a str, ()> {
         let nodes = vec![
             Node::from_name("n1"),
             Node::from_name("n2"),
@@ -323,10 +367,10 @@ mod tests {
         ];
 
         let edges = vec![
-            Edge::with_attribute("n1", "n2", "weight", &1.0),
-            Edge::with_attribute("n2", "n1", "weight", &2.0),
-            Edge::with_attribute("n1", "n3", "weight", &3.0),
-            Edge::with_attribute("n2", "n3", "weight", &3.0),
+            Edge::with_weight("n1", "n2", 1.0),
+            Edge::with_weight("n2", "n1", 2.0),
+            Edge::with_weight("n1", "n3", 3.0),
+            Edge::with_weight("n2", "n3", 3.0),
         ];
 
         let final_specs = match specs {
