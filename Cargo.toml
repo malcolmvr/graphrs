@@ -1,8 +1,8 @@
 [package]
 name = "graphrs"
-version = "0.1.0"
+version = "0.2.0"
 authors = ["Malcolm van Raalte <malcolm@van.raalte.ca>"]
-description = "GraphRS is a Rust package for the creation, manipulation and analysis of graphs."
+description = "graphrs is a Rust package for the creation, manipulation and analysis of graphs."
 edition = "2018"
 license = "MIT"
 homepage = "https://github.com/malcolmvr/graphrs"
