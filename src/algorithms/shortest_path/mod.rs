@@ -1,7 +1,6 @@
 /// Compute the shortest paths and path lengths between nodes in the graph,
-/// counting each edge as `1`.
-pub mod unweighted;
+/// using Dijkstra's algorithm.
+pub mod dijkstra;
 
-/// Compute the shortest paths and path lengths between nodes in the graph,
-/// using edge weights.
-pub mod weighted;
+mod shortest_path_info;
+pub use shortest_path_info::ShortestPathInfo;

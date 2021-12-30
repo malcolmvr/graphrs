@@ -7,18 +7,30 @@
         {
             "type": "lldb",
             "request": "launch",
-            "name": "Debug unit tests 'test_undirected_multi'",
+            "name": "Debug unit tests 'test_algorithms_centrality_betweenness'",
             "cargo": {
                 "args": [
                     "test",
                     "--no-run",
-                    "--test=test_undirected_multi",
+                    "--test=test_algorithms_centrality_betweenness",
                     "--package=graphrs"
                 ],
                 "filter": {
-                    "name": "test_undirected_multi",
+                    "name": "test_algorithms_centrality_betweenness",
                     "kind": "test"
                 }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Launch main.rs",
+            "cargo": {
+                "args": [
+                    "run"
+                ]
             },
             "args": [],
             "cwd": "${workspaceFolder}"

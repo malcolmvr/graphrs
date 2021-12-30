@@ -332,7 +332,7 @@ impl<T: Display + PartialOrd, A: Copy> Graph<T, A> {
     # Examples
 
     ```
-    use graphrs::{algorithms::{shortest_path::{unweighted}}, generators};
+    use graphrs::{generators};
     let graph = generators::social::karate_club_graph();
     let edge = graph.get_edge(0, 1);
     assert!(edge.is_ok());

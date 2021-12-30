@@ -1,19 +1,9 @@
+use crate::algorithms::shortest_path::ShortestPathInfo;
 use crate::{Error, ErrorKind, Graph, Node};
 use std::cmp::Ordering;
 use std::collections::{BinaryHeap, HashMap};
 use std::fmt::Display;
 use std::hash::Hash;
-
-/**
-Information about the weighted shortest path between two nodes.
-*/
-pub struct ShortestPathWeighted<T> {
-    /// The distance (sum-of-weights) between two nodes.
-    pub distance: f64,
-    /// The path between two nodes. The first item is the starting node
-    /// and the last item is the target node.
-    pub path: Vec<T>,
-}
 
 /**
 As a graph is explored by a shortest-path algorithm the nodes at the
@@ -81,7 +71,7 @@ and the keys to the second are the target nodes.
 
 ```
 use graphrs::{Edge, Graph, GraphSpecs, Node};
-use graphrs::{algorithms::{shortest_path::{weighted}}};
+use graphrs::{algorithms::{shortest_path::{dijkstra}}};
 
 let mut graph = Graph::<&str, ()>::new(GraphSpecs::directed_create_missing());
 graph.add_edges(vec![
@@ -91,14 +81,15 @@ graph.add_edges(vec![
     Edge::with_weight("n2", "n3", 1.1),
 ]);
 
-let all_pairs = weighted::all_pairs_dijkstra(&graph, None);
+let all_pairs = dijkstra::all_pairs(&graph, true, None);
 assert_eq!(all_pairs.unwrap().get("n1").unwrap().get("n3").unwrap().distance, 2.1);
 ```
 */
-pub fn all_pairs_dijkstra<T, A>(
+pub fn all_pairs<T, A>(
     graph: &Graph<T, A>,
+    weighted: bool,
     cutoff: Option<f64>,
-) -> Result<HashMap<T, HashMap<T, ShortestPathWeighted<T>>>, Error>
+) -> Result<HashMap<T, HashMap<T, ShortestPathInfo<T>>>, Error>
 where
     T: Hash + Eq + Copy + Ord + Display,
     A: Copy,
@@ -109,7 +100,7 @@ where
         .map(|n| {
             (
                 n.name,
-                single_source_dijkstra(graph, n.name, None, cutoff).unwrap(),
+                single_source(graph, weighted, n.name, None, cutoff).unwrap(),
             )
         })
         .collect())
@@ -131,7 +122,7 @@ If cutoff is provided, only return paths with summed weight <= cutoff.
 
 ```
 use graphrs::{Edge, Graph, GraphSpecs, Node};
-use graphrs::{algorithms::{shortest_path::{weighted}}};
+use graphrs::{algorithms::{shortest_path::{dijkstra}}};
 
 let mut graph = Graph::<&str, ()>::new(GraphSpecs::directed_create_missing());
 graph.add_edges(vec![
@@ -141,21 +132,22 @@ graph.add_edges(vec![
     Edge::with_weight("n2", "n3", 1.1),
 ]);
 
-let shortest_paths = weighted::single_source_dijkstra(&graph, "n1", Some("n3"), None);
+let shortest_paths = dijkstra::single_source(&graph, true, "n1", Some("n3"), None);
 assert_eq!(shortest_paths.unwrap().get("n3").unwrap().distance, 2.1);
 ```
 */
-pub fn single_source_dijkstra<T, A>(
+pub fn single_source<T, A>(
     graph: &Graph<T, A>,
+    weighted: bool,
     source: T,
     target: Option<T>,
     cutoff: Option<f64>,
-) -> Result<HashMap<T, ShortestPathWeighted<T>>, Error>
+) -> Result<HashMap<T, ShortestPathInfo<T>>, Error>
 where
     T: Hash + Eq + Copy + Ord + Display,
     A: Copy,
 {
-    multi_source_dijkstra(graph, vec![source], target, cutoff)
+    multi_source(graph, weighted, vec![source], target, cutoff)
 }
 
 /**
@@ -175,7 +167,7 @@ If cutoff is provided, only return paths with summed weight <= cutoff.
 
 ```
 use graphrs::{Edge, Graph, GraphSpecs, Node};
-use graphrs::{algorithms::{shortest_path::{weighted}}};
+use graphrs::{algorithms::{shortest_path::{dijkstra}}};
 
 let mut graph = Graph::<&str, ()>::new(GraphSpecs::directed_create_missing());
 graph.add_edges(vec![
@@ -185,21 +177,22 @@ graph.add_edges(vec![
     Edge::with_weight("n2", "n3", 1.1),
 ]);
 
-let shortest_paths = weighted::multi_source_dijkstra(&graph, vec!["n1", "n2"], Some("n3"), None);
+let shortest_paths = dijkstra::multi_source(&graph, true, vec!["n1", "n2"], Some("n3"), None);
 assert_eq!(shortest_paths.unwrap().get("n3").unwrap().distance, 1.1);
 ```
 */
-pub fn multi_source_dijkstra<T, A>(
+pub fn multi_source<T, A>(
     graph: &Graph<T, A>,
+    weighted: bool,
     sources: Vec<T>,
     target: Option<T>,
     cutoff: Option<f64>,
-) -> Result<HashMap<T, ShortestPathWeighted<T>>, Error>
+) -> Result<HashMap<T, ShortestPathInfo<T>>, Error>
 where
     T: Hash + Eq + Copy + Ord + Display,
     A: Copy,
 {
-    let result = dijkstra_multisource(graph, sources, target, cutoff);
+    let result = dijkstra_multisource(graph, weighted, sources, target, cutoff);
     match result {
         Err(e) => Err(e),
         Ok((distances, paths)) => Ok(distances
@@ -207,13 +200,13 @@ where
             .map(|(k, v)| {
                 (
                     k,
-                    ShortestPathWeighted {
+                    ShortestPathInfo {
                         distance: v,
-                        path: paths.get(&k).unwrap().clone(),
+                        paths: paths.get(&k).unwrap().clone(),
                     },
                 )
             })
-            .collect::<HashMap<T, ShortestPathWeighted<T>>>()),
+            .collect::<HashMap<T, ShortestPathInfo<T>>>()),
     }
 }
 
@@ -224,29 +217,33 @@ shortest paths. All the public functions in this module call this one.
 */
 fn dijkstra_multisource<T, A>(
     graph: &Graph<T, A>,
+    weighted: bool,
     sources: Vec<T>,
     target: Option<T>,
     cutoff: Option<f64>,
-) -> Result<(HashMap<T, f64>, HashMap<T, Vec<T>>), Error>
+) -> Result<(HashMap<T, f64>, HashMap<T, Vec<Vec<T>>>), Error>
 where
     T: Hash + Eq + Copy + Ord + Display,
     A: Copy,
 {
-    if !graph.edges_have_weight() {
+    if weighted && !graph.edges_have_weight() {
         return Err(Error {
             kind: ErrorKind::EdgeWeightNotSpecified,
             message: format!("Not all edges in the graph have a weight."),
         });
     }
 
-    let get_cost = |u, v| match graph.specs.multi_edges {
-        false => get_cost_single(graph, u, v),
-        true => get_cost_multi(graph, u, v),
+    let get_cost = |u, v| match weighted {
+        true => match graph.specs.multi_edges {
+            false => get_cost_single(graph, u, v),
+            true => get_cost_multi(graph, u, v),
+        },
+        false => 1.0,
     };
 
-    let mut paths: HashMap<T, Vec<T>> = sources
+    let mut paths: HashMap<T, Vec<Vec<T>>> = sources
         .iter()
-        .map(|s| (s.clone(), vec![s.clone()]))
+        .map(|s| (s.clone(), vec![vec![s.clone()]]))
         .collect();
     let mut dist = HashMap::<T, f64>::new();
     let mut seen = HashMap::<T, f64>::new();
@@ -299,8 +296,32 @@ where
                     distance: -vu_dist,
                 });
                 let mut paths_v = paths.entry(v).or_default().clone();
-                paths_v.push(u);
+                for i in 0..paths_v.len() {
+                    paths_v[i].push(u);
+                }
                 paths.insert(u, paths_v);
+            } else if vu_dist == seen.get(&u).unwrap().clone() {
+                count += 1;
+                fringe.push(FringeNode {
+                    node_name: u,
+                    count: count,
+                    distance: -vu_dist,
+                });
+                // add u to all paths[v], then *append* them to paths[u]
+                let v_paths: Vec<Vec<T>> = paths
+                    .get(&v)
+                    .unwrap()
+                    .iter()
+                    .map(|p| {
+                        let mut x = p.clone();
+                        x.push(u);
+                        x
+                    })
+                    .collect();
+                let u_paths = paths.get_mut(&u).unwrap();
+                for v_path in v_paths {
+                    u_paths.push(v_path);
+                }
             }
         }
     }

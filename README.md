@@ -99,7 +99,7 @@ graph.add_edges(vec![
     Edge::with_weight("n2", "n3", 1.1),
 ]);
 
-let shortest_paths = weighted::single_source_dijkstra(&graph, "n1", Some("n3"), None);
+let shortest_paths = weighted::single_source(&graph, "n1", Some("n3"), None);
 assert_eq!(shortest_paths.unwrap().get("n3").unwrap().distance, 2.1);
 ```
 
