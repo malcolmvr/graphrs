@@ -27,7 +27,7 @@ mod tests {
         )
         .unwrap();
 
-        let result = dijkstra::all_pairs(&graph, false, None);
+        let result = dijkstra::all_pairs(&graph, false, None, false);
         assert!(result.is_ok());
         let unwrapped = result.unwrap();
         assert_eq!(
@@ -204,7 +204,7 @@ mod tests {
         )
         .unwrap();
 
-        let result = dijkstra::single_source(&graph, false, "n1", Some("n3"), None);
+        let result = dijkstra::single_source(&graph, false, "n1", Some("n3"), None, false);
         assert!(result.is_ok());
         let unwrapped = result.unwrap();
         assert_eq!(unwrapped.get("n1").unwrap().distance, 0.0);
@@ -242,7 +242,7 @@ mod tests {
         )
         .unwrap();
 
-        let result = dijkstra::single_source(&graph, false, "n12", Some("n9"), None);
+        let result = dijkstra::single_source(&graph, false, "n12", Some("n9"), None, false);
         assert!(result.is_ok());
         let unwrapped = result.unwrap();
         assert_eq!(unwrapped.get("n9").unwrap().distance, 3.0);
@@ -250,6 +250,40 @@ mod tests {
             &unwrapped.get("n9").unwrap().paths,
             &vec![vec!["n12", "n0", "n2", "n9"], vec!["n12", "n3", "n2", "n9"]],
         );
+    }
+
+    #[test]
+    fn test_single_source_3() {
+        let edges = vec![
+            Edge::new("n12", "n0"),
+            Edge::new("n0", "n2"),
+            Edge::new("n2", "n9"),
+            Edge::new("n12", "n3"),
+            Edge::new("n3", "n1"),
+            Edge::new("n3", "n7"),
+            Edge::new("n3", "n2"),
+            Edge::new("n1", "n7"),
+            Edge::new("n1", "n2"),
+            Edge::new("n7", "n2"),
+        ];
+
+        let graph: Graph<&str, ()> = Graph::new_from_nodes_and_edges(
+            vec![],
+            edges,
+            GraphSpecs {
+                missing_node_strategy: MissingNodeStrategy::Create,
+                ..GraphSpecs::directed()
+            },
+        )
+        .unwrap();
+
+        let result = dijkstra::single_source(&graph, false, "n12", Some("n9"), None, true);
+        assert!(result.is_ok());
+        let unwrapped = result.unwrap();
+        let n9 = unwrapped.get("n9").unwrap();
+        assert_eq!(n9.distance, 3.0);
+        assert_eq!(n9.paths.len(), 1);
+        assert!(n9.paths[0] == vec!["n12", "n3", "n2", "n9"] || n9.paths[0] == vec!["n12", "n0", "n2", "n9"]);
     }
 
     #[test]
@@ -270,7 +304,7 @@ mod tests {
 
         let graph = Graph::new_from_nodes_and_edges(nodes, edges, GraphSpecs::directed()).unwrap();
 
-        let result = dijkstra::multi_source(&graph, false, vec!["n1"], Some("n3"), None);
+        let result = dijkstra::multi_source(&graph, false, vec!["n1"], Some("n3"), None, false);
         assert!(result.is_ok());
         let unwrapped = result.unwrap();
         let n3_info = unwrapped.get("n3").unwrap();
@@ -302,7 +336,7 @@ mod tests {
         )
         .unwrap();
 
-        let result = dijkstra::multi_source(&graph, false, vec!["n1"], None, None);
+        let result = dijkstra::multi_source(&graph, false, vec!["n1"], None, None, false);
         assert!(result.is_ok());
         let unwrapped = result.unwrap();
         assert_eq!(unwrapped.get("n1").unwrap().distance, 0.0);

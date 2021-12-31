@@ -61,11 +61,14 @@ of nodes.
 * `graph`: a [Graph](../../../struct.Graph.html) instance where all edges have a weight.
 * `cutoff`: Length (sum of edge weights) at which the search is stopped.
 If cutoff is provided, only return paths with summed weight <= cutoff.
+* `first_only`: If `true` returns the first shortest path found for each source and target,
+if `false` returns all shortest paths found between sources and targets.
 
 # Returns
 
 A `HashMap` of `HashMaps`. The keys to the first one are the starting nodes
-and the keys to the second are the target nodes.
+and the keys to the second are the target nodes. The values of the second one are `Vec`s
+of the shortest paths between the starting and target nodes.
 
 # Examples
 
@@ -81,14 +84,20 @@ graph.add_edges(vec![
     Edge::with_weight("n2", "n3", 1.1),
 ]);
 
-let all_pairs = dijkstra::all_pairs(&graph, true, None);
+let all_pairs = dijkstra::all_pairs(&graph, true, None, false);
 assert_eq!(all_pairs.unwrap().get("n1").unwrap().get("n3").unwrap().distance, 2.1);
 ```
+
+# References
+
+1. E. W. Dijkstra. A note on two problems in connection with graphs. Numer. Math., 1:269–271, 1959.
+
 */
 pub fn all_pairs<T, A>(
     graph: &Graph<T, A>,
     weighted: bool,
     cutoff: Option<f64>,
+    first_only: bool,
 ) -> Result<HashMap<T, HashMap<T, ShortestPathInfo<T>>>, Error>
 where
     T: Hash + Eq + Copy + Ord + Display,
@@ -100,7 +109,7 @@ where
         .map(|n| {
             (
                 n.name,
-                single_source(graph, weighted, n.name, None, cutoff).unwrap(),
+                single_source(graph, weighted, n.name, None, cutoff, first_only).unwrap(),
             )
         })
         .collect())
@@ -108,6 +117,8 @@ where
 
 /**
 Uses Dijkstra's algorithm to find shortest weighted paths from a single source node.
+Unlike most implementations this returns all shortest paths of equal length rather
+than just the first one found.
 
 # Arguments
 
@@ -117,6 +128,8 @@ Uses Dijkstra's algorithm to find shortest weighted paths from a single source n
 all other nodes will be found.
 * `cutoff`: Length (sum of edge weights) at which the search is stopped.
 If cutoff is provided, only return paths with summed weight <= cutoff.
+* `first_only`: If `true` returns the first shortest path found for each target, if
+`false` returns all shortest paths found between source and targets.
 
 # Examples
 
@@ -132,9 +145,13 @@ graph.add_edges(vec![
     Edge::with_weight("n2", "n3", 1.1),
 ]);
 
-let shortest_paths = dijkstra::single_source(&graph, true, "n1", Some("n3"), None);
+let shortest_paths = dijkstra::single_source(&graph, true, "n1", Some("n3"), None, false);
 assert_eq!(shortest_paths.unwrap().get("n3").unwrap().distance, 2.1);
 ```
+
+# References
+
+1. E. W. Dijkstra. A note on two problems in connection with graphs. Numer. Math., 1:269–271, 1959.
 */
 pub fn single_source<T, A>(
     graph: &Graph<T, A>,
@@ -142,16 +159,19 @@ pub fn single_source<T, A>(
     source: T,
     target: Option<T>,
     cutoff: Option<f64>,
+    first_only: bool,
 ) -> Result<HashMap<T, ShortestPathInfo<T>>, Error>
 where
     T: Hash + Eq + Copy + Ord + Display,
     A: Copy,
 {
-    multi_source(graph, weighted, vec![source], target, cutoff)
+    multi_source(graph, weighted, vec![source], target, cutoff, first_only)
 }
 
 /**
 Uses Dijkstra's algorithm to find shortest weighted paths from multiple source nodes.
+Unlike most implementations this returns all shortest paths of equal length rather
+than just the first one found.
 
 # Arguments
 
@@ -162,6 +182,8 @@ for any of the `sources` and ends at the `target`.
 all other nodes will be found.
 * `cutoff`: Length (sum of edge weights) at which the search is stopped.
 If cutoff is provided, only return paths with summed weight <= cutoff.
+* `first_only`: If `true` returns the first shortest path found for each target, if
+`false` returns all shortest paths found between sources and targets.
 
 # Examples
 
@@ -177,9 +199,13 @@ graph.add_edges(vec![
     Edge::with_weight("n2", "n3", 1.1),
 ]);
 
-let shortest_paths = dijkstra::multi_source(&graph, true, vec!["n1", "n2"], Some("n3"), None);
+let shortest_paths = dijkstra::multi_source(&graph, true, vec!["n1", "n2"], Some("n3"), None, false);
 assert_eq!(shortest_paths.unwrap().get("n3").unwrap().distance, 1.1);
 ```
+
+# References
+
+1. E. W. Dijkstra. A note on two problems in connection with graphs. Numer. Math., 1:269–271, 1959.
 */
 pub fn multi_source<T, A>(
     graph: &Graph<T, A>,
@@ -187,12 +213,13 @@ pub fn multi_source<T, A>(
     sources: Vec<T>,
     target: Option<T>,
     cutoff: Option<f64>,
+    first_only: bool,
 ) -> Result<HashMap<T, ShortestPathInfo<T>>, Error>
 where
     T: Hash + Eq + Copy + Ord + Display,
     A: Copy,
 {
-    let result = dijkstra_multisource(graph, weighted, sources, target, cutoff);
+    let result = dijkstra_multisource(graph, weighted, sources, target, cutoff, first_only);
     match result {
         Err(e) => Err(e),
         Ok((distances, paths)) => Ok(distances
@@ -221,6 +248,7 @@ fn dijkstra_multisource<T, A>(
     sources: Vec<T>,
     target: Option<T>,
     cutoff: Option<f64>,
+    first_only: bool,
 ) -> Result<(HashMap<T, f64>, HashMap<T, Vec<Vec<T>>>), Error>
 where
     T: Hash + Eq + Copy + Ord + Display,
@@ -300,7 +328,7 @@ where
                     paths_v[i].push(u);
                 }
                 paths.insert(u, paths_v);
-            } else if vu_dist == seen.get(&u).unwrap().clone() {
+            } else if !first_only && vu_dist == seen.get(&u).unwrap().clone() {
                 count += 1;
                 fringe.push(FringeNode {
                     node_name: u,

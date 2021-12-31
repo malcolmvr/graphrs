@@ -7,6 +7,12 @@ use std::hash::Hash;
 
 /**
 Compute the shortest-path (Dijkstra) betweenness centrality for nodes.
+
+$ c_B(v) =\sum_{s,t \in V} \frac{\sigma(s, t|v)}{\sigma(s, t)} $
+
+# References
+
+1. Ulrik Brandes: A Faster Algorithm for Betweenness Centrality. Journal of Mathematical Sociology 25(2):163-177, 2001.
 */
 pub fn betweenness_centrality<T, A>(
     graph: &Graph<T, A>,
@@ -17,7 +23,7 @@ where
     T: Hash + Eq + Copy + Ord + Display,
     A: Copy,
 {
-    let all_pairs = dijkstra::all_pairs(graph, weighted, None);
+    let all_pairs = dijkstra::all_pairs(graph, weighted, None, false);
     match all_pairs {
         Err(e) => Err(e),
         Ok(ap) => {

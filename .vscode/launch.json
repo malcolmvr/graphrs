@@ -7,16 +7,16 @@
         {
             "type": "lldb",
             "request": "launch",
-            "name": "Debug unit tests 'test_algorithms_centrality_betweenness'",
+            "name": "Debug unit tests 'test_algorithms_shortest_path_dijkstra_unweighted'",
             "cargo": {
                 "args": [
                     "test",
                     "--no-run",
-                    "--test=test_algorithms_centrality_betweenness",
+                    "--test=test_algorithms_shortest_path_dijkstra_unweighted",
                     "--package=graphrs"
                 ],
                 "filter": {
-                    "name": "test_algorithms_centrality_betweenness",
+                    "name": "test_algorithms_shortest_path_dijkstra_unweighted",
                     "kind": "test"
                 }
             },

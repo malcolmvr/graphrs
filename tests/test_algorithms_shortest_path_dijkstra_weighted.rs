@@ -28,7 +28,7 @@ mod tests {
         )
         .unwrap();
 
-        let result = dijkstra::all_pairs(&graph, true, None);
+        let result = dijkstra::all_pairs(&graph, true, None, false);
         assert!(result.is_ok());
         let unwrapped = result.unwrap();
         assert_eq!(
@@ -161,7 +161,7 @@ mod tests {
         )
         .unwrap();
 
-        let result = dijkstra::all_pairs(&graph, true, Some(2.9));
+        let result = dijkstra::all_pairs(&graph, true, Some(2.9), false);
         assert!(result.is_ok());
         let unwrapped = result.unwrap();
         assert_eq!(
@@ -252,7 +252,7 @@ mod tests {
         )
         .unwrap();
 
-        let result = dijkstra::single_source(&graph, true, "n1", Some("n3"), None);
+        let result = dijkstra::single_source(&graph, true, "n1", Some("n3"), None, false);
         assert!(result.is_ok());
         let unwrapped = result.unwrap();
         assert_eq!(unwrapped.get("n1").unwrap().distance, 0.0);
@@ -284,7 +284,7 @@ mod tests {
         )
         .unwrap();
 
-        let result = dijkstra::single_source(&graph, true, "n1", Some("n4"), None);
+        let result = dijkstra::single_source(&graph, true, "n1", Some("n4"), None, false);
         assert!(result.is_ok());
         let unwrapped = result.unwrap();
         assert_eq!(unwrapped.get("n4").unwrap().distance, 2.0);
@@ -314,7 +314,7 @@ mod tests {
         )
         .unwrap();
 
-        let result = dijkstra::single_source(&graph, true, "n1", Some("n5"), None);
+        let result = dijkstra::single_source(&graph, true, "n1", Some("n5"), None, false);
         assert!(result.is_ok());
         let unwrapped = result.unwrap();
         assert_eq!(unwrapped.get("n5").unwrap().distance, 3.0);
@@ -324,6 +324,35 @@ mod tests {
         );
     }
 
+    #[test]
+    fn test_single_source_4() {
+        let edges = vec![
+            Edge::with_weight("n1", "n2", 2.0),
+            Edge::with_weight("n2", "n5", 1.0),
+            Edge::with_weight("n1", "n3", 1.0),
+            Edge::with_weight("n3", "n4", 1.0),
+            Edge::with_weight("n4", "n5", 1.0),
+        ];
+
+        let graph: Graph<&str, ()> = Graph::new_from_nodes_and_edges(
+            vec![],
+            edges,
+            GraphSpecs {
+                missing_node_strategy: MissingNodeStrategy::Create,
+                ..GraphSpecs::directed()
+            },
+        )
+        .unwrap();
+
+        let result = dijkstra::single_source(&graph, true, "n1", Some("n5"), None, true);
+        assert!(result.is_ok());
+        let unwrapped = result.unwrap();
+        let n5 = unwrapped.get("n5").unwrap();
+        assert_eq!(n5.distance, 3.0);
+        assert_eq!(n5.paths.len(), 1);
+        assert!(n5.paths[0] == vec!["n1", "n2", "n5"] || n5.paths[0] == vec!["n1", "n3", "n4", "n5"]);
+    }
+    
     #[test]
     fn test_multi_source_1() {
         let nodes = vec![
@@ -342,7 +371,7 @@ mod tests {
 
         let graph = Graph::new_from_nodes_and_edges(nodes, edges, GraphSpecs::directed()).unwrap();
 
-        let result = dijkstra::multi_source(&graph, true, vec!["n1"], Some("n3"), None);
+        let result = dijkstra::multi_source(&graph, true, vec!["n1"], Some("n3"), None, false);
         assert!(result.is_ok());
         let unwrapped = result.unwrap();
         let n3_info = unwrapped.get("n3").unwrap();
@@ -353,7 +382,7 @@ mod tests {
     #[test]
     fn test_multi_source_2() {
         let graph = generators::social::karate_club_graph();
-        let result = dijkstra::multi_source(&graph, true, vec![0, 1, 2], Some(24), None);
+        let result = dijkstra::multi_source(&graph, true, vec![0, 1, 2], Some(24), None, false);
         assert!(result.is_err());
     }
 
@@ -378,7 +407,7 @@ mod tests {
         )
         .unwrap();
 
-        let result = dijkstra::multi_source(&graph, true, vec!["n1"], None, None);
+        let result = dijkstra::multi_source(&graph, true, vec!["n1"], None, None, false);
         assert!(result.is_ok());
         let unwrapped = result.unwrap();
         assert_eq!(unwrapped.get("n1").unwrap().distance, 0.0);
