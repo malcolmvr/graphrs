@@ -17,3 +17,4 @@ exclude = [".vscode/*", "tests/*"]
 [dependencies]
 itertools = "0.10.0"
 serde = { version = "1.0", optional = true, features = ["derive"] }
+rand = "0.8.4"
