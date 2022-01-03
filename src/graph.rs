@@ -49,7 +49,7 @@ let graph = Graph::<&str, ()>::new_from_nodes_and_edges(
 ```
 */
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub struct Graph<T: PartialOrd, A: Copy> {
+pub struct Graph<T: PartialOrd + Send, A: Copy> {
     /// The graph's nodes, stored as a `HashMap` keyed by the node names.
     nodes: HashMap<T, Node<T, A>>,
     /// The graph's edges, stored as a `HashMap` keyed by a tuple of node names.
@@ -66,7 +66,7 @@ pub struct Graph<T: PartialOrd, A: Copy> {
     predecessors: HashMap<T, HashSet<T>>,
 }
 
-impl<T: Display + PartialOrd, A: Copy> Graph<T, A> {
+impl<T: Display + PartialOrd + Send + Sync, A: Copy> Graph<T, A> {
     /**
     Adds an `edge` to the `Graph`.
 
@@ -76,9 +76,9 @@ impl<T: Display + PartialOrd, A: Copy> Graph<T, A> {
     ```
     use graphrs::{Edge, Graph, GraphSpecs};
 
-    let mut graph: Graph<&str, ()> = Graph::new(GraphSpecs::directed());
+    let mut graph: Graph<&str, ()> = Graph::new(GraphSpecs::directed_create_missing());
     let result = graph.add_edge(Edge::new("n1", "n2"));
-    assert!(result.is_err());
+    assert!(result.is_ok());
     ```
     */
     pub fn add_edge(&mut self, edge: Edge<T, A>) -> Result<(), Error>

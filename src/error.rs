@@ -26,6 +26,8 @@ pub enum ErrorKind {
     /// A duplicate `Edge` was added to a [Graph](./struct.Graph.html) that doesn't
     /// support multi `Edge`s.
     DuplicateEdge,
+    /// An argument to a function was not a valid value.
+    InvalidArgument,
     /// A [Node](./struct.Node.html) was requested from a [Graph](./struct.Graph.html) but the
     /// [Node](./struct.Node.html) doesn't exist.
     NodeNotFound,
@@ -49,6 +51,7 @@ impl Display for ErrorKind {
         match self {
             ErrorKind::ContradictoryPaths => write!(f, "contradictory paths"),
             ErrorKind::DuplicateEdge => write!(f, "duplicate edge detected"),
+            ErrorKind::InvalidArgument => write!(f, "invalid argument"),
             ErrorKind::NodeNotFound => write!(f, "node not found"),
             ErrorKind::EdgeNotFound => write!(f, "edge not found"),
             ErrorKind::EdgeWeightNotSpecified => write!(f, "edge weight not found"),

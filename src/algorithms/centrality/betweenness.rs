@@ -20,8 +20,8 @@ pub fn betweenness_centrality<T, A>(
     normalized: bool,
 ) -> Result<HashMap<T, f64>, Error>
 where
-    T: Hash + Eq + Copy + Ord + Display,
-    A: Copy,
+    T: Hash + Eq + Copy + Ord + Display + Send + Sync,
+    A: Copy + Send + Sync,
 {
     let all_pairs = dijkstra::all_pairs(graph, weighted, None, false);
     match all_pairs {
@@ -44,7 +44,7 @@ fn add_missing_nodes_to_between_counts<T, A>(
     between_counts: &mut HashMap<T, f64>,
     nodes: &Vec<&Node<T, A>>,
 ) where
-    T: Hash + Eq + Copy + Ord + Display,
+    T: Hash + Eq + Copy + Ord + Display + Send + Sync,
 {
     for node in nodes {
         if !between_counts.contains_key(&node.name) {

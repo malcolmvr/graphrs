@@ -287,6 +287,33 @@ mod tests {
     }
 
     #[test]
+    fn test_single_source_4() {
+        let edges = vec![
+            Edge::new("n1", "n2"),
+            Edge::new("n1", "n3"),
+            Edge::new("n2", "n3"),
+            Edge::new("n4", "n5"),
+        ];
+
+        let graph: Graph<&str, ()> = Graph::new_from_nodes_and_edges(
+            vec![],
+            edges,
+            GraphSpecs {
+                missing_node_strategy: MissingNodeStrategy::Create,
+                ..GraphSpecs::directed()
+            },
+        )
+        .unwrap();
+
+        let result = dijkstra::single_source(&graph, false, "n1", Some("n5"), None, true);
+        assert!(result.is_ok());
+        let unwrapped = result.unwrap();
+        assert_eq!(unwrapped.keys().len(), 0);
+        let n5 = unwrapped.get("n5");
+        assert!(n5.is_none());
+    }
+
+    #[test]
     fn test_multi_source_1() {
         let nodes = vec![
             Node::<&str, ()>::from_name("n2"),

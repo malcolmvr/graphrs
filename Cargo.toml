@@ -18,3 +18,4 @@ exclude = [".vscode/*", "tests/*"]
 itertools = "0.10.0"
 serde = { version = "1.0", optional = true, features = ["derive"] }
 rand = "0.8.4"
+rayon = "1.5.1"

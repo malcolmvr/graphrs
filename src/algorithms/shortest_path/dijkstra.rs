@@ -4,6 +4,7 @@ use std::cmp::Ordering;
 use std::collections::{BinaryHeap, HashMap};
 use std::fmt::Display;
 use std::hash::Hash;
+use rayon::prelude::*;
 
 /**
 As a graph is explored by a shortest-path algorithm the nodes at the
@@ -100,16 +101,16 @@ pub fn all_pairs<T, A>(
     first_only: bool,
 ) -> Result<HashMap<T, HashMap<T, ShortestPathInfo<T>>>, Error>
 where
-    T: Hash + Eq + Copy + Ord + Display,
-    A: Copy,
+    T: Hash + Eq + Copy + Ord + Display + Send + Sync,
+    A: Copy + Send + Sync,
 {
     Ok(graph
         .get_all_nodes()
-        .iter()
-        .map(|n| {
+        .into_par_iter()
+        .map(|node| {
             (
-                n.name,
-                single_source(graph, weighted, n.name, None, cutoff, first_only).unwrap(),
+                node.name,
+                single_source(graph, weighted, node.name, None, cutoff, first_only).unwrap(),
             )
         })
         .collect())
@@ -162,7 +163,7 @@ pub fn single_source<T, A>(
     first_only: bool,
 ) -> Result<HashMap<T, ShortestPathInfo<T>>, Error>
 where
-    T: Hash + Eq + Copy + Ord + Display,
+    T: Hash + Eq + Copy + Ord + Display + Send + Sync,
     A: Copy,
 {
     multi_source(graph, weighted, vec![source], target, cutoff, first_only)
@@ -216,7 +217,7 @@ pub fn multi_source<T, A>(
     first_only: bool,
 ) -> Result<HashMap<T, ShortestPathInfo<T>>, Error>
 where
-    T: Hash + Eq + Copy + Ord + Display,
+    T: Hash + Eq + Copy + Ord + Display + Send + Sync,
     A: Copy,
 {
     let result = dijkstra_multisource(graph, weighted, sources, target, cutoff, first_only);
@@ -251,7 +252,7 @@ fn dijkstra_multisource<T, A>(
     first_only: bool,
 ) -> Result<(HashMap<T, f64>, HashMap<T, Vec<Vec<T>>>), Error>
 where
-    T: Hash + Eq + Copy + Ord + Display,
+    T: Hash + Eq + Copy + Ord + Display + Send + Sync,
     A: Copy,
 {
     if weighted && !graph.edges_have_weight() {
@@ -364,7 +365,7 @@ Returns neighbors of a node if the `graph` is undirected.
 */
 fn get_successors_or_neighbors<T, A>(graph: &Graph<T, A>, node_name: T) -> Vec<&Node<T, A>>
 where
-    T: Hash + Eq + Copy + Ord + Display,
+    T: Hash + Eq + Copy + Ord + Display + Send + Sync,
     A: Copy,
 {
     match graph.specs.directed {
@@ -380,7 +381,7 @@ Finds lowest weight of the (u, v) edges.
 */
 fn get_cost_multi<T, A>(graph: &Graph<T, A>, u: T, v: T) -> f64
 where
-    T: Hash + Eq + Copy + Ord + Display,
+    T: Hash + Eq + Copy + Ord + Display + Send + Sync,
     A: Copy,
 {
     let edges = graph.get_edges(u, v).unwrap();
@@ -393,7 +394,7 @@ Returns the weight of the (u, v) edge in a `graph` that is not a multigraph.
 */
 fn get_cost_single<T, A>(graph: &Graph<T, A>, u: T, v: T) -> f64
 where
-    T: Hash + Eq + Copy + Ord + Display,
+    T: Hash + Eq + Copy + Ord + Display + Send + Sync,
     A: Copy,
 {
     let edge = graph.get_edge(u, v).unwrap();

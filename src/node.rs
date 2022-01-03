@@ -8,12 +8,12 @@ Represents a graph node, with `name` and `attributes`.
 */
 #[derive(Clone)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub struct Node<T, A> {
+pub struct Node<T: Send, A> {
     pub name: T,
     pub attributes: Option<A>,
 }
 
-impl<T, A> Node<T, A> {
+impl<T: Send, A> Node<T, A> {
     /**
     Returns a `Node` with the specified `name` and no attributes.
 
@@ -61,39 +61,39 @@ impl<T, A> Node<T, A> {
     }
 }
 
-impl<T: Eq + Ord, A> Ord for Node<T, A> {
+impl<T: Eq + Ord + Send + Sync, A> Ord for Node<T, A> {
     fn cmp(&self, other: &Self) -> Ordering {
         self.name.cmp(&other.name)
     }
 }
 
-impl<T: Eq + PartialOrd + Ord, A> PartialOrd for Node<T, A> {
+impl<T: Eq + PartialOrd + Ord + Send + Sync, A> PartialOrd for Node<T, A> {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         Some(self.cmp(other))
     }
 }
 
-impl<T: std::cmp::PartialEq, A> PartialEq for Node<T, A> {
+impl<T: std::cmp::PartialEq + Send + Sync, A> PartialEq for Node<T, A> {
     fn eq(&self, other: &Self) -> bool {
         self.name == other.name
     }
 }
 
-impl<T: Eq, A> Eq for Node<T, A> {}
+impl<T: Eq + Send + Sync, A> Eq for Node<T, A> {}
 
-impl<T: Debug, A> fmt::Debug for Node<T, A> {
+impl<T: Debug + Send + Sync, A> fmt::Debug for Node<T, A> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("Node").field("name", &self.name).finish()
     }
 }
 
-impl<T: Display, A> fmt::Display for Node<T, A> {
+impl<T: Display + Send + Sync, A> fmt::Display for Node<T, A> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}", self.name)
     }
 }
 
-impl<T: Hash, A> Hash for Node<T, A> {
+impl<T: Hash + Send + Sync, A> Hash for Node<T, A> {
     fn hash<H: Hasher>(&self, state: &mut H) {
         self.name.hash(state);
     }

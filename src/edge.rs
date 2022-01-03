@@ -12,7 +12,7 @@ Also allows `attributes`, as a `HashMap`, to be stored on an edge.
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Edge<T, A>
 where
-    T: PartialOrd,
+    T: PartialOrd + Send,
 {
     /// The name of the first node of the edge.
     pub u: T,
@@ -25,7 +25,7 @@ where
     pub weight: f64,
 }
 
-impl<T: std::cmp::PartialOrd, A> Edge<T, A> {
+impl<T: PartialOrd + Send, A> Edge<T, A> {
     /**
     Creates a new `Edge` with no attributes.
 
@@ -118,15 +118,15 @@ impl<T: std::cmp::PartialOrd, A> Edge<T, A> {
     }
 }
 
-impl<T: PartialEq + PartialOrd, A> PartialEq for Edge<T, A> {
+impl<T: PartialEq + PartialOrd + Send + Sync, A> PartialEq for Edge<T, A> {
     fn eq(&self, other: &Self) -> bool {
         self.u == other.u && self.v == other.v
     }
 }
 
-impl<T: Eq + PartialOrd, A> Eq for Edge<T, A> {}
+impl<T: Eq + PartialOrd + Send + Sync, A> Eq for Edge<T, A> {}
 
-impl<T: Debug + PartialOrd, A> fmt::Debug for Edge<T, A> {
+impl<T: Debug + PartialOrd + Send + Sync, A> fmt::Debug for Edge<T, A> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("Node")
             .field("u", &self.u)
@@ -135,26 +135,26 @@ impl<T: Debug + PartialOrd, A> fmt::Debug for Edge<T, A> {
     }
 }
 
-impl<T: Display + PartialOrd, A> fmt::Display for Edge<T, A> {
+impl<T: Display + PartialOrd + Send + Sync, A> fmt::Display for Edge<T, A> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "({}, {})", self.u, self.v)
     }
 }
 
-impl<T: Hash + PartialOrd, A> Hash for Edge<T, A> {
+impl<T: Hash + PartialOrd + Send + Sync, A> Hash for Edge<T, A> {
     fn hash<H: Hasher>(&self, state: &mut H) {
         self.u.hash(state);
         self.v.hash(state);
     }
 }
 
-impl<T: Eq + PartialEq + PartialOrd, A> PartialOrd for Edge<T, A> {
+impl<T: Eq + PartialEq + PartialOrd + Send + Sync, A> PartialOrd for Edge<T, A> {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         Some(self.cmp(other))
     }
 }
 
-impl<T: Eq + PartialOrd, A> Ord for Edge<T, A> {
+impl<T: Eq + PartialOrd + Send + Sync, A> Ord for Edge<T, A> {
     fn cmp(&self, other: &Self) -> Ordering {
         let u_cmp = self.u.partial_cmp(&other.u).unwrap();
         match u_cmp {
