@@ -177,6 +177,27 @@ impl<T: Display + PartialOrd, A: Copy> Graph<T, A> {
     }
 
     /**
+    Adds an edge, as a (u, v) tuple, to the `Graph`.
+
+    If the new edge references nodes that don't exist the graph's `specs.missing_node_strategy`
+    determines what happens.
+
+    ```
+    use graphrs::{Edge, Graph, GraphSpecs};
+
+    let mut graph: Graph<&str, ()> = Graph::new(GraphSpecs::directed_create_missing());
+    let result = graph.add_edge_tuple("n1", "n2");
+    assert!(result.is_ok());
+    ```
+    */
+    pub fn add_edge_tuple(&mut self, u: T, v: T) -> Result<(), Error>
+    where
+        T: Hash + Eq + Copy + Ord + Display
+    {
+        self.add_edge(Edge::new(u, v))
+    }
+
+    /**
     Adds new edges to a `Graph`, or updates existing edges, or both.
 
     If the new edges reference nodes that don't exist the graph's `specs.missing_node_strategy`
@@ -204,6 +225,42 @@ impl<T: Display + PartialOrd, A: Copy> Graph<T, A> {
     {
         for edge in edges {
             let result = self.add_edge(edge);
+            if result.is_err() {
+                return result;
+            }
+        }
+
+        Ok(())
+    }
+
+    /**
+    Adds new edges to a `Graph`, or updates existing edges, or both.
+
+    If the new edges reference nodes that don't exist the graph's `specs.missing_node_strategy`
+    determines what happens.
+
+    # Arguments
+
+    * `edges`: the new edges to add to the graph
+
+    ```
+    use graphrs::{Edge, Graph, GraphSpecs};
+
+    let mut graph: Graph<&str, ()> = Graph::new(GraphSpecs::directed_create_missing());
+    let result = graph.add_edge_tuples(vec![
+        ("n1", "n2"),
+        ("n2", "n3"),
+    ]);
+    assert!(result.is_ok());
+    ```
+    */
+    pub fn add_edge_tuples(&mut self, edges: Vec<(T, T)>) -> Result<(), Error>
+    where
+        T: Hash + Eq + Copy + Ord + Display,
+        A: Copy,
+    {
+        for edge in edges {
+            let result = self.add_edge(Edge::new(edge.0, edge.1));
             if result.is_err() {
                 return result;
             }
