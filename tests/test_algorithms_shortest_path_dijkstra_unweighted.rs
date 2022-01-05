@@ -207,9 +207,8 @@ mod tests {
         let result = dijkstra::single_source(&graph, false, "n1", Some("n3"), None, false);
         assert!(result.is_ok());
         let unwrapped = result.unwrap();
-        assert_eq!(unwrapped.get("n1").unwrap().distance, 0.0);
-        assert_eq!(unwrapped.get("n2").unwrap().distance, 1.0);
-        assert_eq!(unwrapped.get("n2").unwrap().paths, vec![vec!["n1", "n2"]]);
+        assert!(unwrapped.get("n1").is_none());
+        assert!(unwrapped.get("n2").is_none());
         assert_eq!(unwrapped.get("n3").unwrap().distance, 2.0);
         assert_paths_contain_same_items(
             &unwrapped.get("n3").unwrap().paths,
@@ -283,7 +282,10 @@ mod tests {
         let n9 = unwrapped.get("n9").unwrap();
         assert_eq!(n9.distance, 3.0);
         assert_eq!(n9.paths.len(), 1);
-        assert!(n9.paths[0] == vec!["n12", "n3", "n2", "n9"] || n9.paths[0] == vec!["n12", "n0", "n2", "n9"]);
+        assert!(
+            n9.paths[0] == vec!["n12", "n3", "n2", "n9"]
+                || n9.paths[0] == vec!["n12", "n0", "n2", "n9"]
+        );
     }
 
     #[test]

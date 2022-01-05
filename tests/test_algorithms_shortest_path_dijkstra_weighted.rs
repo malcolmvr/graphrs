@@ -255,9 +255,8 @@ mod tests {
         let result = dijkstra::single_source(&graph, true, "n1", Some("n3"), None, false);
         assert!(result.is_ok());
         let unwrapped = result.unwrap();
-        assert_eq!(unwrapped.get("n1").unwrap().distance, 0.0);
-        assert_eq!(unwrapped.get("n2").unwrap().distance, 1.0);
-        assert_eq!(unwrapped.get("n2").unwrap().paths, vec![vec!["n1", "n2"]]);
+        assert!(unwrapped.get("n1").is_none());
+        assert!(unwrapped.get("n2").is_none());
         assert_eq!(unwrapped.get("n3").unwrap().distance, 5.0);
         assert_eq!(
             unwrapped.get("n3").unwrap().paths,
@@ -350,9 +349,11 @@ mod tests {
         let n5 = unwrapped.get("n5").unwrap();
         assert_eq!(n5.distance, 3.0);
         assert_eq!(n5.paths.len(), 1);
-        assert!(n5.paths[0] == vec!["n1", "n2", "n5"] || n5.paths[0] == vec!["n1", "n3", "n4", "n5"]);
+        assert!(
+            n5.paths[0] == vec!["n1", "n2", "n5"] || n5.paths[0] == vec!["n1", "n3", "n4", "n5"]
+        );
     }
-    
+
     #[test]
     fn test_multi_source_1() {
         let nodes = vec![

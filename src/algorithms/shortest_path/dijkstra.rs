@@ -225,6 +225,7 @@ where
         Err(e) => Err(e),
         Ok((distances, paths)) => Ok(distances
             .into_iter()
+            .filter(|(k, _v)| target.is_none() || k == &target.unwrap())
             .map(|(k, v)| {
                 (
                     k,
