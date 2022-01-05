@@ -25,7 +25,11 @@ where
     pub weight: f64,
 }
 
-impl<T: PartialOrd + Send, A> Edge<T, A> {
+impl<T, A> Edge<T, A>
+where
+    T: Eq + Copy + PartialOrd + Ord + Hash + Send + Sync + Display,
+    A: Copy,
+{
     /**
     Creates a new `Edge` with no attributes.
 

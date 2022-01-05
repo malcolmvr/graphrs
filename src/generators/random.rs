@@ -18,7 +18,11 @@ let graph = generators::random::fast_gnp_random_graph(250, 0.25, true);
 assert!(graph.is_ok());
 ```
 */
-pub fn fast_gnp_random_graph(num_nodes: i32, edge_probability: f64, directed: bool) -> Result<Graph<i32, ()>, Error> {
+pub fn fast_gnp_random_graph(
+    num_nodes: i32,
+    edge_probability: f64,
+    directed: bool,
+) -> Result<Graph<i32, ()>, Error> {
     if edge_probability <= 0.0 || edge_probability >= 1.0 {
         return Err(Error {
             kind: ErrorKind::InvalidArgument,
@@ -30,11 +34,14 @@ pub fn fast_gnp_random_graph(num_nodes: i32, edge_probability: f64, directed: bo
     }
     match directed {
         true => fast_gnp_random_graph_directed(num_nodes, edge_probability),
-        false => fast_gnp_random_graph_undirected(num_nodes, edge_probability)
+        false => fast_gnp_random_graph_undirected(num_nodes, edge_probability),
     }
 }
 
-fn fast_gnp_random_graph_directed(num_nodes: i32, edge_probability: f64) -> Result<Graph<i32, ()>, Error> {
+fn fast_gnp_random_graph_directed(
+    num_nodes: i32,
+    edge_probability: f64,
+) -> Result<Graph<i32, ()>, Error> {
     let mut graph = Graph::new(GraphSpecs::directed_create_missing());
     let mut w: i32 = -1;
     let lp = (1.0 - edge_probability).ln();
@@ -59,11 +66,14 @@ fn fast_gnp_random_graph_directed(num_nodes: i32, edge_probability: f64) -> Resu
     }
     match graph.add_edge_tuples(edges) {
         Err(e) => Err(e),
-        Ok(_) => Ok(graph)
+        Ok(_) => Ok(graph),
     }
 }
 
-fn fast_gnp_random_graph_undirected(num_nodes: i32, edge_probability: f64) -> Result<Graph<i32, ()>, Error> {
+fn fast_gnp_random_graph_undirected(
+    num_nodes: i32,
+    edge_probability: f64,
+) -> Result<Graph<i32, ()>, Error> {
     let mut graph = Graph::new(GraphSpecs::undirected_create_missing());
     let mut w: i32 = -1;
     let lp = (1.0 - edge_probability).ln();
@@ -82,6 +92,6 @@ fn fast_gnp_random_graph_undirected(num_nodes: i32, edge_probability: f64) -> Re
     }
     match graph.add_edge_tuples(edges) {
         Err(e) => Err(e),
-        Ok(_) => Ok(graph)
+        Ok(_) => Ok(graph),
     }
 }

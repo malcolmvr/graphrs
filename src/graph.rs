@@ -66,7 +66,11 @@ pub struct Graph<T: PartialOrd + Send, A: Copy> {
     predecessors: HashMap<T, HashSet<T>>,
 }
 
-impl<T: Display + PartialOrd + Send + Sync, A: Copy> Graph<T, A> {
+impl<T, A> Graph<T, A>
+where
+    T: Eq + Copy + PartialOrd + Ord + Hash + Send + Sync + Display,
+    A: Copy,
+{
     /**
     Adds an `edge` to the `Graph`.
 
@@ -192,7 +196,7 @@ impl<T: Display + PartialOrd + Send + Sync, A: Copy> Graph<T, A> {
     */
     pub fn add_edge_tuple(&mut self, u: T, v: T) -> Result<(), Error>
     where
-        T: Hash + Eq + Copy + Ord + Display
+        T: Hash + Eq + Copy + Ord + Display,
     {
         self.add_edge(Edge::new(u, v))
     }

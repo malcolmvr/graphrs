@@ -19,6 +19,7 @@ let specs = GraphSpecs {
 };
 ```
 */
+#[derive(Clone)]
 pub struct GraphSpecs {
     /// Determines if a [Graph](./struct.Graph.html) is directed or undirected.
     pub directed: bool,
@@ -45,7 +46,7 @@ Specifies options for a situation where a duplicate edge is being added to a [Gr
 
 `KeepLast`: discard the first (original) [Edge](./struct.Edge.html) and keep the one that is being added.
 */
-#[derive(PartialEq)]
+#[derive(Clone, PartialEq)]
 pub enum EdgeDedupeStrategy {
     Error,
     KeepFirst,
@@ -61,7 +62,7 @@ Specifies options for a situation where an [Edge](./struct.Edge.html) is being a
 
 `Error`: return an `Error`.
 */
-#[derive(PartialEq)]
+#[derive(Clone, PartialEq)]
 pub enum MissingNodeStrategy {
     Create,
     Error,
@@ -75,7 +76,7 @@ being added to a [Graph](./struct.Graph.html) but the [Graph](./struct.Graph.htm
 
 `Drop`: drops any self-loop edges
 */
-#[derive(PartialEq)]
+#[derive(Clone, PartialEq)]
 pub enum SelfLoopsFalseStrategy {
     Error,
     Drop,

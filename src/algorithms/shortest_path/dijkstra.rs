@@ -1,10 +1,10 @@
 use crate::algorithms::shortest_path::ShortestPathInfo;
 use crate::{Error, ErrorKind, Graph, Node};
+use rayon::prelude::*;
 use std::cmp::Ordering;
 use std::collections::{BinaryHeap, HashMap};
 use std::fmt::Display;
 use std::hash::Hash;
-use rayon::prelude::*;
 
 /**
 As a graph is explored by a shortest-path algorithm the nodes at the

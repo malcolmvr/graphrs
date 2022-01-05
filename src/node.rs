@@ -13,7 +13,11 @@ pub struct Node<T: Send, A> {
     pub attributes: Option<A>,
 }
 
-impl<T: Send, A> Node<T, A> {
+impl<T, A> Node<T, A>
+where
+    T: Eq + Copy + PartialOrd + Ord + Hash + Send + Sync + Display,
+    A: Copy,
+{
     /**
     Returns a `Node` with the specified `name` and no attributes.
 
@@ -47,7 +51,14 @@ impl<T: Send, A> Node<T, A> {
 
     ```
     use graphrs::Node;
-    let node = Node::from_name_and_attributes("n1", vec![("a", 1.0), ("b", 1.0)]);
+
+    #[derive(Clone, Copy)]
+    struct Attributes {
+        a: i32,
+        b: f64
+    }
+
+    let node = Node::from_name_and_attributes("n1", Attributes {a: 3, b: 4.5});
     ```
     */
     pub fn from_name_and_attributes(name: T, attributes: A) -> Node<T, A>
