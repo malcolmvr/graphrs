@@ -1,7 +1,7 @@
 #[cfg(test)]
 mod tests {
 
-    use graphrs::{generators};
+    use graphrs::generators;
 
     #[test]
     fn test_fast_gnp_random_graph() {

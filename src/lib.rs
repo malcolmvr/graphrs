@@ -81,6 +81,7 @@ mod error;
 pub use error::{Error, ErrorKind};
 
 mod graph;
+mod graph_subgraph;
 pub use graph::Graph;
 
 pub mod algorithms;
