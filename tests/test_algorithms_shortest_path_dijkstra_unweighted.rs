@@ -48,7 +48,7 @@ mod tests {
         );
         assert_paths_contain_same_items(
             &unwrapped.get("n1").unwrap().get("n3").unwrap().paths,
-            &vec![vec!["n1", "n4", "n3"], vec!["n1", "n2", "n3"]],
+            &[vec!["n1", "n4", "n3"], vec!["n1", "n2", "n3"]],
         );
         assert_eq!(
             unwrapped.get("n1").unwrap().get("n4").unwrap().distance,
@@ -212,7 +212,7 @@ mod tests {
         assert_eq!(unwrapped.get("n3").unwrap().distance, 2.0);
         assert_paths_contain_same_items(
             &unwrapped.get("n3").unwrap().paths,
-            &vec![vec!["n1", "n4", "n3"], vec!["n1", "n2", "n3"]],
+            &[vec!["n1", "n4", "n3"], vec!["n1", "n2", "n3"]],
         );
     }
 
@@ -247,7 +247,7 @@ mod tests {
         assert_eq!(unwrapped.get("n9").unwrap().distance, 3.0);
         assert_paths_contain_same_items(
             &unwrapped.get("n9").unwrap().paths,
-            &vec![vec!["n12", "n0", "n2", "n9"], vec!["n12", "n3", "n2", "n9"]],
+            &[vec!["n12", "n0", "n2", "n9"], vec!["n12", "n3", "n2", "n9"]],
         );
     }
 
@@ -340,7 +340,7 @@ mod tests {
         assert_eq!(n3_info.distance, 2.0);
         assert_paths_contain_same_items(
             &n3_info.paths,
-            &vec![vec!["n1", "n4", "n3"], vec!["n1", "n2", "n3"]],
+            &[vec!["n1", "n4", "n3"], vec!["n1", "n2", "n3"]],
         );
     }
 
@@ -374,7 +374,7 @@ mod tests {
         assert_eq!(unwrapped.get("n3").unwrap().distance, 2.0);
         assert_paths_contain_same_items(
             &unwrapped.get("n3").unwrap().paths,
-            &vec![vec!["n1", "n4", "n3"], vec!["n1", "n2", "n3"]],
+            &[vec!["n1", "n4", "n3"], vec!["n1", "n2", "n3"]],
         );
         assert_eq!(unwrapped.get("n4").unwrap().distance, 1.0);
         assert_eq!(unwrapped.get("n4").unwrap().paths, vec![vec!["n1", "n4"]]);
@@ -382,7 +382,7 @@ mod tests {
         assert_eq!(unwrapped.get("n5").unwrap().paths, vec![vec!["n1", "n5"]]);
     }
 
-    fn assert_paths_contain_same_items(v1: &Vec<Vec<&str>>, v2: &Vec<Vec<&str>>) {
+    fn assert_paths_contain_same_items(v1: &[Vec<&str>], v2: &[Vec<&str>]) {
         let a: HashSet<&Vec<&str>> = v1.iter().collect();
         let b: HashSet<&Vec<&str>> = v2.iter().collect();
         assert_eq!(a, b);

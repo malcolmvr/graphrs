@@ -25,13 +25,13 @@ where
     assert_eq!(subgraph.get_all_nodes().len(), 5);
     ```
     */
-    pub fn get_subgraph(&self, nodes: &Vec<T>) -> Graph<T, A> {
+    pub fn get_subgraph(&self, nodes: &[T]) -> Graph<T, A> {
         let nodes_set: HashSet<T> = nodes.iter().cloned().collect();
         let new_nodes = self
             .get_all_nodes()
             .into_iter()
             .filter(|n| nodes_set.contains(&n.name))
-            .map(|n| n.clone())
+            .cloned()
             .collect::<Vec<Node<T, A>>>();
         let new_edges = self
             .get_all_edges()

@@ -158,11 +158,11 @@ mod tests {
             vec![],
             edges,
             GraphSpecs {
-                directed: directed,
+                directed,
                 ..GraphSpecs::directed_create_missing()
             },
         )
         .unwrap();
-        return graph;
+        graph
     }
 }

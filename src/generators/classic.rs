@@ -16,7 +16,7 @@ use graphrs::{generators};
 let graph = generators::classic::complete_graph(5, true);
 ```
 */
-pub fn complete_graph<'a>(num_nodes: i32, directed: bool) -> Graph<i32, ()> {
+pub fn complete_graph(num_nodes: i32, directed: bool) -> Graph<i32, ()> {
     let x = match directed {
         false => (0..num_nodes).combinations(2).collect::<Vec<Vec<i32>>>(),
         true => (0..num_nodes).permutations(2).collect::<Vec<Vec<i32>>>(),

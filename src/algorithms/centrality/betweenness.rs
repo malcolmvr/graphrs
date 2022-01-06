@@ -42,14 +42,12 @@ where
 
 fn add_missing_nodes_to_between_counts<T, A>(
     between_counts: &mut HashMap<T, f64>,
-    nodes: &Vec<&Node<T, A>>,
+    nodes: &[&Node<T, A>],
 ) where
     T: Hash + Eq + Copy + Ord + Display + Send + Sync,
 {
     for node in nodes {
-        if !between_counts.contains_key(&node.name) {
-            between_counts.insert(node.name, 0.0);
-        }
+        between_counts.entry(node.name).or_insert(0.0);
     }
 }
 
@@ -82,7 +80,7 @@ where
         })
 }
 
-fn get_node_counts<T>(paths: &Vec<Vec<T>>) -> Vec<(T, f64)>
+fn get_node_counts<T>(paths: &[Vec<T>]) -> Vec<(T, f64)>
 where
     T: Copy,
 {
@@ -92,7 +90,7 @@ where
         .filter(|path| path.len() > 2)
         .map(|path| &path[1..(path.len() - 1)])
         .flatten()
-        .map(|node| (node.clone(), 1.0 / paths_count))
+        .map(|node| (*node, 1.0 / paths_count))
         .collect()
 }
 
@@ -110,7 +108,7 @@ where
         None => node_counts,
         Some(s) => node_counts
             .iter()
-            .map(|(k, v)| (k.clone(), v * s))
+            .map(|(k, v)| (*k, v * s))
             .collect(),
     }
 }
@@ -137,37 +135,37 @@ mod tests {
 
     #[test]
     fn test_get_node_counts_1() {
-        let result = get_node_counts::<&str>(&vec![]);
+        let result = get_node_counts::<&str>(&[]);
         assert_eq!(result, vec![]);
     }
 
     #[test]
     fn test_get_node_counts_2() {
-        let result = get_node_counts(&vec![vec!["n1", "n3"]]);
+        let result = get_node_counts(&[vec!["n1", "n3"]]);
         assert_eq!(result, vec![]);
     }
 
     #[test]
     fn test_get_node_counts_3() {
-        let result = get_node_counts(&vec![vec!["n1", "n2", "n3"]]);
+        let result = get_node_counts(&[vec!["n1", "n2", "n3"]]);
         assert_eq!(result, vec![("n2", 1.0)]);
     }
 
     #[test]
     fn test_get_node_counts_4() {
-        let result = get_node_counts(&vec![vec!["n1", "n3"], vec!["n1", "n2", "n3"]]);
+        let result = get_node_counts(&[vec!["n1", "n3"], vec!["n1", "n2", "n3"]]);
         assert_eq!(result, vec![("n2", 0.5)]);
     }
 
     #[test]
     fn test_get_node_counts_5() {
-        let result = get_node_counts(&vec![vec!["n1", "n2", "n3", "n4", "n5"]]);
+        let result = get_node_counts(&[vec!["n1", "n2", "n3", "n4", "n5"]]);
         assert_eq!(result, vec![("n2", 1.0), ("n3", 1.0), ("n4", 1.0)]);
     }
 
     #[test]
     fn test_get_node_counts_6() {
-        let result = get_node_counts(&vec![
+        let result = get_node_counts(&[
             vec!["n1", "n2", "n3", "n4", "n5"],
             vec!["n1", "n2", "n6", "n5"],
         ]);

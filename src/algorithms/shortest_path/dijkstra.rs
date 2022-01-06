@@ -20,17 +20,17 @@ struct FringeNode<T> {
 impl<T: Eq + Ord> Ord for FringeNode<T> {
     fn cmp(&self, other: &Self) -> Ordering {
         if self.distance < other.distance {
-            return Ordering::Less;
+            Ordering::Less
         } else if self.distance > other.distance {
-            return Ordering::Greater;
+            Ordering::Greater
         } else {
             let count_ordering = self.count.cmp(&other.count);
             match count_ordering {
                 Ordering::Equal => {
-                    return self.node_name.cmp(&other.node_name);
+                    self.node_name.cmp(&other.node_name)
                 }
                 _ => {
-                    return count_ordering;
+                    count_ordering
                 }
             }
         }
@@ -46,8 +46,8 @@ impl<T: Eq + Ord> PartialOrd for FringeNode<T> {
 impl<T: Eq> PartialEq for FringeNode<T> {
     fn eq(&self, other: &Self) -> bool {
         self.distance == other.distance
-            && self.count == self.count
-            && self.node_name == self.node_name
+            && self.count == other.count
+            && self.node_name == other.node_name
     }
 }
 
@@ -220,21 +220,12 @@ where
     T: Hash + Eq + Copy + Ord + Display + Send + Sync,
     A: Copy,
 {
-    let result = dijkstra_multisource(graph, weighted, sources, target, cutoff, first_only);
-    match result {
+    let shortest_path_infos = dijkstra_multisource(graph, weighted, sources, target, cutoff, first_only);
+    match shortest_path_infos {
         Err(e) => Err(e),
-        Ok((distances, paths)) => Ok(distances
+        Ok(spis) => Ok(spis
             .into_iter()
             .filter(|(k, _v)| target.is_none() || k == &target.unwrap())
-            .map(|(k, v)| {
-                (
-                    k,
-                    ShortestPathInfo {
-                        distance: v,
-                        paths: paths.get(&k).unwrap().clone(),
-                    },
-                )
-            })
             .collect::<HashMap<T, ShortestPathInfo<T>>>()),
     }
 }
@@ -251,7 +242,7 @@ fn dijkstra_multisource<T, A>(
     target: Option<T>,
     cutoff: Option<f64>,
     first_only: bool,
-) -> Result<(HashMap<T, f64>, HashMap<T, Vec<Vec<T>>>), Error>
+) -> Result<HashMap<T, ShortestPathInfo<T>>, Error>
 where
     T: Hash + Eq + Copy + Ord + Display + Send + Sync,
     A: Copy,
@@ -259,7 +250,7 @@ where
     if weighted && !graph.edges_have_weight() {
         return Err(Error {
             kind: ErrorKind::EdgeWeightNotSpecified,
-            message: format!("Not all edges in the graph have a weight."),
+            message: "Not all edges in the graph have a weight.".to_string(),
         });
     }
 
@@ -273,7 +264,7 @@ where
 
     let mut paths: HashMap<T, Vec<Vec<T>>> = sources
         .iter()
-        .map(|s| (s.clone(), vec![vec![s.clone()]]))
+        .map(|s| (*s, vec![vec![*s]]))
         .collect();
     let mut dist = HashMap::<T, f64>::new();
     let mut seen = HashMap::<T, f64>::new();
@@ -289,7 +280,7 @@ where
         });
     }
 
-    while fringe.len() > 0 {
+    while !fringe.is_empty() {
         let fringe_item = fringe.pop().unwrap();
         let d = -fringe_item.distance;
         let v = fringe_item.node_name;
@@ -297,7 +288,7 @@ where
             continue;
         }
         dist.insert(v, d);
-        if target.is_some() && v == target.unwrap().clone() {
+        if target.is_some() && v == target.unwrap() {
             break;
         }
         let sorn = get_successors_or_neighbors(graph, v);
@@ -309,7 +300,7 @@ where
                 continue;
             }
             if dist.contains_key(&u) {
-                let u_dist = dist.get(&u).unwrap().clone();
+                let u_dist = *dist.get(&u).unwrap();
                 if vu_dist < u_dist {
                     return Err(Error {
                         kind: ErrorKind::ContradictoryPaths,
@@ -317,24 +308,22 @@ where
                             .to_string(),
                     });
                 }
-            } else if !seen.contains_key(&u) || vu_dist < seen.get(&u).unwrap().clone() {
+            } else if !seen.contains_key(&u) || vu_dist < *seen.get(&u).unwrap() {
                 seen.insert(u, vu_dist);
                 count += 1;
                 fringe.push(FringeNode {
                     node_name: u,
-                    count: count,
+                    count,
                     distance: -vu_dist,
                 });
-                let mut paths_v = paths.entry(v).or_default().clone();
-                for i in 0..paths_v.len() {
-                    paths_v[i].push(u);
-                }
-                paths.insert(u, paths_v);
-            } else if !first_only && vu_dist == seen.get(&u).unwrap().clone() {
+                let mut new_paths_v = paths.entry(v).or_default().clone();
+                new_paths_v.iter_mut().for_each(|pv| pv.push(u));
+                paths.insert(u, new_paths_v);
+            } else if !first_only && vu_dist == *seen.get(&u).unwrap() {
                 count += 1;
                 fringe.push(FringeNode {
                     node_name: u,
-                    count: count,
+                    count,
                     distance: -vu_dist,
                 });
                 // add u to all paths[v], then *append* them to paths[u]
@@ -356,7 +345,53 @@ where
         }
     }
 
-    Ok((dist, paths))
+    Ok(get_shortest_path_infos::<T, A>(dist, paths))
+}
+
+/**
+Returns the "cost" of a (`u`, `v`) edges when the `graph` is a multigraph.
+
+Finds lowest weight of the (u, v) edges.
+*/
+fn get_cost_multi<T, A>(graph: &Graph<T, A>, u: T, v: T) -> f64
+where
+    T: Hash + Eq + Copy + Ord + Display + Send + Sync,
+    A: Copy,
+{
+    let edges = graph.get_edges(u, v).unwrap();
+    let weights = edges.into_iter().map(|e| e.weight);
+    weights.into_iter().reduce(f64::min).unwrap()
+}
+
+/**
+Returns the weight of the (u, v) edge in a `graph` that is not a multigraph.
+*/
+fn get_cost_single<T, A>(graph: &Graph<T, A>, u: T, v: T) -> f64
+where
+    T: Hash + Eq + Copy + Ord + Display + Send + Sync,
+    A: Copy,
+{
+    let edge = graph.get_edge(u, v).unwrap();
+    edge.weight
+}
+
+fn get_shortest_path_infos<T, A>(distances: HashMap<T, f64>, paths: HashMap<T, Vec<Vec<T>>>) -> HashMap<T, ShortestPathInfo<T>>
+where
+    T: Hash + Eq + Copy + Ord + Display + Send + Sync,
+    A: Copy,
+{
+    distances
+        .into_iter()
+        .map(|(k, v)| {
+            (
+                k,
+                ShortestPathInfo {
+                    distance: v,
+                    paths: paths.get(&k).unwrap().clone(),
+                },
+            )
+        })
+        .collect::<HashMap<T, ShortestPathInfo<T>>>()
 }
 
 /**
@@ -373,31 +408,4 @@ where
         true => graph.get_successor_nodes(node_name).unwrap(),
         false => graph.get_neighbor_nodes(node_name).unwrap(),
     }
-}
-
-/**
-Returns the "cost" of a (`u`, `v`) edges when the `graph` is a multigraph.
-
-Finds lowest weight of the (u, v) edges.
-*/
-fn get_cost_multi<T, A>(graph: &Graph<T, A>, u: T, v: T) -> f64
-where
-    T: Hash + Eq + Copy + Ord + Display + Send + Sync,
-    A: Copy,
-{
-    let edges = graph.get_edges(u, v).unwrap();
-    let weights: Vec<f64> = edges.into_iter().map(|e| e.weight).collect();
-    weights.into_iter().reduce(f64::min).unwrap()
-}
-
-/**
-Returns the weight of the (u, v) edge in a `graph` that is not a multigraph.
-*/
-fn get_cost_single<T, A>(graph: &Graph<T, A>, u: T, v: T) -> f64
-where
-    T: Hash + Eq + Copy + Ord + Display + Send + Sync,
-    A: Copy,
-{
-    let edge = graph.get_edge(u, v).unwrap();
-    edge.weight
 }

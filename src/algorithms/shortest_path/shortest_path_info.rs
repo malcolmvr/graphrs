@@ -23,6 +23,6 @@ impl<T> ShortestPathInfo<T> {
                 return true;
             }
         }
-        return false;
+        false
     }
 }

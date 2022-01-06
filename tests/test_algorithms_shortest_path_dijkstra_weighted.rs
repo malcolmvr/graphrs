@@ -289,7 +289,7 @@ mod tests {
         assert_eq!(unwrapped.get("n4").unwrap().distance, 2.0);
         assert_paths_contain_same_items(
             &unwrapped.get("n4").unwrap().paths,
-            &vec![vec!["n1", "n2", "n4"], vec!["n1", "n3", "n4"]],
+            &[vec!["n1", "n2", "n4"], vec!["n1", "n3", "n4"]],
         );
     }
 
@@ -319,7 +319,7 @@ mod tests {
         assert_eq!(unwrapped.get("n5").unwrap().distance, 3.0);
         assert_paths_contain_same_items(
             &unwrapped.get("n5").unwrap().paths,
-            &vec![vec!["n1", "n2", "n5"], vec!["n1", "n3", "n4", "n5"]],
+            &[vec!["n1", "n2", "n5"], vec!["n1", "n3", "n4", "n5"]],
         );
     }
 
@@ -428,7 +428,7 @@ mod tests {
         );
     }
 
-    fn assert_paths_contain_same_items(v1: &Vec<Vec<&str>>, v2: &Vec<Vec<&str>>) {
+    fn assert_paths_contain_same_items(v1: &[Vec<&str>], v2: &[Vec<&str>]) {
         let a: HashSet<&Vec<&str>> = v1.iter().collect();
         let b: HashSet<&Vec<&str>> = v2.iter().collect();
         assert_eq!(a, b);

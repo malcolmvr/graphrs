@@ -51,13 +51,13 @@ fn fast_gnp_random_graph_directed(
         let lr: f64 = (1.0_f64 - rand::random::<f64>()).ln();
         w = w + 1 + ((lr / lp) as i32);
         if v == w {
-            w = w + 1;
+            w += 1;
         }
         while v < num_nodes && num_nodes <= w {
-            w = w - num_nodes;
-            v = v + 1;
+            w -= num_nodes;
+            v += 1;
             if v == w {
-                w = w + 1;
+                w += 1;
             }
         }
         if v < num_nodes {
@@ -83,8 +83,8 @@ fn fast_gnp_random_graph_undirected(
         let lr: f64 = (1.0_f64 - rand::random::<f64>()).ln();
         w = w + 1 + ((lr / lp) as i32);
         while w >= v && v < num_nodes {
-            w = w - v;
-            v = v + 1;
+            w += v;
+            v += 1;
         }
         if v < num_nodes {
             edges.push((v, w));

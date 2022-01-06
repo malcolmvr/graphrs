@@ -69,10 +69,10 @@ where
     ```
     */
     pub fn ordered(self: Edge<T, A>) -> Edge<T, A> {
-        return match self.u > self.v {
+        match self.u > self.v {
             true => self.reversed(),
             false => self,
-        };
+        }
     }
 
     /**
@@ -117,7 +117,7 @@ where
             u,
             v,
             attributes: None,
-            weight: weight,
+            weight,
         }
     }
 }

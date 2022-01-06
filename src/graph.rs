@@ -122,12 +122,8 @@ where
                 ),
             });
         }
-        if !self.nodes.contains_key(&edge.u) {
-            self.nodes.insert(edge.u, Node::from_name(edge.u));
-        }
-        if !self.nodes.contains_key(&edge.v) {
-            self.nodes.insert(edge.v, Node::from_name(edge.v));
-        }
+        self.nodes.entry(edge.u).or_insert_with(|| Node::from_name(edge.u));
+        self.nodes.entry(edge.v).or_insert_with(|| Node::from_name(edge.v));
 
         // add successors and predecessors
         self.successors.entry(edge.u).or_default().insert(edge.v);
@@ -621,7 +617,7 @@ where
         let pred = self.predecessors.get(&node_name);
         match pred {
             None => Ok(vec![]),
-            Some(hashset) => Ok(self.get_nodes_for_names(&hashset)),
+            Some(hashset) => Ok(self.get_nodes_for_names(hashset)),
         }
     }
 
@@ -692,7 +688,7 @@ where
         let succ = self.successors.get(&node_name);
         match succ {
             None => Ok(vec![]),
-            Some(hashset) => Ok(self.get_nodes_for_names(&hashset)),
+            Some(hashset) => Ok(self.get_nodes_for_names(hashset)),
         }
     }
 
@@ -744,7 +740,7 @@ where
         Graph {
             nodes: HashMap::<T, Node<T, A>>::new(),
             edges: HashMap::<(T, T), Vec<Edge<T, A>>>::new(),
-            specs: specs,
+            specs,
             successors: HashMap::<T, HashSet<T>>::new(),
             predecessors: HashMap::<T, HashSet<T>>::new(),
         }
@@ -799,10 +795,10 @@ where
         let mut graph = Graph::new(specs);
         graph.add_nodes(nodes);
         let result = graph.add_edges(edges);
-        if result.is_err() {
-            return Err(result.unwrap_err());
+        match result {
+            Err(e) => Err(e),
+            Ok(_) => Ok(graph)
         }
-        Ok(graph)
     }
 
     // PRIVATE METHODS
@@ -813,7 +809,7 @@ where
         A: Copy,
     {
         names
-            .into_iter()
+            .iter()
             .map(|n| self.nodes.get(n).unwrap())
             .collect::<Vec<&Node<T, A>>>()
     }
