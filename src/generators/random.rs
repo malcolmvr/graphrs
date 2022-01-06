@@ -1,5 +1,6 @@
 use crate::{Error, ErrorKind, Graph, GraphSpecs};
-extern crate rand;
+use rand::{Rng, RngCore, SeedableRng};
+use rand_chacha::ChaCha20Rng;
 
 /**
 Returns an Erdos-Renyi or binomial random graph.
@@ -22,6 +23,8 @@ pub fn fast_gnp_random_graph(
     num_nodes: i32,
     edge_probability: f64,
     directed: bool,
+    seed: Option<u64>,
+    
 ) -> Result<Graph<i32, ()>, Error> {
     if edge_probability <= 0.0 || edge_probability >= 1.0 {
         return Err(Error {
@@ -32,15 +35,17 @@ pub fn fast_gnp_random_graph(
             ),
         });
     }
+    let mut rng = get_random_number_generator(seed);
     match directed {
-        true => fast_gnp_random_graph_directed(num_nodes, edge_probability),
-        false => fast_gnp_random_graph_undirected(num_nodes, edge_probability),
+        true => fast_gnp_random_graph_directed(num_nodes, edge_probability, &mut rng),
+        false => fast_gnp_random_graph_undirected(num_nodes, edge_probability, &mut rng),
     }
 }
 
 fn fast_gnp_random_graph_directed(
     num_nodes: i32,
     edge_probability: f64,
+    rng: &mut Box<dyn RngCore>,
 ) -> Result<Graph<i32, ()>, Error> {
     let mut graph = Graph::new(GraphSpecs::directed_create_missing());
     let mut w: i32 = -1;
@@ -48,7 +53,7 @@ fn fast_gnp_random_graph_directed(
     let mut v = 0;
     let mut edges = vec![];
     while v < num_nodes {
-        let lr: f64 = (1.0_f64 - rand::random::<f64>()).ln();
+        let lr: f64 = (1.0_f64 - rng.gen::<f64>()).ln();
         w = w + 1 + ((lr / lp) as i32);
         if v == w {
             w += 1;
@@ -73,6 +78,7 @@ fn fast_gnp_random_graph_directed(
 fn fast_gnp_random_graph_undirected(
     num_nodes: i32,
     edge_probability: f64,
+    rng: &mut Box<dyn RngCore>,
 ) -> Result<Graph<i32, ()>, Error> {
     let mut graph = Graph::new(GraphSpecs::undirected_create_missing());
     let mut w: i32 = -1;
@@ -80,7 +86,7 @@ fn fast_gnp_random_graph_undirected(
     let mut v = 1;
     let mut edges = vec![];
     while v < num_nodes {
-        let lr: f64 = (1.0_f64 - rand::random::<f64>()).ln();
+        let lr: f64 = (1.0_f64 - rng.gen::<f64>()).ln();
         w = w + 1 + ((lr / lp) as i32);
         while w >= v && v < num_nodes {
             w += v;
@@ -93,5 +99,13 @@ fn fast_gnp_random_graph_undirected(
     match graph.add_edge_tuples(edges) {
         Err(e) => Err(e),
         Ok(_) => Ok(graph),
+    }
+}
+
+fn get_random_number_generator(seed: Option<u64>) -> Box<dyn RngCore>
+{
+    match seed {
+        None => Box::new(rand::thread_rng()),
+        Some(s) => Box::new(ChaCha20Rng::seed_from_u64(s))
     }
 }
