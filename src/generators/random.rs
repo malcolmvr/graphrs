@@ -15,7 +15,7 @@ Returns an Erdos-Renyi or binomial random graph.
 
 ```
 use graphrs::{generators};
-let graph = generators::random::fast_gnp_random_graph(250, 0.25, true);
+let graph = generators::random::fast_gnp_random_graph(250, 0.25, true, None);
 assert!(graph.is_ok());
 ```
 */
@@ -24,7 +24,6 @@ pub fn fast_gnp_random_graph(
     edge_probability: f64,
     directed: bool,
     seed: Option<u64>,
-    
 ) -> Result<Graph<i32, ()>, Error> {
     if edge_probability <= 0.0 || edge_probability >= 1.0 {
         return Err(Error {
@@ -102,10 +101,9 @@ fn fast_gnp_random_graph_undirected(
     }
 }
 
-fn get_random_number_generator(seed: Option<u64>) -> Box<dyn RngCore>
-{
+fn get_random_number_generator(seed: Option<u64>) -> Box<dyn RngCore> {
     match seed {
         None => Box::new(rand::thread_rng()),
-        Some(s) => Box::new(ChaCha20Rng::seed_from_u64(s))
+        Some(s) => Box::new(ChaCha20Rng::seed_from_u64(s)),
     }
 }

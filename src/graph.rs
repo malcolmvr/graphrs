@@ -122,8 +122,12 @@ where
                 ),
             });
         }
-        self.nodes.entry(edge.u).or_insert_with(|| Node::from_name(edge.u));
-        self.nodes.entry(edge.v).or_insert_with(|| Node::from_name(edge.v));
+        self.nodes
+            .entry(edge.u)
+            .or_insert_with(|| Node::from_name(edge.u));
+        self.nodes
+            .entry(edge.v)
+            .or_insert_with(|| Node::from_name(edge.v));
 
         // add successors and predecessors
         self.successors.entry(edge.u).or_default().insert(edge.v);
@@ -797,7 +801,7 @@ where
         let result = graph.add_edges(edges);
         match result {
             Err(e) => Err(e),
-            Ok(_) => Ok(graph)
+            Ok(_) => Ok(graph),
         }
     }
 

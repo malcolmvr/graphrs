@@ -106,10 +106,7 @@ where
     let scale = get_scale(num_nodes, normalized, directed);
     match scale {
         None => node_counts,
-        Some(s) => node_counts
-            .iter()
-            .map(|(k, v)| (*k, v * s))
-            .collect(),
+        Some(s) => node_counts.iter().map(|(k, v)| (*k, v * s)).collect(),
     }
 }
 
