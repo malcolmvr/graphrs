@@ -26,12 +26,8 @@ impl<T: Eq + Ord> Ord for FringeNode<T> {
         } else {
             let count_ordering = self.count.cmp(&other.count);
             match count_ordering {
-                Ordering::Equal => {
-                    self.node_name.cmp(&other.node_name)
-                }
-                _ => {
-                    count_ordering
-                }
+                Ordering::Equal => self.node_name.cmp(&other.node_name),
+                _ => count_ordering,
             }
         }
     }
@@ -52,6 +48,8 @@ impl<T: Eq> PartialEq for FringeNode<T> {
 }
 
 impl<T: Eq> Eq for FringeNode<T> {}
+
+static CONTRADICTORY_PATHS_ERROR_MESSAGE: &str = "Contradictary paths found, do some edges have negative weights?";
 
 /**
 Uses Dijkstra's algorithm to find shortest weighted paths between all pairs
@@ -220,7 +218,8 @@ where
     T: Hash + Eq + Copy + Ord + Display + Send + Sync,
     A: Copy,
 {
-    let shortest_path_infos = dijkstra_multisource(graph, weighted, sources, target, cutoff, first_only);
+    let shortest_path_infos =
+        dijkstra_multisource(graph, weighted, sources, target, cutoff, first_only);
     match shortest_path_infos {
         Err(e) => Err(e),
         Ok(spis) => Ok(spis
@@ -262,10 +261,7 @@ where
         false => 1.0,
     };
 
-    let mut paths: HashMap<T, Vec<Vec<T>>> = sources
-        .iter()
-        .map(|s| (*s, vec![vec![*s]]))
-        .collect();
+    let mut paths: HashMap<T, Vec<Vec<T>>> = sources.iter().map(|s| (*s, vec![vec![*s]])).collect();
     let mut dist = HashMap::<T, f64>::new();
     let mut seen = HashMap::<T, f64>::new();
     let mut fringe = BinaryHeap::new();
@@ -291,8 +287,7 @@ where
         if target.is_some() && v == target.unwrap() {
             break;
         }
-        let sorn = get_successors_or_neighbors(graph, v);
-        for node in sorn {
+        for node in get_successors_or_neighbors(graph, v) {
             let u = node.name;
             let cost = get_cost(v, u);
             let vu_dist = dist.get(&v).unwrap() + cost;
@@ -302,50 +297,77 @@ where
             if dist.contains_key(&u) {
                 let u_dist = *dist.get(&u).unwrap();
                 if vu_dist < u_dist {
-                    return Err(Error {
-                        kind: ErrorKind::ContradictoryPaths,
-                        message: "Contradictary paths found, do some edges have negative weights?"
-                            .to_string(),
-                    });
+                    return Err(get_contractory_paths_error());
                 }
             } else if !seen.contains_key(&u) || vu_dist < *seen.get(&u).unwrap() {
                 seen.insert(u, vu_dist);
-                count += 1;
-                fringe.push(FringeNode {
-                    node_name: u,
-                    count,
-                    distance: -vu_dist,
-                });
+                push_fringe_node(&mut count, &mut fringe, u, vu_dist);
                 let mut new_paths_v = paths.entry(v).or_default().clone();
                 new_paths_v.iter_mut().for_each(|pv| pv.push(u));
                 paths.insert(u, new_paths_v);
             } else if !first_only && vu_dist == *seen.get(&u).unwrap() {
-                count += 1;
-                fringe.push(FringeNode {
-                    node_name: u,
-                    count,
-                    distance: -vu_dist,
-                });
-                // add u to all paths[v], then *append* them to paths[u]
-                let v_paths: Vec<Vec<T>> = paths
-                    .get(&v)
-                    .unwrap()
-                    .iter()
-                    .map(|p| {
-                        let mut x = p.clone();
-                        x.push(u);
-                        x
-                    })
-                    .collect();
-                let u_paths = paths.get_mut(&u).unwrap();
-                for v_path in v_paths {
-                    u_paths.push(v_path);
-                }
+                push_fringe_node(&mut count, &mut fringe, u, vu_dist);
+                add_u_to_v_paths_and_append_v_paths_to_u_paths(u, v, &mut paths);
             }
         }
     }
 
     Ok(get_shortest_path_infos::<T, A>(dist, paths))
+}
+
+/// Returns the `Error` object for a contradictory-paths error.
+#[inline]
+fn get_contractory_paths_error() -> Error {
+    Error {
+        kind: ErrorKind::ContradictoryPaths,
+        message: CONTRADICTORY_PATHS_ERROR_MESSAGE.to_string(),
+    }
+}
+
+/**
+Pushes a `FringeNode` into the `fringe` `BinaryHeap`.
+Increments `count`.
+*/
+#[inline]
+fn push_fringe_node<T>(count: &mut i32, fringe: &mut BinaryHeap<FringeNode<T>>, u: T, vu_dist: f64)
+where
+    T: Hash + Eq + Copy + Ord + Display + Send + Sync,
+{
+    *count += 1;
+    fringe.push(FringeNode {
+        node_name: u,
+        count: *count,
+        distance: -vu_dist,
+    });
+}
+
+/**
+Adds `u` to the paths that lead to `v`, then appends all the paths that
+lead to `v` to the paths that lead to `u`.
+*/
+#[inline]
+fn add_u_to_v_paths_and_append_v_paths_to_u_paths<T>(
+    u: T,
+    v: T,
+    paths: &mut HashMap<T, Vec<Vec<T>>>,
+) where
+    T: Hash + Eq + Copy + Ord + Display + Send + Sync,
+{
+    // add u to all paths[v], then *append* them to paths[u]
+    let v_paths: Vec<Vec<T>> = paths
+        .get(&v)
+        .unwrap()
+        .iter()
+        .map(|p| {
+            let mut x = p.clone();
+            x.push(u);
+            x
+        })
+        .collect();
+    let u_paths = paths.get_mut(&u).unwrap();
+    for v_path in v_paths {
+        u_paths.push(v_path);
+    }
 }
 
 /**
@@ -375,7 +397,15 @@ where
     edge.weight
 }
 
-fn get_shortest_path_infos<T, A>(distances: HashMap<T, f64>, paths: HashMap<T, Vec<Vec<T>>>) -> HashMap<T, ShortestPathInfo<T>>
+/**
+Zips the `distances` and the `paths` together into a `HashMap` where
+the keys are the names of the target nodes and the values are
+`ShortestPathInfo` objects.
+*/
+fn get_shortest_path_infos<T, A>(
+    distances: HashMap<T, f64>,
+    paths: HashMap<T, Vec<Vec<T>>>,
+) -> HashMap<T, ShortestPathInfo<T>>
 where
     T: Hash + Eq + Copy + Ord + Display + Send + Sync,
     A: Copy,
