@@ -337,6 +337,34 @@ mod tests {
     }
 
     #[test]
+    fn test_get_reverse() {
+        let graph = get_basic_graph(None);
+        let result = graph.reverse();
+        assert!(result.is_ok());
+        let graph = result.unwrap();
+        assert_eq!(graph.get_all_nodes().len(), 3);
+        assert_eq!(graph.get_all_edges().len(), 4);
+        assert!(graph.get_edge("n1", "n2").is_ok());
+        assert!(graph.get_edge("n2", "n1").is_ok());
+        assert!(graph.get_edge("n3", "n1").is_ok());
+        assert!(graph.get_edge("n3", "n2").is_ok());
+        assert!(graph.get_edge("n1", "n3").is_err());
+        assert!(graph.get_edge("n2", "n3").is_err());
+
+        let nodes = graph.get_successor_nodes("n3").unwrap();
+        let hashset = HashSet::<&str>::from_iter(nodes.iter().map(|n| n.name));
+        assert_eq!(nodes.len(), 2);
+        assert!(hashset.contains("n1"));
+        assert!(hashset.contains("n2"));
+
+        let nodes = graph.get_predecessor_nodes("n1").unwrap();
+        let hashset = HashSet::<&str>::from_iter(nodes.iter().map(|n| n.name));
+        assert_eq!(nodes.len(), 2);
+        assert!(hashset.contains("n2"));
+        assert!(hashset.contains("n3"));
+    }
+
+    #[test]
     fn test_new_from_nodes_and_edges() {
         let nodes = vec![
             Node::from_name("n1"),

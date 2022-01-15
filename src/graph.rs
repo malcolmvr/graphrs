@@ -737,23 +737,32 @@ where
     }
 
     /**
-    Determines if all edges have a weight value.
+    Reverses the edges in a directed graph.
 
-    # Returns
+    # Examples
 
-    `true` if all edges have a `weight` value and the value isn't NAN, false otherwise.
+    ```
+    use graphrs::{Edge, Graph, GraphSpecs};
+
+    let mut graph: Graph<&str, ()> = Graph::new(GraphSpecs::directed_create_missing());
+    let result = graph.add_edges(vec![
+        Edge::new("n1", "n3"),
+        Edge::new("n2", "n3"),
+    ]);
+    let graph = graph.reverse().unwrap();
+    assert!(graph.get_edge("n3", "n1").is_ok());
+    ```
     */
-    pub fn edges_have_weight(&self) -> bool
-    where
-        T: Hash + Eq + Copy + Ord,
-        A: Copy,
-    {
-        for edge in self.get_all_edges() {
-            if edge.weight.is_nan() {
-                return false;
+    pub fn reverse(&self) -> Result<Graph<T, A>, Error> {
+        if !self.specs.directed {
+            return Err(Error {
+                kind: ErrorKind::WrongMethod,
+                message: "The `reverse` method is not applicable to undirected graphs.".to_string(),
+            });
         }
-        }
-        true
+        let new_nodes = self.get_all_nodes().into_iter().cloned().collect();
+        let new_edges = self.get_all_edges().into_iter().map(|edge| edge.clone().reversed()).collect();
+        Graph::new_from_nodes_and_edges(new_nodes, new_edges, self.specs.clone())
     }
 
     /**
