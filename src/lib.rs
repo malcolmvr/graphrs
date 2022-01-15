@@ -74,6 +74,11 @@ graph.add_node(Node {
 ```
 !*/
 
+// run doc tests on the README.md file
+#[macro_use]
+extern crate doc_comment;
+doc_comment!(include_str!("../README.md"));
+
 mod edge;
 pub use edge::Edge;
 
