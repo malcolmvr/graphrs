@@ -8,7 +8,19 @@ use std::hash::Hash;
 /**
 Compute the shortest-path (Dijkstra) betweenness centrality for nodes.
 
-$ c_B(v) =\sum_{s,t \in V} \frac{\sigma(s, t|v)}{\sigma(s, t)} $
+# Arguments
+
+* `graph`: a [Graph](../../../struct.Graph.html) instance
+* `weighted`: set to `true` to use edge weights when computing the betweenness centrality
+* `normalized`: set to `true` to normalize the node centrality values
+
+# Examples
+
+```
+use graphrs::{algorithms::{centrality::{betweenness}}, generators};
+let graph = generators::social::karate_club_graph();
+let centralities = betweenness::betweenness_centrality(&graph, false, true);
+```
 
 # References
 
