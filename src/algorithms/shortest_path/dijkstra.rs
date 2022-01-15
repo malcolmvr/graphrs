@@ -49,7 +49,8 @@ impl<T: Eq> PartialEq for FringeNode<T> {
 
 impl<T: Eq> Eq for FringeNode<T> {}
 
-static CONTRADICTORY_PATHS_ERROR_MESSAGE: &str = "Contradictary paths found, do some edges have negative weights?";
+static CONTRADICTORY_PATHS_ERROR_MESSAGE: &str =
+    "Contradictary paths found, do some edges have negative weights?";
 
 /**
 Uses Dijkstra's algorithm to find shortest weighted paths between all pairs
@@ -99,16 +100,17 @@ pub fn all_pairs<T, A>(
     first_only: bool,
 ) -> Result<HashMap<T, HashMap<T, ShortestPathInfo<T>>>, Error>
 where
-    T: Hash + Eq + Copy + Ord + Display + Send + Sync,
-    A: Copy + Send + Sync,
+    T: Hash + Eq + Clone + Ord + Display + Send + Sync,
+    A: Clone + Send + Sync,
 {
     Ok(graph
         .get_all_nodes()
         .into_par_iter()
         .map(|node| {
             (
-                node.name,
-                single_source(graph, weighted, node.name, None, cutoff, first_only).unwrap(),
+                node.name.clone(),
+                single_source(graph, weighted, node.name.clone(), None, cutoff, first_only)
+                    .unwrap(),
             )
         })
         .collect())
@@ -161,8 +163,8 @@ pub fn single_source<T, A>(
     first_only: bool,
 ) -> Result<HashMap<T, ShortestPathInfo<T>>, Error>
 where
-    T: Hash + Eq + Copy + Ord + Display + Send + Sync,
-    A: Copy,
+    T: Hash + Eq + Clone + Ord + Display + Send + Sync,
+    A: Clone,
 {
     multi_source(graph, weighted, vec![source], target, cutoff, first_only)
 }
@@ -215,16 +217,16 @@ pub fn multi_source<T, A>(
     first_only: bool,
 ) -> Result<HashMap<T, ShortestPathInfo<T>>, Error>
 where
-    T: Hash + Eq + Copy + Ord + Display + Send + Sync,
-    A: Copy,
+    T: Hash + Eq + Clone + Ord + Display + Send + Sync,
+    A: Clone,
 {
     let shortest_path_infos =
-        dijkstra_multisource(graph, weighted, sources, target, cutoff, first_only);
+        dijkstra_multisource(graph, weighted, sources, target.clone(), cutoff, first_only);
     match shortest_path_infos {
         Err(e) => Err(e),
         Ok(spis) => Ok(spis
             .into_iter()
-            .filter(|(k, _v)| target.is_none() || k == &target.unwrap())
+            .filter(|(k, _v)| target.is_none() || k == target.as_ref().unwrap())
             .collect::<HashMap<T, ShortestPathInfo<T>>>()),
     }
 }
@@ -243,8 +245,8 @@ fn dijkstra_multisource<T, A>(
     first_only: bool,
 ) -> Result<HashMap<T, ShortestPathInfo<T>>, Error>
 where
-    T: Hash + Eq + Copy + Ord + Display + Send + Sync,
-    A: Copy,
+    T: Hash + Eq + Clone + Ord + Display + Send + Sync,
+    A: Clone,
 {
     if weighted && !graph.edges_have_weight() {
         return Err(Error {
@@ -261,14 +263,17 @@ where
         false => 1.0,
     };
 
-    let mut paths: HashMap<T, Vec<Vec<T>>> = sources.iter().map(|s| (*s, vec![vec![*s]])).collect();
+    let mut paths: HashMap<T, Vec<Vec<T>>> = sources
+        .iter()
+        .map(|s| (s.clone(), vec![vec![s.clone()]]))
+        .collect();
     let mut dist = HashMap::<T, f64>::new();
     let mut seen = HashMap::<T, f64>::new();
     let mut fringe = BinaryHeap::new();
     let mut count = 0;
 
     for source in sources {
-        seen.insert(source, 0.0);
+        seen.insert(source.clone(), 0.0);
         fringe.push(FringeNode {
             node_name: source,
             count: 0,
@@ -279,17 +284,17 @@ where
     while !fringe.is_empty() {
         let fringe_item = fringe.pop().unwrap();
         let d = -fringe_item.distance;
-        let v = fringe_item.node_name;
-        if dist.contains_key(&v) {
+        let v = fringe_item.node_name.clone();
+        if dist.contains_key(&v.clone()) {
             continue;
         }
-        dist.insert(v, d);
-        if target.is_some() && v == target.unwrap() {
+        dist.insert(v.clone(), d);
+        if target.is_some() && &v.clone() == target.as_ref().unwrap() {
             break;
         }
-        for node in get_successors_or_neighbors(graph, v) {
-            let u = node.name;
-            let cost = get_cost(v, u);
+        for node in get_successors_or_neighbors(graph, v.clone()) {
+            let u = node.name.clone();
+            let cost = get_cost(v.clone(), u.clone());
             let vu_dist = dist.get(&v).unwrap() + cost;
             if cutoff.is_some() && vu_dist > cutoff.unwrap() {
                 continue;
@@ -300,14 +305,14 @@ where
                     return Err(get_contractory_paths_error());
                 }
             } else if !seen.contains_key(&u) || vu_dist < *seen.get(&u).unwrap() {
-                seen.insert(u, vu_dist);
-                push_fringe_node(&mut count, &mut fringe, u, vu_dist);
-                let mut new_paths_v = paths.entry(v).or_default().clone();
-                new_paths_v.iter_mut().for_each(|pv| pv.push(u));
+                seen.insert(u.clone(), vu_dist);
+                push_fringe_node(&mut count, &mut fringe, u.clone(), vu_dist);
+                let mut new_paths_v = paths.entry(v.clone()).or_default().clone();
+                new_paths_v.iter_mut().for_each(|pv| pv.push(u.clone()));
                 paths.insert(u, new_paths_v);
             } else if !first_only && vu_dist == *seen.get(&u).unwrap() {
-                push_fringe_node(&mut count, &mut fringe, u, vu_dist);
-                add_u_to_v_paths_and_append_v_paths_to_u_paths(u, v, &mut paths);
+                push_fringe_node(&mut count, &mut fringe, u.clone(), vu_dist);
+                add_u_to_v_paths_and_append_v_paths_to_u_paths(u.clone(), v.clone(), &mut paths);
             }
         }
     }
@@ -331,7 +336,7 @@ Increments `count`.
 #[inline]
 fn push_fringe_node<T>(count: &mut i32, fringe: &mut BinaryHeap<FringeNode<T>>, u: T, vu_dist: f64)
 where
-    T: Hash + Eq + Copy + Ord + Display + Send + Sync,
+    T: Hash + Eq + Clone + Ord + Display + Send + Sync,
 {
     *count += 1;
     fringe.push(FringeNode {
@@ -351,7 +356,7 @@ fn add_u_to_v_paths_and_append_v_paths_to_u_paths<T>(
     v: T,
     paths: &mut HashMap<T, Vec<Vec<T>>>,
 ) where
-    T: Hash + Eq + Copy + Ord + Display + Send + Sync,
+    T: Hash + Eq + Clone + Ord + Display + Send + Sync,
 {
     // add u to all paths[v], then *append* them to paths[u]
     let v_paths: Vec<Vec<T>> = paths
@@ -360,7 +365,7 @@ fn add_u_to_v_paths_and_append_v_paths_to_u_paths<T>(
         .iter()
         .map(|p| {
             let mut x = p.clone();
-            x.push(u);
+            x.push(u.clone());
             x
         })
         .collect();
@@ -377,8 +382,8 @@ Finds lowest weight of the (u, v) edges.
 */
 fn get_cost_multi<T, A>(graph: &Graph<T, A>, u: T, v: T) -> f64
 where
-    T: Hash + Eq + Copy + Ord + Display + Send + Sync,
-    A: Copy,
+    T: Hash + Eq + Clone + Ord + Display + Send + Sync,
+    A: Clone,
 {
     let edges = graph.get_edges(u, v).unwrap();
     let weights = edges.into_iter().map(|e| e.weight);
@@ -390,8 +395,8 @@ Returns the weight of the (u, v) edge in a `graph` that is not a multigraph.
 */
 fn get_cost_single<T, A>(graph: &Graph<T, A>, u: T, v: T) -> f64
 where
-    T: Hash + Eq + Copy + Ord + Display + Send + Sync,
-    A: Copy,
+    T: Hash + Eq + Clone + Ord + Display + Send + Sync,
+    A: Clone,
 {
     let edge = graph.get_edge(u, v).unwrap();
     edge.weight
@@ -407,14 +412,14 @@ fn get_shortest_path_infos<T, A>(
     paths: HashMap<T, Vec<Vec<T>>>,
 ) -> HashMap<T, ShortestPathInfo<T>>
 where
-    T: Hash + Eq + Copy + Ord + Display + Send + Sync,
-    A: Copy,
+    T: Hash + Eq + Clone + Ord + Display + Send + Sync,
+    A: Clone,
 {
     distances
         .into_iter()
         .map(|(k, v)| {
             (
-                k,
+                k.clone(),
                 ShortestPathInfo {
                     distance: v,
                     paths: paths.get(&k).unwrap().clone(),
@@ -431,8 +436,8 @@ Returns neighbors of a node if the `graph` is undirected.
 */
 fn get_successors_or_neighbors<T, A>(graph: &Graph<T, A>, node_name: T) -> Vec<&Node<T, A>>
 where
-    T: Hash + Eq + Copy + Ord + Display + Send + Sync,
-    A: Copy,
+    T: Hash + Eq + Clone + Ord + Display + Send + Sync,
+    A: Clone,
 {
     match graph.specs.directed {
         true => graph.get_successor_nodes(node_name).unwrap(),

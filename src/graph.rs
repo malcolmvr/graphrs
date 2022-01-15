@@ -49,7 +49,7 @@ let graph = Graph::<&str, ()>::new_from_nodes_and_edges(
 ```
 */
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub struct Graph<T: PartialOrd + Send, A: Copy> {
+pub struct Graph<T: PartialOrd + Send, A: Clone> {
     /// The graph's nodes, stored as a `HashMap` keyed by the node names.
     nodes: HashMap<T, Node<T, A>>,
     /// The graph's edges, stored as a `HashMap` keyed by a tuple of node names.
@@ -68,8 +68,8 @@ pub struct Graph<T: PartialOrd + Send, A: Copy> {
 
 impl<T, A> Graph<T, A>
 where
-    T: Eq + Copy + PartialOrd + Ord + Hash + Send + Sync + Display,
-    A: Copy,
+    T: Eq + Clone + PartialOrd + Ord + Hash + Send + Sync + Display,
+    A: Clone,
 {
     /**
     Adds an `edge` to the `Graph`.
@@ -87,8 +87,8 @@ where
     */
     pub fn add_edge(&mut self, edge: Edge<T, A>) -> Result<(), Error>
     where
-        T: Hash + Eq + Copy + Ord + Display,
-        A: Copy,
+        T: Hash + Eq + Clone + Ord + Display,
+        A: Clone,
     {
         // check for self loops
         if !self.specs.self_loops && edge.u == edge.v {
@@ -123,20 +123,29 @@ where
             });
         }
         self.nodes
-            .entry(edge.u)
-            .or_insert_with(|| Node::from_name(edge.u));
+            .entry(edge.u.clone())
+            .or_insert_with(|| Node::from_name(edge.u.clone()));
         self.nodes
-            .entry(edge.v)
-            .or_insert_with(|| Node::from_name(edge.v));
+            .entry(edge.v.clone())
+            .or_insert_with(|| Node::from_name(edge.v.clone()));
 
         // add successors and predecessors
-        self.successors.entry(edge.u).or_default().insert(edge.v);
+        self.successors
+            .entry(edge.u.clone())
+            .or_default()
+            .insert(edge.v.clone());
         match self.specs.directed {
             true => {
-                self.predecessors.entry(edge.v).or_default().insert(edge.u);
+                self.predecessors
+                    .entry(edge.v.clone())
+                    .or_default()
+                    .insert(edge.u.clone());
             }
             false => {
-                self.successors.entry(edge.v).or_default().insert(edge.u);
+                self.successors
+                    .entry(edge.v.clone())
+                    .or_default()
+                    .insert(edge.u.clone());
             }
         }
 
@@ -149,13 +158,14 @@ where
         match self.specs.multi_edges {
             true => {
                 self.edges
-                    .entry((ordered.u, ordered.v))
+                    .entry((ordered.u.clone(), ordered.v.clone()))
                     .or_default()
                     .push(ordered);
             }
-            false => match self.get_edge(ordered.u, ordered.v).is_ok() {
+            false => match self.get_edge(ordered.u.clone(), ordered.v.clone()).is_ok() {
                 false => {
-                    self.edges.insert((ordered.u, ordered.v), vec![ordered]);
+                    self.edges
+                        .insert((ordered.u.clone(), ordered.v.clone()), vec![ordered]);
                 }
                 true => match self.specs.edge_dedupe_strategy {
                     EdgeDedupeStrategy::Error => {
@@ -170,7 +180,8 @@ where
                         });
                     }
                     EdgeDedupeStrategy::KeepLast => {
-                        self.edges.insert((ordered.u, ordered.v), vec![ordered]);
+                        self.edges
+                            .insert((ordered.u.clone(), ordered.v.clone()), vec![ordered]);
                     }
                     _ => {}
                 },
@@ -196,7 +207,7 @@ where
     */
     pub fn add_edge_tuple(&mut self, u: T, v: T) -> Result<(), Error>
     where
-        T: Hash + Eq + Copy + Ord + Display,
+        T: Hash + Eq + Clone + Ord + Display,
     {
         self.add_edge(Edge::new(u, v))
     }
@@ -224,8 +235,8 @@ where
     */
     pub fn add_edges(&mut self, edges: Vec<Edge<T, A>>) -> Result<(), Error>
     where
-        T: Hash + Eq + Copy + Ord + Display,
-        A: Copy,
+        T: Hash + Eq + Clone + Ord + Display,
+        A: Clone,
     {
         for edge in edges {
             let result = self.add_edge(edge);
@@ -260,8 +271,8 @@ where
     */
     pub fn add_edge_tuples(&mut self, edges: Vec<(T, T)>) -> Result<(), Error>
     where
-        T: Hash + Eq + Copy + Ord + Display,
-        A: Copy,
+        T: Hash + Eq + Clone + Ord + Display,
+        A: Clone,
     {
         for edge in edges {
             let result = self.add_edge(Edge::new(edge.0, edge.1));
@@ -289,10 +300,10 @@ where
     */
     pub fn add_node(&mut self, node: Node<T, A>)
     where
-        T: Hash + Eq + Copy + Ord,
-        A: Copy,
+        T: Hash + Eq + Clone + Ord,
+        A: Clone,
     {
-        self.nodes.insert(node.name, node);
+        self.nodes.insert(node.name.clone(), node);
     }
 
     /**
@@ -314,12 +325,32 @@ where
     */
     pub fn add_nodes(&mut self, nodes: Vec<Node<T, A>>)
     where
-        T: Hash + Eq + Copy + Ord,
-        A: Copy,
+        T: Hash + Eq + Clone + Ord,
+        A: Clone,
     {
         for node in nodes {
             self.add_node(node);
         }
+    }
+
+    /**
+    Determines if all edges have a weight value.
+
+    # Returns
+
+    `true` if all edges have a `weight` value and the value isn't NAN, false otherwise.
+    */
+    pub fn edges_have_weight(&self) -> bool
+    where
+        T: Hash + Eq + Clone + Ord,
+        A: Clone,
+    {
+        for edge in self.get_all_edges() {
+            if edge.weight.is_nan() {
+                return false;
+            }
+        }
+        true
     }
 
     /**
@@ -341,8 +372,8 @@ where
     **/
     pub fn get_all_edges(&self) -> Vec<&Edge<T, A>>
     where
-        T: Hash + Eq + Copy + Ord,
-        A: Copy,
+        T: Hash + Eq + Clone + Ord,
+        A: Clone,
     {
         self.edges
             .values()
@@ -370,8 +401,8 @@ where
     */
     pub fn get_all_nodes(&self) -> Vec<&Node<T, A>>
     where
-        T: Hash + Eq + Copy + Ord,
-        A: Copy,
+        T: Hash + Eq + Clone + Ord,
+        A: Clone,
     {
         self.nodes.values().collect::<Vec<&Node<T, A>>>()
     }
@@ -401,8 +432,8 @@ where
     */
     pub fn get_edge(&self, u: T, v: T) -> Result<&Edge<T, A>, Error>
     where
-        T: Hash + Eq + Copy + Ord,
-        A: Copy,
+        T: Hash + Eq + Clone + Ord,
+        A: Clone,
     {
         if self.specs.multi_edges {
             return Err(Error {
@@ -413,8 +444,8 @@ where
         }
 
         let ordered = match !self.specs.directed && u > v {
-            false => (u, v),
-            true => (v, u),
+            false => (u.clone(), v.clone()),
+            true => (v.clone(), u.clone()),
         };
 
         let edges = self.edges.get(&ordered);
@@ -460,8 +491,8 @@ where
     */
     pub fn get_edges(&self, u: T, v: T) -> Result<Vec<&Edge<T, A>>, Error>
     where
-        T: Hash + Eq + Copy + Ord,
-        A: Copy,
+        T: Hash + Eq + Clone + Ord,
+        A: Clone,
     {
         if !self.specs.multi_edges {
             return Err(Error {
@@ -471,8 +502,8 @@ where
         }
 
         let ordered = match !self.specs.directed && u > v {
-            false => (u, v),
-            true => (v, u),
+            false => (u.clone(), v.clone()),
+            true => (v.clone(), u.clone()),
         };
 
         let edges = self.edges.get(&ordered);
@@ -514,17 +545,17 @@ where
     */
     pub fn get_neighbor_nodes(&self, node_name: T) -> Result<Vec<&Node<T, A>>, Error>
     where
-        T: Hash + Eq + Copy + Ord,
-        A: Copy,
+        T: Hash + Eq + Clone + Ord,
+        A: Clone,
     {
-        if !self.nodes.contains_key(&node_name) {
+        if !self.nodes.contains_key(&node_name.clone()) {
             return Err(Error {
                 kind: ErrorKind::NodeNotFound,
                 message: format!("Requested node '{}' was not found in the graph.", node_name),
             });
         }
 
-        let pred_nodes = self._get_predecessor_nodes(node_name).unwrap();
+        let pred_nodes = self._get_predecessor_nodes(node_name.clone()).unwrap();
         let succ_nodes = self._get_successor_nodes(node_name).unwrap();
 
         let all_nodes = pred_nodes
@@ -557,8 +588,8 @@ where
     */
     pub fn get_node(&self, name: T) -> Option<&Node<T, A>>
     where
-        T: Hash + Eq + Copy + Ord,
-        A: Copy,
+        T: Hash + Eq + Clone + Ord,
+        A: Clone,
     {
         self.nodes.get(&name)
     }
@@ -592,8 +623,8 @@ where
     */
     pub fn get_predecessor_nodes(&self, node_name: T) -> Result<Vec<&Node<T, A>>, Error>
     where
-        T: Hash + Eq + Copy + Ord,
-        A: Copy,
+        T: Hash + Eq + Clone + Ord,
+        A: Clone,
     {
         if !self.specs.directed {
             return Err(Error {
@@ -609,8 +640,8 @@ where
 
     fn _get_predecessor_nodes(&self, node_name: T) -> Result<Vec<&Node<T, A>>, Error>
     where
-        T: Hash + Eq + Copy + Ord,
-        A: Copy,
+        T: Hash + Eq + Clone + Ord,
+        A: Clone,
     {
         if !self.nodes.contains_key(&node_name) {
             return Err(Error {
@@ -628,8 +659,8 @@ where
     /// Gets a `HashMap` of all the predecessor edges.
     pub fn get_predecessors_map(&self) -> &HashMap<T, HashSet<T>>
     where
-        T: Hash + Eq + Copy + Ord,
-        A: Copy,
+        T: Hash + Eq + Clone + Ord,
+        A: Clone,
     {
         &self.predecessors
     }
@@ -663,8 +694,8 @@ where
     */
     pub fn get_successor_nodes(&self, node_name: T) -> Result<Vec<&Node<T, A>>, Error>
     where
-        T: Hash + Eq + Copy + Ord,
-        A: Copy,
+        T: Hash + Eq + Clone + Ord,
+        A: Clone,
     {
         if !self.specs.directed {
             return Err(Error {
@@ -680,8 +711,8 @@ where
 
     fn _get_successor_nodes(&self, node_name: T) -> Result<Vec<&Node<T, A>>, Error>
     where
-        T: Hash + Eq + Copy + Ord,
-        A: Copy,
+        T: Hash + Eq + Clone + Ord,
+        A: Clone,
     {
         if !self.nodes.contains_key(&node_name) {
             return Err(Error {
@@ -699,8 +730,8 @@ where
     /// Gets a `HashMap` of all the successor edges.
     pub fn get_successors_map(&self) -> &HashMap<T, HashSet<T>>
     where
-        T: Hash + Eq + Copy + Ord,
-        A: Copy,
+        T: Hash + Eq + Clone + Ord,
+        A: Clone,
     {
         &self.successors
     }
@@ -720,7 +751,7 @@ where
         for edge in self.get_all_edges() {
             if edge.weight.is_nan() {
                 return false;
-            }
+        }
         }
         true
     }
@@ -793,8 +824,8 @@ where
         specs: GraphSpecs,
     ) -> Result<Graph<T, A>, Error>
     where
-        T: Hash + Eq + Copy + Ord,
-        A: Copy,
+        T: Hash + Eq + Clone + Ord,
+        A: Clone,
     {
         let mut graph = Graph::new(specs);
         graph.add_nodes(nodes);
@@ -809,8 +840,8 @@ where
 
     fn get_nodes_for_names(&self, names: &HashSet<T>) -> Vec<&Node<T, A>>
     where
-        T: Hash + Eq + Copy + Ord,
-        A: Copy,
+        T: Hash + Eq + Clone + Ord,
+        A: Clone,
     {
         names
             .iter()

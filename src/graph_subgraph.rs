@@ -5,8 +5,8 @@ use std::hash::Hash;
 
 impl<T, A> Graph<T, A>
 where
-    T: Eq + Copy + PartialOrd + Ord + Hash + Send + Sync + Display,
-    A: Copy,
+    T: Eq + Clone + PartialOrd + Ord + Hash + Send + Sync + Display,
+    A: Clone,
 {
     /**
     Returns an induced subgraph that contains only the specified nodes

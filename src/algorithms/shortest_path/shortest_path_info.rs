@@ -13,7 +13,7 @@ pub struct ShortestPathInfo<T> {
 impl<T> ShortestPathInfo<T> {
     pub fn contains_path_through_node(&self, node_name: T) -> bool
     where
-        T: Eq + Copy,
+        T: Eq + Clone,
     {
         for path in &self.paths {
             if path.len() <= 2 {

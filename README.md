@@ -25,7 +25,7 @@ their first and last names.
 ### Create a weighted, directed graph
 
 ```
-use graphrs::{Edge, Graph, GraphSpecs, MissingNodeStrategy, Node};
+use graphrs::{Edge, Graph, GraphSpecs, Node};
 
 let nodes = vec![
     Node::from_name("n1"),
@@ -34,15 +34,15 @@ let nodes = vec![
 ];
 
 let edges = vec![
-    Edge::with_attribute("n1", "n2", "weight", &1.0),
-    Edge::with_attribute("n2", "n1", "weight", &2.0),
-    Edge::with_attribute("n1", "n3", "weight", &3.0),
-    Edge::with_attribute("n2", "n3", "weight", &3.0),
+    Edge::with_weight("n1", "n2", 1.0),
+    Edge::with_weight("n2", "n1", 2.0),
+    Edge::with_weight("n1", "n3", 3.0),
+    Edge::with_weight("n2", "n3", 3.0),
 ];
 
 let specs = GraphSpecs::directed();
 
-let graph = Graph::<&str, &str, &f64>::new_from_nodes_and_edges(
+let graph = Graph::<&str, ()>::new_from_nodes_and_edges(
     nodes,
     edges,
     specs
@@ -66,7 +66,7 @@ let result = graph.add_edges(vec![
 ```
 use graphrs::{Graph, GraphSpecs, EdgeDedupeStrategy, MissingNodeStrategy, SelfLoopsFalseStrategy};
 
-let graph = Graph::new(
+let graph = Graph::<&str, ()>::new(
     GraphSpecs {
         directed: true, 
         edge_dedupe_strategy: EdgeDedupeStrategy::Error,
@@ -88,8 +88,8 @@ let graph = generators::classic::complete_graph(5, true);
 ### Find the shortest path between two nodes
 
 ```
-use graphrs::{Edge, Graph, GraphSpecs};
-use graphrs::{algorithms::{shortest_path::{weighted}}};
+use graphrs::{Edge, Graph, GraphSpecs, Node};
+use graphrs::{algorithms::{shortest_path::{dijkstra}}};
 
 let mut graph = Graph::<&str, ()>::new(GraphSpecs::directed_create_missing());
 graph.add_edges(vec![
@@ -99,9 +99,23 @@ graph.add_edges(vec![
     Edge::with_weight("n2", "n3", 1.1),
 ]);
 
-let shortest_paths = weighted::single_source(&graph, "n1", Some("n3"), None);
+let shortest_paths = dijkstra::single_source(&graph, true, "n1", Some("n3"), None, false);
 assert_eq!(shortest_paths.unwrap().get("n3").unwrap().distance, 2.1);
 ```
 
+### Compute the betweenness centrality for all nodes
 
+```
+use graphrs::{algorithms::{centrality::{betweenness}}, generators};
+let graph = generators::social::karate_club_graph();
+let centralities = betweenness::betweenness_centrality(&graph, false, true);
+```
+
+## Credits
+
+Some of the structure of the API and some of the algorithms were inspired by NetworkX.
+
+## License
+
+MIT
 

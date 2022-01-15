@@ -27,8 +27,8 @@ where
 
 impl<T, A> Edge<T, A>
 where
-    T: Eq + Copy + PartialOrd + Ord + Hash + Send + Sync + Display,
-    A: Copy,
+    T: Eq + Clone + PartialOrd + Ord + Hash + Send + Sync + Display,
+    A: Clone,
 {
     /**
     Creates a new `Edge` with no attributes.

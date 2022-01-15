@@ -38,6 +38,8 @@ pub enum ErrorKind {
     /// but an [Edge](./struct.Edge.html) that did not have a weight value (was f64::NAN) was
     /// found in the [Graph](./struct.Graph.html).
     EdgeWeightNotSpecified,
+    /// An error occurred while reading a graph from a file.
+    ReadError,
     /// An [Edge](./struct.Edge.html) where `u` and `v` were the same was added to a
     /// [Graph](./struct.Graph.html) that doesn't allow self-loops.
     SelfLoopsFound,
@@ -55,6 +57,7 @@ impl Display for ErrorKind {
             ErrorKind::NodeNotFound => write!(f, "node not found"),
             ErrorKind::EdgeNotFound => write!(f, "edge not found"),
             ErrorKind::EdgeWeightNotSpecified => write!(f, "edge weight not found"),
+            ErrorKind::ReadError => write!(f, "error reading graph from file"),
             ErrorKind::SelfLoopsFound => write!(f, "self loops found"),
             ErrorKind::WrongMethod => write!(f, "wrong method was used"),
         }

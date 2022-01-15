@@ -15,8 +15,8 @@ pub struct Node<T: Send, A> {
 
 impl<T, A> Node<T, A>
 where
-    T: Eq + Copy + PartialOrd + Ord + Hash + Send + Sync + Display,
-    A: Copy,
+    T: Eq + Clone + PartialOrd + Ord + Hash + Send + Sync + Display,
+    A: Clone,
 {
     /**
     Returns a `Node` with the specified `name` and no attributes.
@@ -63,7 +63,7 @@ where
     */
     pub fn from_name_and_attributes(name: T, attributes: A) -> Node<T, A>
     where
-        T: Hash + Eq + Copy,
+        T: Hash + Eq + Clone,
     {
         Node {
             name,

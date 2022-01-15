@@ -20,8 +20,8 @@ pub fn betweenness_centrality<T, A>(
     normalized: bool,
 ) -> Result<HashMap<T, f64>, Error>
 where
-    T: Hash + Eq + Copy + Ord + Display + Send + Sync,
-    A: Copy + Send + Sync,
+    T: Hash + Eq + Clone + Ord + Display + Send + Sync,
+    A: Clone + Send + Sync,
 {
     let all_pairs = dijkstra::all_pairs(graph, weighted, None, false);
     match all_pairs {
@@ -44,10 +44,10 @@ fn add_missing_nodes_to_between_counts<T, A>(
     between_counts: &mut HashMap<T, f64>,
     nodes: &[&Node<T, A>],
 ) where
-    T: Hash + Eq + Copy + Ord + Display + Send + Sync,
+    T: Hash + Eq + Clone + Ord + Display + Send + Sync,
 {
     for node in nodes {
-        between_counts.entry(node.name).or_insert(0.0);
+        between_counts.entry(node.name.clone()).or_insert(0.0);
     }
 }
 
@@ -56,19 +56,19 @@ pub fn get_all_shortest_paths_involving<T>(
     node_name: T,
 ) -> Vec<&ShortestPathInfo<T>>
 where
-    T: Copy + Eq,
+    T: Clone + Eq,
 {
     pairs
         .values()
         .map(|x| x.values())
         .flatten()
-        .filter(|x| x.contains_path_through_node(node_name))
+        .filter(|x| x.contains_path_through_node(node_name.clone()))
         .collect()
 }
 
 fn get_between_counts<T>(pairs: &HashMap<T, HashMap<T, ShortestPathInfo<T>>>) -> HashMap<T, f64>
 where
-    T: Hash + Eq + Copy + Ord + Display,
+    T: Hash + Eq + Clone + Ord + Display,
 {
     let short_paths = pairs.values().map(|x| x.values()).flatten();
     short_paths
@@ -82,7 +82,7 @@ where
 
 fn get_node_counts<T>(paths: &[Vec<T>]) -> Vec<(T, f64)>
 where
-    T: Copy,
+    T: Clone,
 {
     let paths_count = paths.len() as f64;
     paths
@@ -90,7 +90,7 @@ where
         .filter(|path| path.len() > 2)
         .map(|path| &path[1..(path.len() - 1)])
         .flatten()
-        .map(|node| (*node, 1.0 / paths_count))
+        .map(|node| (node.clone(), 1.0 / paths_count))
         .collect()
 }
 
@@ -101,12 +101,15 @@ fn rescale<T>(
     directed: bool,
 ) -> HashMap<T, f64>
 where
-    T: Hash + Eq + Copy + Ord + Display,
+    T: Hash + Eq + Clone + Ord + Display,
 {
     let scale = get_scale(num_nodes, normalized, directed);
     match scale {
         None => node_counts,
-        Some(s) => node_counts.iter().map(|(k, v)| (*k, v * s)).collect(),
+        Some(s) => node_counts
+            .iter()
+            .map(|(k, v)| (k.clone(), v * s))
+            .collect(),
     }
 }
 
