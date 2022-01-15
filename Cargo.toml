@@ -7,6 +7,7 @@ edition = "2018"
 license = "MIT"
 homepage = "https://github.com/malcolmvr/graphrs"
 repository = "https://github.com/malcolmvr/graphrs"
+documentation = "https://docs.rs/graphrs"
 readme = "README.md"
 keywords = ["graph", "network", "directed", "undirected", "multigraph"]
 categories = ["data-structures", "algorithms", "mathematics", "science"]
