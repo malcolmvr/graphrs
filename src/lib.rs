@@ -90,8 +90,8 @@ mod graph_subgraph;
 pub use graph::Graph;
 
 pub mod algorithms;
-
 pub mod generators;
+pub mod readwrite;
 
 mod graph_specs;
 pub use graph_specs::{
