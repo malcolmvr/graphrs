@@ -7,16 +7,16 @@
         {
             "type": "lldb",
             "request": "launch",
-            "name": "Debug unit tests 'test_algorithms_shortest_path_dijkstra_unweighted'",
+            "name": "Debug unit tests 'test_algorithms_centrality_closeness'",
             "cargo": {
                 "args": [
                     "test",
                     "--no-run",
-                    "--test=test_algorithms_shortest_path_dijkstra_unweighted",
+                    "--test=test_algorithms_centrality_closeness",
                     "--package=graphrs"
                 ],
                 "filter": {
-                    "name": "test_algorithms_shortest_path_dijkstra_unweighted",
+                    "name": "test_algorithms_centrality_closeness",
                     "kind": "test"
                 }
             },
