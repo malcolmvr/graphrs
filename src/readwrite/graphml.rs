@@ -1,7 +1,7 @@
 use crate::{Edge, Error, ErrorKind, Graph, GraphSpecs, Node};
 use quick_xml::{
     events::{BytesEnd, BytesStart, Event},
-    Reader, Writer
+    Reader, Writer,
 };
 use std::collections::HashMap;
 use std::fmt::Display;
@@ -130,7 +130,7 @@ where
     let mut graph_elem_start = BytesStart::owned(b"graph".to_vec(), "graph".len());
     let edge_default = match graph.specs.directed {
         true => "directed",
-        false => "undirected"
+        false => "undirected",
     };
     graph_elem_start.push_attribute(("edgedefault", edge_default));
     assert!(writer.write_event(Event::Start(graph_elem_start)).is_ok());

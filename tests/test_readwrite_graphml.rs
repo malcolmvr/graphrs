@@ -5,7 +5,6 @@ mod tests {
 
     #[test]
     fn test_write_then_read_graphml() {
-        
         let file = "./tests/karate.graphml";
 
         // write
@@ -24,5 +23,4 @@ mod tests {
 
         assert!(std::fs::remove_file(file).is_ok());
     }
-
 }

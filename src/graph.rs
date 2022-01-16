@@ -761,7 +761,11 @@ where
             });
         }
         let new_nodes = self.get_all_nodes().into_iter().cloned().collect();
-        let new_edges = self.get_all_edges().into_iter().map(|edge| edge.clone().reversed()).collect();
+        let new_edges = self
+            .get_all_edges()
+            .into_iter()
+            .map(|edge| edge.clone().reversed())
+            .collect();
         Graph::new_from_nodes_and_edges(new_nodes, new_edges, self.specs.clone())
     }
 
