@@ -337,6 +337,27 @@ mod tests {
     }
 
     #[test]
+    fn test_get_successors_or_neighbors() {
+        let graph = get_basic_graph(None);
+
+        let nodes = graph.get_successors_or_neighbors("n1");
+        let hashset = HashSet::<&str>::from_iter(nodes.iter().map(|n| n.name));
+        assert_eq!(nodes.len(), 2);
+        assert!(hashset.contains("n2"));
+        assert!(hashset.contains("n3"));
+
+        let nodes = graph.get_successors_or_neighbors("n2");
+        let hashset = HashSet::<&str>::from_iter(nodes.iter().map(|n| n.name));
+        assert_eq!(nodes.len(), 2);
+        assert!(hashset.contains("n1"));
+        assert!(hashset.contains("n3"));
+
+        let nodes = graph.get_successors_or_neighbors("n3");
+        let expected: Vec<&Node<&str, ()>> = vec![];
+        assert_eq!(nodes, expected);
+    }
+
+    #[test]
     fn test_get_reverse() {
         let graph = get_basic_graph(None);
         let result = graph.reverse();

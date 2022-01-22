@@ -63,21 +63,6 @@ fn add_missing_nodes_to_between_counts<T, A>(
     }
 }
 
-pub fn get_all_shortest_paths_involving<T>(
-    pairs: &HashMap<T, HashMap<T, ShortestPathInfo<T>>>,
-    node_name: T,
-) -> Vec<&ShortestPathInfo<T>>
-where
-    T: Clone + Eq,
-{
-    pairs
-        .values()
-        .map(|x| x.values())
-        .flatten()
-        .filter(|x| x.contains_path_through_node(node_name.clone()))
-        .collect()
-}
-
 fn get_between_counts<T>(pairs: &HashMap<T, HashMap<T, ShortestPathInfo<T>>>) -> HashMap<T, f64>
 where
     T: Hash + Eq + Clone + Ord + Display,

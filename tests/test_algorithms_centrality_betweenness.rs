@@ -1,6 +1,9 @@
+mod utility;
+
 #[cfg(test)]
 mod tests {
 
+    use super::utility::round;
     use graphrs::{algorithms::centrality::betweenness, generators, Edge, Graph, GraphSpecs};
 
     #[test]
@@ -138,11 +141,6 @@ mod tests {
         assert_eq!(round(result.get(&31).unwrap(), 2), 73.01);
         assert_eq!(round(result.get(&32).unwrap(), 2), 76.69);
         assert_eq!(round(result.get(&33).unwrap(), 2), 160.55);
-    }
-
-    fn round(number: &f64, decimal_places: u32) -> f64 {
-        let x = (10.0 as i32).pow(decimal_places) as f64;
-        (number * x).round() / x
     }
 
     fn get_graph_1<'a>(directed: bool) -> Graph<&'a str, ()> {

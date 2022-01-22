@@ -1,5 +1,5 @@
 use crate::algorithms::shortest_path::ShortestPathInfo;
-use crate::{Error, ErrorKind, Graph, Node};
+use crate::{Error, ErrorKind, Graph};
 use rayon::prelude::*;
 use std::cmp::Ordering;
 use std::collections::{BinaryHeap, HashMap};
@@ -59,6 +59,7 @@ of nodes.
 # Arguments
 
 * `graph`: a [Graph](../../../struct.Graph.html) instance where all edges have a weight.
+* `weighted`: determines if shortest paths are determined with edge weight, or not
 * `cutoff`: Length (sum of edge weights) at which the search is stopped.
 If cutoff is provided, only return paths with summed weight <= cutoff.
 * `first_only`: If `true` returns the first shortest path found for each source and target,
@@ -103,17 +104,27 @@ where
     T: Hash + Eq + Clone + Ord + Display + Send + Sync,
     A: Clone + Send + Sync,
 {
-    Ok(graph
+    let x = graph
         .get_all_nodes()
         .into_par_iter()
         .map(|node| {
-            (
-                node.name.clone(),
-                single_source(graph, weighted, node.name.clone(), None, cutoff, first_only)
-                    .unwrap(),
-            )
+            let ss = single_source(graph, weighted, node.name.clone(), None, cutoff, first_only);
+            (node.name.clone(), ss)
         })
-        .collect())
+        .collect::<Vec<(T, Result<HashMap<T, ShortestPathInfo<T>>, Error>)>>();
+    let y = x
+        .iter()
+        .filter(|t| t.1.is_err())
+        .collect::<Vec<&(T, Result<HashMap<T, ShortestPathInfo<T>>, Error>)>>();
+    if !y.is_empty() {
+        match &y[0].1 {
+            Err(e) => {
+                return Err(e.clone());
+            }
+            Ok(_) => {}
+        }
+    }
+    Ok(x.into_iter().map(|t| (t.0, t.1.unwrap())).collect())
 }
 
 /**
@@ -124,6 +135,7 @@ than just the first one found.
 # Arguments
 
 * `graph`: a [Graph](../../../struct.Graph.html) instance where all edges have a weight.
+* `weighted`: determines if shortest paths are determined with edge weight, or not
 * `source`: The starting node.
 * `target`: The ending node. If `None` then the shortest paths between `source` and
 all other nodes will be found.
@@ -177,6 +189,7 @@ than just the first one found.
 # Arguments
 
 * `graph`: a [Graph](../../../struct.Graph.html) instance where all edges have a weight.
+* `weighted`: determines if shortest paths are determined with edge weight, or not
 * `sources`: The starting nodes. The shortest path will be found that can start
 for any of the `sources` and ends at the `target`.
 * `target`: The ending node. If `None` then the shortest paths between `sources` and
@@ -292,7 +305,7 @@ where
         if target.is_some() && &v.clone() == target.as_ref().unwrap() {
             break;
         }
-        for node in get_successors_or_neighbors(graph, v.clone()) {
+        for node in graph.get_successors_or_neighbors(v.clone()) {
             let u = node.name.clone();
             let cost = get_cost(v.clone(), u.clone());
             let vu_dist = dist.get(&v).unwrap() + cost;
@@ -376,6 +389,57 @@ fn add_u_to_v_paths_and_append_v_paths_to_u_paths<T>(
 }
 
 /**
+Gets all shortest paths that pass through a given node.
+
+Does not return paths where the node is the source or the target;
+the node must be between two other nodes.
+
+# Arguments
+
+* `graph`: a [Graph](../../../struct.Graph.html) instance
+* `node_name`: the name of the intermediate node
+* `weighted`: determines if shortest paths are determined with edge weight, or not
+
+# Examples
+
+```
+use graphrs::{Edge, Graph, GraphSpecs, Node};
+use graphrs::{algorithms::{shortest_path::{dijkstra}}};
+
+let mut graph = Graph::<&str, ()>::new(GraphSpecs::directed_create_missing());
+graph.add_edges(vec![
+    Edge::new("n1", "n2"),
+    Edge::new("n2", "n3"),
+    Edge::new("n1", "n4"),
+    Edge::new("n4", "n3"),
+    Edge::new("n2", "n5"),
+]);
+let result = dijkstra::get_all_shortest_paths_involving(&graph, "n2", false);
+assert_eq!(result.len(), 2);
+```
+*/
+pub fn get_all_shortest_paths_involving<T, A>(
+    graph: &Graph<T, A>,
+    node_name: T,
+    weighted: bool,
+) -> Vec<ShortestPathInfo<T>>
+where
+    T: Hash + Eq + Clone + Ord + Display + Send + Sync,
+    A: Clone + Send + Sync,
+{
+    let result = all_pairs(graph, weighted, None, false);
+    match result {
+        Err(_) => vec![],
+        Ok(pairs) => pairs
+            .into_iter()
+            .map(|x| x.1.into_iter().map(|y| y.1))
+            .flatten()
+            .filter(|x| x.contains_path_through_node(node_name.clone()))
+            .collect(),
+    }
+}
+
+/**
 Returns the "cost" of a (`u`, `v`) edges when the `graph` is a multigraph.
 
 Finds lowest weight of the (u, v) edges.
@@ -427,20 +491,4 @@ where
             )
         })
         .collect::<HashMap<T, ShortestPathInfo<T>>>()
-}
-
-/**
-Returns successors of a node if the `graph` is directed.
-
-Returns neighbors of a node if the `graph` is undirected.
-*/
-fn get_successors_or_neighbors<T, A>(graph: &Graph<T, A>, node_name: T) -> Vec<&Node<T, A>>
-where
-    T: Hash + Eq + Clone + Ord + Display + Send + Sync,
-    A: Clone,
-{
-    match graph.specs.directed {
-        true => graph.get_successor_nodes(node_name).unwrap(),
-        false => graph.get_neighbor_nodes(node_name).unwrap(),
-    }
 }

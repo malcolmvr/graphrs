@@ -1,4 +1,4 @@
-use crate::{Error, ErrorKind, Graph, GraphSpecs};
+use crate::{Error, ErrorKind, Graph, GraphSpecs, Node};
 use rand::{Rng, RngCore, SeedableRng};
 use rand_chacha::ChaCha20Rng;
 
@@ -47,6 +47,9 @@ fn fast_gnp_random_graph_directed(
     rng: &mut Box<dyn RngCore>,
 ) -> Result<Graph<i32, ()>, Error> {
     let mut graph = Graph::new(GraphSpecs::directed_create_missing());
+    for i in 0..num_nodes {
+        graph.add_node(Node::from_name(i));
+    }
     let mut w: i32 = -1;
     let lp = (1.0 - edge_probability).ln();
     let mut v = 0;
@@ -80,6 +83,9 @@ fn fast_gnp_random_graph_undirected(
     rng: &mut Box<dyn RngCore>,
 ) -> Result<Graph<i32, ()>, Error> {
     let mut graph = Graph::new(GraphSpecs::undirected_create_missing());
+    for i in 0..num_nodes {
+        graph.add_node(Node::from_name(i));
+    }
     let mut w: i32 = -1;
     let lp = (1.0 - edge_probability).ln();
     let mut v = 1;

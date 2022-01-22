@@ -382,6 +382,30 @@ mod tests {
         assert_eq!(unwrapped.get("n5").unwrap().paths, vec![vec!["n1", "n5"]]);
     }
 
+    #[test]
+    fn test_get_all_shortest_paths_involving() {
+        let edges = vec![
+            Edge::new("n1", "n2"),
+            Edge::new("n2", "n3"),
+            Edge::new("n1", "n4"),
+            Edge::new("n4", "n3"),
+            Edge::new("n2", "n5"),
+        ];
+
+        let graph: Graph<&str, ()> = Graph::new_from_nodes_and_edges(
+            vec![],
+            edges,
+            GraphSpecs {
+                missing_node_strategy: MissingNodeStrategy::Create,
+                ..GraphSpecs::directed()
+            },
+        )
+        .unwrap();
+
+        let result = dijkstra::get_all_shortest_paths_involving(&graph, "n2", false);
+        assert_eq!(result.len(), 2);
+    }
+
     fn assert_paths_contain_same_items(v1: &[Vec<&str>], v2: &[Vec<&str>]) {
         let a: HashSet<&Vec<&str>> = v1.iter().collect();
         let b: HashSet<&Vec<&str>> = v2.iter().collect();

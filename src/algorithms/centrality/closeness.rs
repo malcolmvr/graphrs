@@ -1,6 +1,6 @@
 use crate::algorithms::shortest_path::dijkstra;
 use crate::algorithms::shortest_path::ShortestPathInfo;
-use crate::{Error, Graph, Node};
+use crate::{Error, Graph};
 use std::collections::HashMap;
 use std::fmt::Display;
 use std::hash::Hash;
@@ -30,7 +30,7 @@ let centralities = closeness::closeness_centrality(&graph, false, true);
 # References
 
 1. Linton C. Freeman: Centrality in networks: I. Conceptual clarification. Social Networks 1:215-239, 1979.
-https://doi.org/10.1016/0378-8733(78)90021-7
+<https://doi.org/10.1016/0378-8733(78)90021-7>
 
 2. pg. 201 of Wasserman, S. and Faust, K., Social Network Analysis: Methods and Applications, 1994,
 Cambridge University Press.

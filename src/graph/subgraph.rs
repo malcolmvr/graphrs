@@ -1,4 +1,5 @@
-use crate::{Edge, Graph, Node};
+use super::Graph;
+use crate::{Edge, Node};
 use std::collections::HashSet;
 use std::fmt::Display;
 use std::hash::Hash;
