@@ -18,7 +18,7 @@ Returns the best partition of a graph, using the Louvain algorithm.
 * `weighted`: set to `true` to use edge weights when determining communities
 * `resolution`: If less than 1.0 larger communities are favoured. If greater than 1.0 smaller communities are favoured.
 * `threshold`: Determines how quickly the algorithms stops trying to find partitions with higher modularity. Higher values cause the algorithm to give up more quickly.
-* `seed`: The Louvain algorithm implemented uses random number generators. Setting the `seed` causes consistent behaviour.__rust_force_expr!
+* `seed`: The Louvain algorithm implemented uses random number generators. Setting the `seed` causes consistent behaviour.
 
 # Examples
 
