@@ -230,18 +230,16 @@ where
         let succ_node_names = self.successors.get(&name.clone()).unwrap_or(&empty_set);
         let pred_edges = pred_node_names
             .iter()
-            .map(|pnn| self.edges.get(&(pnn.clone(), name.clone())).unwrap())
-            .flatten();
+            .flat_map(|pnn| self.edges.get(&(pnn.clone(), name.clone())).unwrap());
         let succ_edges: Vec<&Edge<T, A>> = succ_node_names
             .iter()
-            .map(|snn| {
+            .flat_map(|snn| {
                 let ordered = match !self.specs.directed && name > snn.clone() {
                     false => (name.clone(), snn.clone()),
                     true => (snn.clone(), name.clone()),
                 };
                 self.edges.get(&ordered).unwrap()
             })
-            .flatten()
             .collect();
         Ok(pred_edges.into_iter().chain(succ_edges).collect())
     }
@@ -291,8 +289,9 @@ where
         let pred_node_names = self.predecessors.get(&name).unwrap_or(&empty);
         Ok(pred_node_names
             .iter()
-            .map(|pnn| self.edges.get(&(pnn.clone(), name.clone())).unwrap())
-            .flatten()
+            .flat_map(|pnn| self.edges.get(&(pnn.clone(), name.clone())).unwrap())
+            .collect())
+    }
             .collect())
     }
 
@@ -341,8 +340,9 @@ where
         let succ_node_names = self.successors.get(&name).unwrap_or(&empty);
         Ok(succ_node_names
             .iter()
-            .map(|snn| self.edges.get(&(name.clone(), snn.clone())).unwrap())
-            .flatten()
+            .flat_map(|snn| self.edges.get(&(name.clone(), snn.clone())).unwrap())
+            .collect())
+    }
             .collect())
     }
 

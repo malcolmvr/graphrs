@@ -67,10 +67,9 @@ fn get_between_counts<T>(pairs: &HashMap<T, HashMap<T, ShortestPathInfo<T>>>) ->
 where
     T: Hash + Eq + Clone + Ord + Display,
 {
-    let short_paths = pairs.values().map(|x| x.values()).flatten();
+    let short_paths = pairs.values().flat_map(|x| x.values());
     short_paths
-        .map(|sp| get_node_counts(&sp.paths))
-        .flatten()
+        .flat_map(|sp| get_node_counts(&sp.paths))
         .fold(HashMap::<T, f64>::new(), |mut acc, (node, count)| {
             *acc.entry(node).or_insert(0.0) += count;
             acc
@@ -85,8 +84,7 @@ where
     paths
         .iter()
         .filter(|path| path.len() > 2)
-        .map(|path| &path[1..(path.len() - 1)])
-        .flatten()
+        .flat_map(|path| &path[1..(path.len() - 1)])
         .map(|node| (node.clone(), 1.0 / paths_count))
         .collect()
 }

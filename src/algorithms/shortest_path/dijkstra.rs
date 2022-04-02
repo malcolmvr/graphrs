@@ -432,8 +432,7 @@ where
         Err(_) => vec![],
         Ok(pairs) => pairs
             .into_iter()
-            .map(|x| x.1.into_iter().map(|y| y.1))
-            .flatten()
+            .flat_map(|x| x.1.into_iter().map(|y| y.1))
             .filter(|x| x.contains_path_through_node(node_name.clone()))
             .collect(),
     }
