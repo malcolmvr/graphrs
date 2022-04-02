@@ -31,6 +31,10 @@ pub enum ErrorKind {
     /// A [Node](./struct.Node.html) was requested from a [Graph](./struct.Graph.html) but the
     /// [Node](./struct.Node.html) doesn't exist.
     NodeNotFound,
+    /// No partitions were found.
+    NoPartitions,
+    /// The specified communities did not form a partition of a [Graph](./struct.Graph.html).
+    NotAPartition,
     /// An [Edge](./struct.Edge.html) was requested from a [Graph](./struct.Graph.html) but the
     /// [Edge](./struct.Edge.html) doesn't exist.
     EdgeNotFound,
@@ -56,10 +60,12 @@ impl Display for ErrorKind {
         match self {
             ErrorKind::ContradictoryPaths => write!(f, "contradictory paths"),
             ErrorKind::DuplicateEdge => write!(f, "duplicate edge detected"),
-            ErrorKind::InvalidArgument => write!(f, "invalid argument"),
-            ErrorKind::NodeNotFound => write!(f, "node not found"),
             ErrorKind::EdgeNotFound => write!(f, "edge not found"),
             ErrorKind::EdgeWeightNotSpecified => write!(f, "edge weight not found"),
+            ErrorKind::InvalidArgument => write!(f, "invalid argument"),
+            ErrorKind::NodeNotFound => write!(f, "node not found"),
+            ErrorKind::NoPartitions => write!(f, "no partitions were found"),
+            ErrorKind::NotAPartition => write!(f, "communities were not a partition"),
             ErrorKind::PowerIterationFailedConvergence => write!(f, "failed to converge to the specified tolerance within the specified number of iterations"),
             ErrorKind::ReadError => write!(f, "error reading graph from file"),
             ErrorKind::SelfLoopsFound => write!(f, "self loops found"),

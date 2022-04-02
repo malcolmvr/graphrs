@@ -245,6 +245,48 @@ where
     }
 
     /**
+    Returns all edges that connect to any node in a `Vec` of nodes.
+
+    # Arguments
+
+    * `names`: the nodes to get all edges for
+
+    # Examples
+
+    ```
+    use graphrs::{Edge, Graph, GraphSpecs};
+
+    let mut graph: Graph<&str, ()> = Graph::new(GraphSpecs::undirected_create_missing());
+    let result = graph.add_edges(vec![
+        Edge::new("n1", "n3"),
+        Edge::new("n2", "n4"),
+        Edge::new("n3", "n4"),
+    ]);
+    let n2_edges = graph.get_edges_for_nodes(&["n1", "n2"]).unwrap();
+    assert_eq!(n2_edges.len(), 2);
+    ```
+    */
+    pub fn get_edges_for_nodes(&self, names: &[T]) -> Result<Vec<&Edge<T, A>>, Error>
+    where
+        T: Hash + Eq + Clone + Ord,
+        A: Clone,
+    {
+        if !self.has_nodes(names) {
+            return Err(Error {
+                kind: ErrorKind::NodeNotFound,
+                message: "One or more of the specified found nodes were not found in the graph."
+                    .to_string(),
+            });
+        }
+        let names_set: HashSet<&T> = names.iter().collect();
+        Ok(self
+            .get_all_edges()
+            .into_iter()
+            .filter(|e| names_set.contains(&e.u) || names_set.contains(&e.v))
+            .collect())
+    }
+
+    /**
     Returns all edges (u, v) where v is `name`.
     Returns an `Error` if `graph.specs.directed` is `false`; use the `get_edges_for_node`
     for an undirected graph.
@@ -292,6 +334,53 @@ where
             .flat_map(|pnn| self.edges.get(&(pnn.clone(), name.clone())).unwrap())
             .collect())
     }
+
+    /**
+    Returns all edges that connect into to any node in a `Vec` of nodes.
+
+    # Arguments
+
+    * `names`: the nodes to get all in-edges for
+
+    # Examples
+
+    ```
+    use graphrs::{Edge, Graph, GraphSpecs};
+
+    let mut graph: Graph<&str, ()> = Graph::new(GraphSpecs::directed_create_missing());
+    let result = graph.add_edges(vec![
+        Edge::new("n1", "n2"),
+        Edge::new("n2", "n1"),
+        Edge::new("n2", "n3"),
+    ]);
+    let n2_in_edges = graph.get_in_edges_for_nodes(&["n1", "n2"]).unwrap();
+    assert_eq!(n2_in_edges.len(), 2);
+    ```
+    */
+    pub fn get_in_edges_for_nodes(&self, names: &[T]) -> Result<Vec<&Edge<T, A>>, Error>
+    where
+        T: Hash + Eq + Clone + Ord,
+        A: Clone,
+    {
+        if !self.specs.directed {
+            return Err(Error {
+                kind: ErrorKind::WrongMethod,
+                message: "Use the `get_edges_for_nodes` method when `directed` is `false`"
+                    .to_string(),
+            });
+        }
+        if !self.has_nodes(names) {
+            return Err(Error {
+                kind: ErrorKind::NodeNotFound,
+                message: "One or more of the specified found nodes were not found in the graph."
+                    .to_string(),
+            });
+        }
+        let names_set: HashSet<&T> = names.iter().collect();
+        Ok(self
+            .get_all_edges()
+            .into_iter()
+            .filter(|e| names_set.contains(&e.v))
             .collect())
     }
 
@@ -343,6 +432,53 @@ where
             .flat_map(|snn| self.edges.get(&(name.clone(), snn.clone())).unwrap())
             .collect())
     }
+
+    /**
+    Returns all edges that come out of any node in a `Vec` of nodes.
+
+    # Arguments
+
+    * `names`: the nodes to get all out-edges for
+
+    # Examples
+
+    ```
+    use graphrs::{Edge, Graph, GraphSpecs};
+
+    let mut graph: Graph<&str, ()> = Graph::new(GraphSpecs::directed_create_missing());
+    let result = graph.add_edges(vec![
+        Edge::new("n1", "n2"),
+        Edge::new("n2", "n3"),
+        Edge::new("n3", "n2"),
+    ]);
+    let n1_out_edges = graph.get_out_edges_for_nodes(&["n2", "n3"]).unwrap();
+    assert_eq!(n1_out_edges.len(), 2);
+    ```
+    */
+    pub fn get_out_edges_for_nodes(&self, names: &[T]) -> Result<Vec<&Edge<T, A>>, Error>
+    where
+        T: Hash + Eq + Clone + Ord,
+        A: Clone,
+    {
+        if !self.specs.directed {
+            return Err(Error {
+                kind: ErrorKind::WrongMethod,
+                message: "Use the `get_edges_for_nodes` method when `directed` is `false`"
+                    .to_string(),
+            });
+        }
+        if !self.has_nodes(names) {
+            return Err(Error {
+                kind: ErrorKind::NodeNotFound,
+                message: "One or more of the specified found nodes were not found in the graph."
+                    .to_string(),
+            });
+        }
+        let names_set: HashSet<&T> = names.iter().collect();
+        Ok(self
+            .get_all_edges()
+            .into_iter()
+            .filter(|e| names_set.contains(&e.u))
             .collect())
     }
 
@@ -579,6 +715,73 @@ where
         match self.specs.directed {
             true => self.get_successor_nodes(node_name).unwrap(),
             false => self.get_neighbor_nodes(node_name).unwrap(),
+        }
+    }
+
+    /**
+    Returns `true` if the graph contains a given node, `false` otherwise.
+
+    # Arguments
+
+    * `node_name`: the name of the node to query for
+
+    # Examples
+
+    ```
+    use graphrs::{Graph, GraphSpecs, Node};
+    let mut graph: Graph<&str, ()> = Graph::new(GraphSpecs::directed_create_missing());
+    graph.add_node(Node::from_name("n1"));
+    assert!(graph.has_node(&"n1"));
+    ```
+    */
+    pub fn has_node(&self, node_name: &T) -> bool {
+        self.get_node(node_name.clone()).is_some()
+    }
+
+    /**
+    Returns `true` if the graph contains all given nodes, `false` otherwise.
+
+    # Arguments
+
+    * `node_names`: the names of the nodes to query for
+
+    # Examples
+
+    ```
+    use graphrs::{Graph, GraphSpecs, Node};
+    let mut graph: Graph<&str, ()> = Graph::new(GraphSpecs::directed_create_missing());
+    graph.add_node(Node::from_name("n1"));
+    assert!(!graph.has_nodes(&vec!["n1", "n2"]));
+    ```
+    */
+    pub fn has_nodes(&self, node_names: &[T]) -> bool {
+        for node_name in node_names {
+            if !self.has_node(node_name) {
+                return false;
+            }
+        }
+        true
+    }
+
+    /**
+    Returns the number of edges or sum of all edge weights.
+
+    # Arguments
+
+    * `weighted`: if `true` returns the sum of all edge weights, if `false` the number of edges
+
+    # Examples
+
+    ```
+    use graphrs::{generators};
+    let graph = generators::social::karate_club_graph();
+    assert_eq!(graph.size(false), 78.0);
+    ```
+    */
+    pub fn size(&self, weighted: bool) -> f64 {
+        match weighted {
+            false => self.get_all_edges().len() as f64,
+            true => self.get_all_edges().iter().map(|e| e.weight).sum(),
         }
     }
 
