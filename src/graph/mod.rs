@@ -63,5 +63,6 @@ pub struct Graph<T: PartialOrd + Send, A: Clone> {
 mod convert;
 mod creation;
 mod degree;
+mod density;
 mod query;
 mod subgraph;
