@@ -1,10 +1,11 @@
 use crate::{
-    algorithms::community::partitions, Edge, EdgeDedupeStrategy, Error, ErrorKind, Graph, GraphSpecs, Node,
+    algorithms::community::partitions, Edge, EdgeDedupeStrategy, Error, ErrorKind, Graph,
+    GraphSpecs, Node,
 };
 use itertools::Itertools;
+use rand::prelude::*;
 use rand::seq::SliceRandom;
 use rand::thread_rng;
-use rand::prelude::*;
 use std::collections::{HashMap, HashSet};
 use std::fmt::Display;
 use std::hash::Hash;
@@ -46,7 +47,7 @@ where
         true => Err(Error {
             kind: ErrorKind::NoPartitions,
             message: "No partitions were found.".to_string(),
-        })
+        }),
     }
 }
 

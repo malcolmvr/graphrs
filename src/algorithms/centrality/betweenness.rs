@@ -68,12 +68,13 @@ where
     T: Hash + Eq + Clone + Ord + Display,
 {
     let short_paths = pairs.values().flat_map(|x| x.values());
-    short_paths
-        .flat_map(|sp| get_node_counts(&sp.paths))
-        .fold(HashMap::<T, f64>::new(), |mut acc, (node, count)| {
+    short_paths.flat_map(|sp| get_node_counts(&sp.paths)).fold(
+        HashMap::<T, f64>::new(),
+        |mut acc, (node, count)| {
             *acc.entry(node).or_insert(0.0) += count;
             acc
-        })
+        },
+    )
 }
 
 fn get_node_counts<T>(paths: &[Vec<T>]) -> Vec<(T, f64)>
