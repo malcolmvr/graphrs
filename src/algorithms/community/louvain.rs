@@ -160,6 +160,149 @@ fn compute_one_level(
         .map(|n| (n, n))
         .collect();
     let mut inner_partition = map_node_names_to_hashsets(graph);
+    let mut deg_info = get_degree_information(graph, partition);
+    let nbrs = graph.get_successors_map();
+    let shuffled_nodes = get_shuffled_node_names(graph, seed);
+    let mut nb_moves = 1;
+    let mut improvement = false;
+    while nb_moves > 0 {
+        nb_moves = 0;
+        for u in &shuffled_nodes {
+            let mut best_mod = 0.0;
+            let mut best_com: usize = *node2com.get(u).unwrap();
+            let weights2com = get_neighbor_weights(graph, u, nbrs, &node2com);
+            subtract_degree_from_best_com(best_com, u, &mut deg_info, graph.specs.directed);
+            #[rustfmt::skip]
+            update_best_com(&mut best_com, &mut best_mod, weights2com, &deg_info, m, resolution, graph.specs.directed);
+            add_degree_to_best_com(best_com, &mut deg_info, graph.specs.directed);
+            if best_com != *node2com.get(u).unwrap() {
+                let node_hs = vec![u].into_iter().copied().collect::<HashSet<usize>>();
+                let com = graph
+                    .get_node(*u)
+                    .unwrap()
+                    .attributes
+                    .clone()
+                    .unwrap_or(node_hs);
+                let n2c = *node2com.get(u).unwrap();
+                _partition[n2c] = _partition[n2c].difference(&com).cloned().collect();
+                inner_partition[n2c].remove(u);
+                _partition[best_com] = _partition[best_com].union(&com).cloned().collect();
+                inner_partition[best_com].insert(*u);
+                *node2com.entry(*u).or_default() = best_com;
+                improvement = true;
+                nb_moves += 1;
+            }
+        }
+    }
+    let new_partition: Vec<HashSet<usize>> = _partition
+        .into_iter()
+        .filter(|part| !part.is_empty())
+        .collect();
+    let new_inner_partition: Vec<HashSet<usize>> = inner_partition
+        .into_iter()
+        .filter(|part| !part.is_empty())
+        .collect();
+
+    (new_partition, new_inner_partition, improvement)
+}
+
+/// Returns a random number generator (RNG), optionally seeded.
+fn get_rng(seed: Option<u64>) -> StdRng {
+    match seed {
+        None => {
+            let mut trng = thread_rng();
+            StdRng::seed_from_u64(trng.next_u64())
+        }
+        Some(s) => StdRng::seed_from_u64(s),
+    }
+}
+
+/// Returns all the node names in `graph`, shuffled randomly.
+fn get_shuffled_node_names(graph: &Graph<usize, HashSet<usize>>, seed: Option<u64>) -> Vec<usize> {
+    let mut rng = get_rng(seed);
+    let mut shuffled_nodes: Vec<usize> = graph.get_all_nodes().iter().map(|n| n.name).collect();
+    shuffled_nodes.shuffle(&mut rng);
+    shuffled_nodes
+}
+
+#[inline]
+fn add_degree_to_best_com(best_com: usize, deg_info: &mut DegreeInfo, directed: bool) {
+    match directed {
+        true => {
+            deg_info.stot_in[best_com] += deg_info.in_degree;
+            deg_info.stot_out[best_com] += deg_info.out_degree;
+        }
+        false => {
+            deg_info.stot[best_com] += deg_info.degree;
+        }
+    }
+}
+
+fn update_best_com(
+    best_com: &mut usize,
+    best_mod: &mut f64,
+    weights2com: HashMap<usize, f64>,
+    deg_info: &DegreeInfo,
+    m: f64,
+    resolution: f64,
+    directed: bool,
+) {
+    for (nbr_com, wt) in weights2com {
+        let gain = match directed {
+            true => {
+                wt - resolution
+                    * (deg_info.out_degree * deg_info.stot_in[nbr_com]
+                        + deg_info.in_degree * deg_info.stot_out[nbr_com])
+                    / m
+            }
+            false => 2.0 * wt - resolution * (deg_info.stot[nbr_com] * deg_info.degree) / m,
+        };
+        if gain > *best_mod {
+            *best_mod = gain;
+            *best_com = nbr_com;
+        }
+    }
+}
+
+#[inline]
+fn subtract_degree_from_best_com(
+    best_com: usize,
+    u: &usize,
+    deg_info: &mut DegreeInfo,
+    directed: bool,
+) {
+    match directed {
+        true => {
+            deg_info.in_degree = *deg_info.in_degrees.get(u).unwrap();
+            deg_info.out_degree = *deg_info.out_degrees.get(u).unwrap();
+            deg_info.stot_in[best_com] -= deg_info.in_degree;
+            deg_info.stot_out[best_com] -= deg_info.out_degree;
+        }
+        false => {
+            deg_info.degree = *deg_info.degrees.get(u).unwrap();
+            deg_info.stot[best_com] -= deg_info.degree;
+        }
+    }
+}
+
+/// Holds information about the degrees of nodes of a graph.
+struct DegreeInfo {
+    pub in_degrees: HashMap<usize, f64>,
+    pub out_degrees: HashMap<usize, f64>,
+    pub stot_in: Vec<f64>,
+    pub stot_out: Vec<f64>,
+    pub degrees: HashMap<usize, f64>,
+    pub stot: Vec<f64>,
+    pub degree: f64,
+    pub in_degree: f64,
+    pub out_degree: f64,
+}
+
+/// Gets information about the degrees of nodes of a graph.
+fn get_degree_information(
+    graph: &Graph<usize, HashSet<usize>>,
+    partition: &[HashSet<usize>],
+) -> DegreeInfo {
     let mut in_degrees: HashMap<usize, f64> = HashMap::new();
     let mut out_degrees: HashMap<usize, f64> = HashMap::new();
     let mut stot_in: Vec<f64> = vec![];
@@ -187,96 +330,17 @@ fn compute_one_level(
             .map(|i| *degrees.get(&i).unwrap())
             .collect();
     }
-    let nbrs = graph.get_successors_map();
-    let mut rng = get_rng(seed);
-    let mut rand_nodes: Vec<usize> = graph.get_all_nodes().iter().map(|n| n.name).collect();
-    rand_nodes.shuffle(&mut rng);
-    let mut nb_moves = 1;
-    let mut improvement = false;
-    let mut degree: f64 = 0.0;
-    let mut in_degree: f64 = 0.0;
-    let mut out_degree: f64 = 0.0;
-    let mut gain: f64;
-    while nb_moves > 0 {
-        nb_moves = 0;
-        for u in &rand_nodes {
-            let mut best_mod = 0.0;
-            let mut best_com: usize = *node2com.get(u).unwrap();
-            let weights2com = get_neighbor_weights(graph, u, nbrs, &node2com);
-            match graph.specs.directed {
-                true => {
-                    in_degree = *in_degrees.get(u).unwrap();
-                    out_degree = *out_degrees.get(u).unwrap();
-                    stot_in[best_com] -= in_degree;
-                    stot_out[best_com] -= out_degree;
-                }
-                false => {
-                    degree = *degrees.get(u).unwrap();
-                    stot[best_com] -= degree;
-                }
-            }
-            for (nbr_com, wt) in weights2com {
-                gain = match graph.specs.directed {
-                    true => {
-                        wt - resolution
-                            * (out_degree * stot_in[nbr_com] + in_degree * stot_out[nbr_com])
-                            / m
-                    }
-                    false => 2.0 * wt - resolution * (stot[nbr_com] * degree) / m,
-                };
-                if gain > best_mod {
-                    best_mod = gain;
-                    best_com = nbr_com;
-                }
-            }
-            match graph.specs.directed {
-                true => {
-                    stot_in[best_com] += in_degree;
-                    stot_out[best_com] += out_degree;
-                }
-                false => {
-                    stot[best_com] += degree;
-                }
-            }
-            if best_com != *node2com.get(u).unwrap() {
-                let node_hs = vec![u].into_iter().copied().collect::<HashSet<usize>>();
-                let com = graph
-                    .get_node(*u)
-                    .unwrap()
-                    .attributes
-                    .clone()
-                    .unwrap_or(node_hs);
-                let n2c = *node2com.get(u).unwrap();
-                _partition[n2c] = _partition[n2c].difference(&com).cloned().collect();
-                inner_partition[n2c].remove(u);
-                _partition[best_com] = _partition[best_com].union(&com).cloned().collect();
-                inner_partition[best_com].insert(*u);
-                improvement = true;
-                nb_moves += 1;
-                *node2com.entry(*u).or_default() = best_com;
-            }
-        }
-    }
-    let new_partition: Vec<HashSet<usize>> = _partition
-        .into_iter()
-        .filter(|part| !part.is_empty())
-        .collect();
-    let new_inner_partition: Vec<HashSet<usize>> = inner_partition
-        .into_iter()
-        .filter(|part| !part.is_empty())
-        .collect();
 
-    (new_partition, new_inner_partition, improvement)
-}
-
-/// Returns a random number generator (RNG), optionally seeded.
-fn get_rng(seed: Option<u64>) -> StdRng {
-    match seed {
-        None => {
-            let mut trng = thread_rng();
-            StdRng::seed_from_u64(trng.next_u64())
-        }
-        Some(s) => StdRng::seed_from_u64(s),
+    DegreeInfo {
+        in_degrees,
+        out_degrees,
+        stot_in,
+        stot_out,
+        degrees,
+        stot,
+        degree: 0.0,
+        in_degree: 0.0,
+        out_degree: 0.0,
     }
 }
 

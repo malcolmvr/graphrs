@@ -44,5 +44,4 @@ mod tests {
                 .unwrap();
         assert_eq!(graph.get_density(), 0.0);
     }
-
 }

@@ -174,19 +174,14 @@ where
     assert!(result.is_ok());
     ```
     */
-    #[allow(clippy::question_mark)]
     pub fn add_edges(&mut self, edges: Vec<Edge<T, A>>) -> Result<(), Error>
     where
         T: Hash + Eq + Clone + Ord + Display,
         A: Clone,
     {
         for edge in edges {
-            let result = self.add_edge(edge);
-            if result.is_err() {
-                return result;
-            }
+            self.add_edge(edge)?;
         }
-
         Ok(())
     }
 
@@ -211,19 +206,14 @@ where
     assert!(result.is_ok());
     ```
     */
-    #[allow(clippy::question_mark)]
     pub fn add_edge_tuples(&mut self, edges: Vec<(T, T)>) -> Result<(), Error>
     where
         T: Hash + Eq + Clone + Ord + Display,
         A: Clone,
     {
         for edge in edges {
-            let result = self.add_edge(Edge::new(edge.0, edge.1));
-            if result.is_err() {
-                return result;
-            }
+            self.add_edge(Edge::new(edge.0, edge.1))?;
         }
-
         Ok(())
     }
 
