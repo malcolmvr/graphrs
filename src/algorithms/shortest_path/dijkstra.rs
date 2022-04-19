@@ -261,11 +261,8 @@ where
     T: Hash + Eq + Clone + Ord + Display + Send + Sync,
     A: Clone,
 {
-    if weighted && !graph.edges_have_weight() {
-        return Err(Error {
-            kind: ErrorKind::EdgeWeightNotSpecified,
-            message: "Not all edges in the graph have a weight.".to_string(),
-        });
+    if weighted {
+        graph.ensure_weighted()?;
     }
 
     let get_cost = |u, v| match weighted {
@@ -276,10 +273,8 @@ where
         false => 1.0,
     };
 
-    let mut paths: HashMap<T, Vec<Vec<T>>> = sources
-        .iter()
-        .map(|s| (s.clone(), vec![vec![s.clone()]]))
-        .collect();
+    let mut paths: HashMap<T, Vec<Vec<T>>> =
+        sources.iter().map(|s| (s.clone(), vec![vec![s.clone()]])).collect();
     let mut dist = HashMap::<T, f64>::new();
     let mut seen = HashMap::<T, f64>::new();
     let mut fringe = BinaryHeap::new();

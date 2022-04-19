@@ -85,6 +85,8 @@ pub use edge::Edge;
 mod error;
 pub use error::{Error, ErrorKind};
 
+mod ext;
+
 mod graph;
 pub use graph::Graph;
 

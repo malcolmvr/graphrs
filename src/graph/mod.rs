@@ -64,5 +64,6 @@ mod convert;
 mod creation;
 mod degree;
 mod density;
+mod ensure;
 mod query;
 mod subgraph;

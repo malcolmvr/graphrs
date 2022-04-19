@@ -52,11 +52,7 @@ where
         T: Hash + Eq + Clone + Ord,
         A: Clone,
     {
-        self.edges
-            .values()
-            .into_iter()
-            .flatten()
-            .collect::<Vec<&Edge<T, A>>>()
+        self.edges.values().into_iter().flatten().collect::<Vec<&Edge<T, A>>>()
     }
 
     /**
@@ -82,6 +78,31 @@ where
         A: Clone,
     {
         self.nodes.values().collect::<Vec<&Node<T, A>>>()
+    }
+
+    /**
+    Gets a `Vec` of all the nodes in the graph.
+
+    # Examples
+
+    ```
+    use graphrs::{Node, Graph, GraphSpecs};
+
+    let mut graph: Graph<&str, ()> = Graph::new(GraphSpecs::multi_undirected());
+    graph.add_nodes(vec![
+        Node::from_name("n1"),
+        Node::from_name("n2"),
+    ]);
+    let all_nodes = graph.get_all_node_names();
+    assert_eq!(all_nodes.len(), 2);
+    ```
+    */
+    pub fn get_all_node_names(&self) -> Vec<&T>
+    where
+        T: Hash + Eq + Clone + Ord,
+        A: Clone,
+    {
+        self.nodes.keys().collect::<Vec<&T>>()
     }
 
     /**
@@ -377,11 +398,7 @@ where
             });
         }
         let names_set: HashSet<&T> = names.iter().collect();
-        Ok(self
-            .get_all_edges()
-            .into_iter()
-            .filter(|e| names_set.contains(&e.v))
-            .collect())
+        Ok(self.get_all_edges().into_iter().filter(|e| names_set.contains(&e.v)).collect())
     }
 
     /**
@@ -475,11 +492,7 @@ where
             });
         }
         let names_set: HashSet<&T> = names.iter().collect();
-        Ok(self
-            .get_all_edges()
-            .into_iter()
-            .filter(|e| names_set.contains(&e.u))
-            .collect())
+        Ok(self.get_all_edges().into_iter().filter(|e| names_set.contains(&e.u)).collect())
     }
 
     /**
@@ -604,6 +617,42 @@ where
         self._get_predecessor_nodes(node_name)
     }
 
+    /**
+    Gets all the names of u for (u, v) edges where `node_name` is v.
+
+    # Arguments
+
+    * `name`: The name of the [Node](./struct.Node.html) to return predecessors for.
+
+    # Returns
+
+    Returns an error if called on an undirected graph. Use `get_neighbor_nodes` for
+    undirected graphs.
+
+    # Examples
+
+    ```
+    use graphrs::{Edge, Graph, GraphSpecs};
+
+    let mut graph: Graph<&str, ()> = Graph::new(GraphSpecs::directed_create_missing());
+    let result = graph.add_edges(vec![
+        Edge::new("n1", "n3"),
+        Edge::new("n2", "n3"),
+    ]);
+    assert!(result.is_ok());
+    let predecessor_names = graph.get_predecessor_node_names("n3");
+    assert_eq!(predecessor_names.unwrap().len(), 2);
+    ```
+    */
+    pub fn get_predecessor_node_names(&self, node_name: T) -> Result<Vec<&T>, Error>
+    where
+        T: Hash + Eq + Clone + Ord,
+        A: Clone,
+    {
+        let nodes = self.get_predecessor_nodes(node_name)?;
+        Ok(nodes.into_iter().map(|n| &n.name).collect())
+    }
+
     fn _get_predecessor_nodes(&self, node_name: T) -> Result<Vec<&Node<T, A>>, Error>
     where
         T: Hash + Eq + Clone + Ord,
@@ -650,11 +699,11 @@ where
 
     let mut graph: Graph<&str, ()> = Graph::new(GraphSpecs::directed_create_missing());
     let result = graph.add_edges(vec![
+        Edge::new("n1", "n2"),
         Edge::new("n1", "n3"),
-        Edge::new("n2", "n3"),
     ]);
     assert!(result.is_ok());
-    let successors = graph.get_predecessor_nodes("n3");
+    let successors = graph.get_successor_nodes("n1");
     assert_eq!(successors.unwrap().len(), 2);
     ```
     */
@@ -673,6 +722,42 @@ where
         }
 
         self._get_successor_nodes(node_name)
+    }
+
+    /**
+    Gets all the names of v for (u, v) edges where `node_name` is u.
+
+    # Arguments
+
+    * `name`: The name of the [Node](./struct.Node.html) to return successors for.
+
+    # Returns
+
+    Returns an error if called on an undirected graph. Use `get_neighbor_nodes` for
+    undirected graphs.
+
+    # Examples
+
+    ```
+    use graphrs::{Edge, Graph, GraphSpecs};
+
+    let mut graph: Graph<&str, ()> = Graph::new(GraphSpecs::directed_create_missing());
+    let result = graph.add_edges(vec![
+        Edge::new("n1", "n2"),
+        Edge::new("n1", "n3"),
+    ]);
+    assert!(result.is_ok());
+    let successor_names = graph.get_successor_node_names("n1");
+    assert_eq!(successor_names.unwrap().len(), 2);
+    ```
+    */
+    pub fn get_successor_node_names(&self, node_name: T) -> Result<Vec<&T>, Error>
+    where
+        T: Hash + Eq + Clone + Ord,
+        A: Clone,
+    {
+        let nodes = self.get_successor_nodes(node_name)?;
+        Ok(nodes.into_iter().map(|n| &n.name).collect())
     }
 
     fn _get_successor_nodes(&self, node_name: T) -> Result<Vec<&Node<T, A>>, Error>
@@ -792,9 +877,6 @@ where
         T: Hash + Eq + Clone + Ord,
         A: Clone,
     {
-        names
-            .iter()
-            .map(|n| self.nodes.get(n).unwrap())
-            .collect::<Vec<&Node<T, A>>>()
+        names.iter().map(|n| self.nodes.get(n).unwrap()).collect::<Vec<&Node<T, A>>>()
     }
 }

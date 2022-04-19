@@ -1,6 +1,9 @@
 /// Compute the centrality of nodes and edges in the graph.
 pub mod centrality;
 
+/// Compute clustering metrics.
+pub mod cluster;
+
 /// Find community sub-structure.
 pub mod community;
 
