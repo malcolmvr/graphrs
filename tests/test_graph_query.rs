@@ -4,6 +4,29 @@ mod tests {
     use graphrs::{generators, Edge, Graph, GraphSpecs, Node};
 
     #[test]
+    fn test_breadth_first_search_1() {
+        let graph = generators::social::karate_club_graph();
+        let result = graph.breadth_first_search(&0);
+        assert_eq!(result.len(), graph.get_all_nodes().len());
+        let i1 = result.iter().position(|&n| n == 3).unwrap();
+        let i2 = result.iter().position(|&n| n == 24).unwrap();
+        assert!(i1 < i2);
+    }
+
+    #[test]
+    fn test_breadth_first_search_2() {
+        let edges = vec![
+            Edge::new("n1", "n2"),
+            Edge::new("n2", "n3"),
+            Edge::new("n3", "n4"),
+        ];
+        let specs = GraphSpecs::directed_create_missing();
+        let graph: Graph<&str, ()> = Graph::new_from_nodes_and_edges(vec![], edges, specs).unwrap();
+        let result = graph.breadth_first_search(&"n1");
+        assert_eq!(result, vec!["n1", "n2", "n3", "n4"]);
+    }
+
+    #[test]
     fn test_get_edges_for_node_1() {
         let edges = vec![Edge::new("n1", "n2")];
         let graph: Graph<&str, ()> =

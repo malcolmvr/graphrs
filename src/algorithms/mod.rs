@@ -7,5 +7,8 @@ pub mod cluster;
 /// Find community sub-structure.
 pub mod community;
 
+/// Find components of a graph.
+pub mod components;
+
 /// Compute the shortest paths and path lengths between nodes in the graph.
 pub mod shortest_path;

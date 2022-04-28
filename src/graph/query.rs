@@ -1,5 +1,5 @@
 use super::Graph;
-use crate::{Edge, Error, ErrorKind, Node};
+use crate::{ext::vec::VecExt, Edge, Error, ErrorKind, Node};
 use itertools::Itertools;
 use std::collections::{HashMap, HashSet};
 use std::fmt::Display;
@@ -10,6 +10,49 @@ where
     T: Eq + Clone + PartialOrd + Ord + Hash + Send + Sync + Display,
     A: Clone,
 {
+    /**
+    Performs a BFS of the graph, starting with a given node.
+    Returns node names that the specified `node_name` connects to.
+
+    # Arguments
+
+    * `node_name`: the starting point for the search
+
+    # Examples
+
+    ```
+    use graphrs::{generators};
+    let graph = generators::social::karate_club_graph();
+    let result = graph.breadth_first_search(&0);
+    ```
+    */
+    pub fn breadth_first_search(&self, node_name: &T) -> Vec<T>
+    where
+        T: Hash + Eq + Clone + Ord + Display + Send + Sync,
+        A: Clone + Send + Sync,
+    {
+        let mut seen = HashSet::new();
+        let mut return_vec = vec![];
+        let mut next_level = vec![node_name.clone()].to_hashset();
+        while !next_level.is_empty() {
+            let this_level = next_level;
+            next_level = HashSet::new();
+            for v in this_level {
+                if !seen.contains(&v) {
+                    seen.insert(v.clone());
+                    return_vec.push(v.clone());
+                    let next: HashSet<T> = self
+                        .get_successors_or_neighbors(v)
+                        .into_iter()
+                        .map(|n| n.name.clone())
+                        .collect();
+                    next_level = next_level.union(&next).cloned().collect();
+                }
+            }
+        }
+        return_vec
+    }
+
     /**
     Determines if all edges have a weight value.
 
