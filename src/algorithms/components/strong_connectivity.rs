@@ -1,4 +1,5 @@
 use crate::{ext::vec::VecExt, Error, Graph};
+// use core::array::IntoIter;
 use std::collections::{HashMap, HashSet};
 use std::fmt::Display;
 use std::hash::Hash;
@@ -27,35 +28,70 @@ where
     graph.ensure_directed()?;
     let mut preorder = HashMap::new();
     let mut lowlink = HashMap::new();
-    let mut scc_found = HashSet::new();
-    let mut scc_queue = vec![];
+    let mut scc_found: HashSet<T> = HashSet::new();
+    let mut scc_queue: Vec<&T> = vec![];
     let mut i = 0; // preorder counter
-    let neighbors = graph.get_successors_map();
+    let mut neighbors: HashMap<&T, HashSet<T>> =
+        graph.get_successors_map().into_iter().map(|(n, hs)| (n, hs.clone())).collect();
+    let mut components: Vec<HashSet<T>> = Vec::new();
+    let empty_hs: HashSet<T> = HashSet::new();
     for source in graph.get_all_node_names() {
-        if scc_found.contains(source) {
+        if scc_found.contains(&source) {
             continue;
         }
-        let queue = vec![source];
+        let mut queue = vec![source];
         while !queue.is_empty() {
-            let v = queue.last().unwrap();
-            if !preorder.contains_key(v) {
+            let v = queue.last().unwrap().clone();
+            if !preorder.contains_key(&v) {
                 i = i + 1;
                 preorder.insert(v, i);
             }
-            let done = true;
-            for w in neighbors.get(v).unwrap() {
+            let mut done = true;
+            for w in neighbors.get(v).unwrap_or(&empty_hs) {
                 if !preorder.contains_key(&w) {
                     queue.push(w);
                     done = false;
                     break;
                 }
             }
+            neighbors.remove(v);
+            // neighbors.insert(v, HashSet::new());
             if !done {
                 continue;
             }
-            lowlink.insert(v, preorder.get(v).unwrap());
-            for w in neighbors.get(v).unwrap() {}
+            lowlink.insert(v, preorder.get(v).unwrap().clone());
+            for w in neighbors.get(v).unwrap_or(&empty_hs) {
+                if !scc_found.contains(&w) {
+                    let new_ll = match preorder.get(&w).unwrap() > preorder.get(v).unwrap() {
+                        true => vec![lowlink.get(v).unwrap(), lowlink.get(&w).unwrap()]
+                            .into_iter()
+                            .min()
+                            .unwrap(),
+                        false => vec![lowlink.get(v).unwrap(), preorder.get(&w).unwrap()]
+                            .into_iter()
+                            .min()
+                            .unwrap(),
+                    }
+                    .clone();
+                    lowlink.insert(v, new_ll);
+                }
+            }
+            queue.pop();
+            if lowlink.get(v).unwrap() == preorder.get(v).unwrap() {
+                let mut scc: HashSet<T> = vec![v.clone()].to_hashset();
+                while !scc_queue.is_empty()
+                    && !scc_queue.is_empty()
+                    && preorder.get(*scc_queue.last().unwrap()) > preorder.get(v)
+                {
+                    let k = scc_queue.pop().unwrap();
+                    scc.insert(k.clone());
+                    scc_found = scc_found.union(&scc).cloned().collect();
+                }
+                components.push(scc)
+            } else {
+                scc_queue.push(v);
+            }
         }
     }
-    Ok(vec![])
+    Ok(components)
 }
