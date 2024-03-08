@@ -1,23 +1,22 @@
 use crate::{ext::vec::VecExt, Error, Graph};
-// use core::array::IntoIter;
 use std::collections::{HashMap, HashSet};
 use std::fmt::Display;
 use std::hash::Hash;
 
 /**
-Returns the components of a graph.
-A connected component is a maximal connected subgraph of an undirected graph.
+Returns the strongly connected components of a directed graph.
 
 # Arguments:
 
-* `graph`: a [Graph](../../struct.Graph.html) instance that must be undirected.
+* `graph`: a [Graph](../../struct.Graph.html) instance that must be directed.
 
 # Examples:
 
 ```
-use graphrs::{Edge, Graph, GraphSpecs};
-use graphrs::{algorithms::components};
-assert!(false);
+use graphrs::{algorithms::{components}, generators};
+let graph = generators::random::fast_gnp_random_graph(250, 0.02, true, Some(1)).unwrap();
+let strong_components = components::strongly_connected_components(&graph).unwrap();
+assert_eq!(strong_components.len(), 5);
 ```
 */
 pub fn strongly_connected_components<T, A>(graph: &Graph<T, A>) -> Result<Vec<HashSet<T>>, Error>
@@ -31,7 +30,7 @@ where
     let mut scc_found: HashSet<T> = HashSet::new();
     let mut scc_queue: Vec<&T> = vec![];
     let mut i = 0; // preorder counter
-    let mut neighbors: HashMap<&T, HashSet<T>> =
+    let neighbors: HashMap<&T, HashSet<T>> =
         graph.get_successors_map().into_iter().map(|(n, hs)| (n, hs.clone())).collect();
     let mut components: Vec<HashSet<T>> = Vec::new();
     let empty_hs: HashSet<T> = HashSet::new();
@@ -54,7 +53,7 @@ where
                     break;
                 }
             }
-            neighbors.remove(v);
+            // neighbors.remove(v);
             // neighbors.insert(v, HashSet::new());
             if !done {
                 continue;
@@ -85,8 +84,8 @@ where
                 {
                     let k = scc_queue.pop().unwrap();
                     scc.insert(k.clone());
-                    scc_found = scc_found.union(&scc).cloned().collect();
                 }
+                scc_found = scc_found.union(&scc).cloned().collect();
                 components.push(scc)
             } else {
                 scc_queue.push(v);
