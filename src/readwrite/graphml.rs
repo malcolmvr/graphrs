@@ -31,8 +31,8 @@ pub fn read_graphml(file: &str, specs: GraphSpecs) -> Result<Graph<String, ()>, 
     let mut nodes: Vec<Node<String, ()>> = vec![];
     let mut edges: Vec<Edge<String, ()>> = vec![];
     loop {
-        match reader.read_event(&mut buf) {
-            Ok(Event::Empty(ref e)) => match e.name() {
+        match reader.read_event_into(&mut buf) {
+            Ok(Event::Empty(ref e)) => match e.name().as_ref() {
                 b"node" => {
                     let result = add_node(&mut nodes, e);
                     if let Err(value) = result {
@@ -48,7 +48,7 @@ pub fn read_graphml(file: &str, specs: GraphSpecs) -> Result<Graph<String, ()>, 
                 _ => (),
             },
             Ok(Event::Start(ref e)) => {
-                match e.name() {
+                match e.name().as_ref() {
                     b"graph" => {
                         let attrs = get_attributes_as_hashmap(e);
                         match attrs.get("edgedefault") {
@@ -121,13 +121,13 @@ where
     }
     let mut writer = Writer::new(f.unwrap());
 
-    let mut graphml_elem_start = BytesStart::owned(b"graphml".to_vec(), "graphml".len());
+    let mut graphml_elem_start = BytesStart::new("graphml");
     graphml_elem_start.push_attribute(("xmlns", "http://graphml.graphdrawing.org/xmlns"));
     graphml_elem_start.push_attribute(("xmlns:xsi", "http://www.w3.org/2001/XMLSchema-instance"));
     graphml_elem_start.push_attribute(("xsi:schemaLocation", "http://graphml.graphdrawing.org/xmlns http://graphml.graphdrawing.org/xmlns/1.0/graphml.xsd"));
     assert!(writer.write_event(Event::Start(graphml_elem_start)).is_ok());
 
-    let mut graph_elem_start = BytesStart::owned(b"graph".to_vec(), "graph".len());
+    let mut graph_elem_start = BytesStart::new("graph");
     let edge_default = match graph.specs.directed {
         true => "directed",
         false => "undirected",
@@ -136,22 +136,22 @@ where
     assert!(writer.write_event(Event::Start(graph_elem_start)).is_ok());
 
     for node in graph.get_all_nodes() {
-        let mut node_elem_start = BytesStart::owned(b"node".to_vec(), "node".len());
+        let mut node_elem_start = BytesStart::new("node");
         node_elem_start.push_attribute(("id", format!("{}", node.name).as_str()));
         assert!(writer.write_event(Event::Empty(node_elem_start)).is_ok());
     }
 
     for edge in graph.get_all_edges() {
-        let mut edge_elem_start = BytesStart::owned(b"edge".to_vec(), "edge".len());
+        let mut edge_elem_start = BytesStart::new("edge");
         edge_elem_start.push_attribute(("source", format!("{}", edge.u).as_str()));
         edge_elem_start.push_attribute(("target", format!("{}", edge.v).as_str()));
         assert!(writer.write_event(Event::Empty(edge_elem_start)).is_ok());
     }
 
-    let graph_elem_end = BytesEnd::owned(b"graph".to_vec());
+    let graph_elem_end = BytesEnd::new("graph");
     assert!(writer.write_event(Event::End(graph_elem_end)).is_ok());
 
-    let graphml_elem_end = BytesEnd::owned(b"graphml".to_vec());
+    let graphml_elem_end = BytesEnd::new("graphml");
     assert!(writer.write_event(Event::End(graphml_elem_end)).is_ok());
 
     Ok(())
@@ -193,10 +193,10 @@ fn get_attributes_as_hashmap(event: &BytesStart) -> HashMap<String, String> {
         .attributes()
         .map(|a| {
             let attr = a.unwrap();
-            (
-                str::from_utf8(attr.key).unwrap().to_string(),
-                str::from_utf8(attr.value.as_ref()).unwrap().to_string(),
-            )
+            let key_vec = attr.key.local_name().as_ref().to_vec();
+            let key = String::from_utf8(key_vec).unwrap();
+            let value = attr.unescape_value().unwrap().into_owned();
+            (key, value)
         })
         .collect()
 }
