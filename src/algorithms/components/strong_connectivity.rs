@@ -40,7 +40,8 @@ where
         }
         let mut queue = vec![source];
         while !queue.is_empty() {
-            let v = queue.last().unwrap().clone();
+            // let last = queue.last();
+            let v = *queue.last().unwrap();
             if !preorder.contains_key(&v) {
                 i = i + 1;
                 preorder.insert(v, i);

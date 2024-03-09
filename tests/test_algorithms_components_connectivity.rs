@@ -31,7 +31,7 @@ mod tests {
         let result = components::connected_components(&graph).unwrap();
         assert_eq!(result.len(), 1);
         assert_eq!(
-            result[0].iter().map(|n| n.clone()).sorted().collect::<Vec<&str>>(),
+            result[0].iter().map(|n| *n).sorted().collect::<Vec<&str>>(),
             vec!["n1", "n2", "n3", "n4"]
         );
     }
