@@ -25,7 +25,11 @@ where
         false => edges.iter().map(|e| e.weight).reduce(f64::max).unwrap(),
     };
     let ns: Vec<T> = match node_names {
-        None => graph.get_all_nodes().into_iter().map(|n| n.name.clone()).collect(),
+        None => graph
+            .get_all_nodes()
+            .into_iter()
+            .map(|n| n.name.clone())
+            .collect(),
         Some(names) => names.to_vec(),
     };
     ns.into_iter()

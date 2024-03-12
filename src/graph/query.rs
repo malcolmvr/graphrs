@@ -95,7 +95,11 @@ where
         T: Hash + Eq + Clone + Ord,
         A: Clone,
     {
-        self.edges.values().into_iter().flatten().collect::<Vec<&Edge<T, A>>>()
+        self.edges
+            .values()
+            .into_iter()
+            .flatten()
+            .collect::<Vec<&Edge<T, A>>>()
     }
 
     /**
@@ -441,7 +445,11 @@ where
             });
         }
         let names_set: HashSet<&T> = names.iter().collect();
-        Ok(self.get_all_edges().into_iter().filter(|e| names_set.contains(&e.v)).collect())
+        Ok(self
+            .get_all_edges()
+            .into_iter()
+            .filter(|e| names_set.contains(&e.v))
+            .collect())
     }
 
     /**
@@ -535,7 +543,11 @@ where
             });
         }
         let names_set: HashSet<&T> = names.iter().collect();
-        Ok(self.get_all_edges().into_iter().filter(|e| names_set.contains(&e.u)).collect())
+        Ok(self
+            .get_all_edges()
+            .into_iter()
+            .filter(|e| names_set.contains(&e.u))
+            .collect())
     }
 
     /**
@@ -920,6 +932,9 @@ where
         T: Hash + Eq + Clone + Ord,
         A: Clone,
     {
-        names.iter().map(|n| self.nodes.get(n).unwrap()).collect::<Vec<&Node<T, A>>>()
+        names
+            .iter()
+            .map(|n| self.nodes.get(n).unwrap())
+            .collect::<Vec<&Node<T, A>>>()
     }
 }

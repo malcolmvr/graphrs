@@ -28,7 +28,11 @@ where
     A: Clone + Send + Sync,
 {
     let ns: Vec<T> = match node_names {
-        None => graph.get_all_nodes().into_iter().map(|n| n.name.clone()).collect(),
+        None => graph
+            .get_all_nodes()
+            .into_iter()
+            .map(|n| n.name.clone())
+            .collect(),
         Some(names) => names.to_vec(),
     };
     ns.into_iter()
@@ -82,8 +86,10 @@ mod tests {
                 .unwrap();
         let result = get_directed_triangles_and_degrees(&graph, None);
         assert_eq!(result.len(), 4);
-        let hm: HashMap<&str, DirectedTrianglesAndDegree<&str>> =
-            result.into_iter().map(|item| (item.node_name, item)).collect();
+        let hm: HashMap<&str, DirectedTrianglesAndDegree<&str>> = result
+            .into_iter()
+            .map(|item| (item.node_name, item))
+            .collect();
         let mut dtad = hm.get("n0").unwrap();
         assert_eq!(dtad.total_degree, 3);
         assert_eq!(dtad.reciprocal_degree, 0);

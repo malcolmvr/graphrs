@@ -1,5 +1,5 @@
 use crate::algorithms::shortest_path::ShortestPathInfo;
-use crate::{Error, ErrorKind, Graph};
+use crate::{Error, ErrorKind, Graph, Node};
 use rayon::prelude::*;
 use std::cmp::Ordering;
 use std::collections::{BinaryHeap, HashMap};
@@ -106,7 +106,7 @@ where
 {
     let x = graph
         .get_all_nodes()
-        .into_par_iter()
+        .into_iter()
         .map(|node| {
             let ss = single_source(graph, weighted, node.name.clone(), None, cutoff, first_only);
             (node.name.clone(), ss)
@@ -125,6 +125,29 @@ where
         }
     }
     Ok(x.into_iter().map(|t| (t.0, t.1.unwrap())).collect())
+}
+
+pub fn all_pairs_par_iter<'a, T, A>(
+    graph: &'a Graph<T, A>,
+    weighted: bool,
+    cutoff: Option<f64>,
+    first_only: bool,
+) -> rayon::iter::Map<
+    rayon::vec::IntoIter<&Node<T, A>>,
+    impl Fn(&'a Node<T, A>) -> (T, HashMap<T, ShortestPathInfo<T>>) + '_,
+>
+where
+    T: Hash + Eq + Clone + Ord + Display + Send + Sync,
+    A: Clone + Send + Sync,
+{
+    let x = graph
+        .get_all_nodes()
+        .into_par_iter()
+        .map(move |node: &Node<T, A>| {
+            let ss = single_source(graph, weighted, node.name.clone(), None, cutoff, first_only);
+            (node.name.clone(), ss.unwrap())
+        });
+    x
 }
 
 /**
@@ -273,8 +296,10 @@ where
         false => 1.0,
     };
 
-    let mut paths: HashMap<T, Vec<Vec<T>>> =
-        sources.iter().map(|s| (s.clone(), vec![vec![s.clone()]])).collect();
+    let mut paths: HashMap<T, Vec<Vec<T>>> = sources
+        .iter()
+        .map(|s| (s.clone(), vec![vec![s.clone()]]))
+        .collect();
     let mut dist = HashMap::<T, f64>::new();
     let mut seen = HashMap::<T, f64>::new();
     let mut fringe = BinaryHeap::new();

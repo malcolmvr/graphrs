@@ -40,7 +40,11 @@ where
     A: Clone + Send + Sync,
 {
     let c = clustering(graph, weighted, node_names)?;
-    let vs = c.values().into_iter().filter(|v| count_zeros || v.abs() > 0.0).collect::<Vec<&f64>>();
+    let vs = c
+        .values()
+        .into_iter()
+        .filter(|v| count_zeros || v.abs() > 0.0)
+        .collect::<Vec<&f64>>();
     Ok(vs.iter().cloned().sum::<f64>() / vs.len() as f64)
 }
 
@@ -117,7 +121,10 @@ where
 {
     graph.ensure_undirected()?;
     let tads = get_triangles_and_degrees(graph, node_names);
-    Ok(tads.into_iter().map(|item| (item.node_name, item.generalized_degree)).collect())
+    Ok(tads
+        .into_iter()
+        .map(|item| (item.node_name, item.generalized_degree))
+        .collect())
 }
 
 pub use square::square_clustering;
@@ -148,8 +155,14 @@ where
         return Ok(0.0);
     }
     let tads = get_triangles_and_degrees(graph, None);
-    let triangles = tads.iter().map(|item| (item.number_of_triangles)).sum::<usize>() as f64;
-    let contri = tads.iter().map(|item| item.degree * (item.degree - 1)).sum::<usize>() as f64;
+    let triangles = tads
+        .iter()
+        .map(|item| (item.number_of_triangles))
+        .sum::<usize>() as f64;
+    let contri = tads
+        .iter()
+        .map(|item| item.degree * (item.degree - 1))
+        .sum::<usize>() as f64;
     match triangles == 0.0 {
         true => Ok(0.0),
         false => Ok(triangles / contri),
@@ -183,7 +196,10 @@ where
 {
     graph.ensure_undirected()?;
     let tads = get_triangles_and_degrees(graph, node_names);
-    Ok(tads.into_iter().map(|item| (item.node_name, item.number_of_triangles / 2)).collect())
+    Ok(tads
+        .into_iter()
+        .map(|item| (item.node_name, item.number_of_triangles / 2))
+        .collect())
 }
 
 ///////////////////////

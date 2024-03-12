@@ -1,5 +1,5 @@
 use crate::{ext::vec::VecExt, Error, Graph};
-use std::collections::{HashSet};
+use std::collections::HashSet;
 use std::fmt::Display;
 use std::hash::Hash;
 
@@ -56,8 +56,14 @@ where
             if !seen.contains(&v) {
                 seen.insert(v.clone());
                 connected_nodes.push(v.clone());
-                nextlevel = nextlevel.union(gsucc.get(&v).unwrap_or(&empty_hs)).cloned().collect();
-                nextlevel = nextlevel.union(gpred.get(&v).unwrap_or(&empty_hs)).cloned().collect();
+                nextlevel = nextlevel
+                    .union(gsucc.get(&v).unwrap_or(&empty_hs))
+                    .cloned()
+                    .collect();
+                nextlevel = nextlevel
+                    .union(gpred.get(&v).unwrap_or(&empty_hs))
+                    .cloned()
+                    .collect();
                 connected_nodes.push(v.clone());
             }
         }

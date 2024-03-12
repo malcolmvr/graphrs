@@ -7,9 +7,7 @@ mod tests {
 
     #[test]
     fn test_weakly_connected_components_1() {
-        let edges = vec![
-            Edge::new("n1", "n2"),
-        ];
+        let edges = vec![Edge::new("n1", "n2")];
         let specs = GraphSpecs::undirected_create_missing();
         let graph: Graph<&str, ()> = Graph::new_from_nodes_and_edges(vec![], edges, specs).unwrap();
         let result = components::weakly_connected_components(&graph);
@@ -35,7 +33,6 @@ mod tests {
         assert_eq!(c2, &vec!["n3", "n4", "n5", "n6"].into_iter().collect());
     }
 
-
     #[test]
     fn test_weakly_connected_components_3() {
         let edges = vec![
@@ -56,5 +53,4 @@ mod tests {
         let c3 = result.iter().find(|hs| hs.get("n5").is_some()).unwrap();
         assert_eq!(c3, &vec!["n5", "n6"].into_iter().collect());
     }
-
 }

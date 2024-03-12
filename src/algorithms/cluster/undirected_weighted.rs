@@ -102,8 +102,10 @@ mod tests {
                 .unwrap();
         let result = get_weighted_triangles_and_degrees(&graph, None);
         assert_eq!(result.len(), 4);
-        let hm: HashMap<&str, DegreesAndWeightedTriangles<&str>> =
-            result.into_iter().map(|item| (item.node_name, item)).collect();
+        let hm: HashMap<&str, DegreesAndWeightedTriangles<&str>> = result
+            .into_iter()
+            .map(|item| (item.node_name, item))
+            .collect();
         let mut dawt = hm.get("n0").unwrap();
         assert_eq!(dawt.degree, 3);
         assert_eq!(dawt.weighted_triangles, 1.86348664915158);

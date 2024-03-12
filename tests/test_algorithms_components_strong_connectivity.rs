@@ -7,9 +7,7 @@ mod tests {
 
     #[test]
     fn test_strongly_connected_components_1() {
-        let edges = vec![
-            Edge::new("n1", "n2"),
-        ];
+        let edges = vec![Edge::new("n1", "n2")];
         let specs = GraphSpecs::undirected_create_missing();
         let graph: Graph<&str, ()> = Graph::new_from_nodes_and_edges(vec![], edges, specs).unwrap();
         let result = components::strongly_connected_components(&graph);
@@ -120,5 +118,4 @@ mod tests {
         let result = components::node_connected_component(&graph, &"p3").unwrap();
         assert_eq!(result.len(), 3);
     }
-
 }

@@ -88,8 +88,10 @@ mod tests {
                 .unwrap();
         let result = get_triangles_and_degrees(&graph, None);
         assert_eq!(result.len(), 4);
-        let hm: HashMap<&str, TrianglesAndDegrees<&str>> =
-            result.into_iter().map(|item| (item.node_name, item)).collect();
+        let hm: HashMap<&str, TrianglesAndDegrees<&str>> = result
+            .into_iter()
+            .map(|item| (item.node_name, item))
+            .collect();
         let mut tad = hm.get("n0").unwrap();
         assert_eq!(tad.degree, 3);
         assert_eq!(tad.number_of_triangles, 2);

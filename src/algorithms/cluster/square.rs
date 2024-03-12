@@ -26,10 +26,16 @@ where
     A: Clone + Send + Sync,
 {
     let ns: Vec<T> = match node_names {
-        None => graph.get_all_nodes().into_iter().map(|n| n.name.clone()).collect(),
+        None => graph
+            .get_all_nodes()
+            .into_iter()
+            .map(|n| n.name.clone())
+            .collect(),
         Some(names) => names.to_vec(),
     };
-    ns.into_iter().map(|v| get_coefficient_for_node(v, graph)).collect()
+    ns.into_iter()
+        .map(|v| get_coefficient_for_node(v, graph))
+        .collect()
 }
 
 ///////////////////////
@@ -64,7 +70,11 @@ where
 {
     let u_nbrs = gnos(u, graph);
     let w_nbrs = gnos(w.clone(), graph);
-    let squares = u_nbrs.intersection(&w_nbrs).collect::<HashSet<&T>>().without(&&v).len();
+    let squares = u_nbrs
+        .intersection(&w_nbrs)
+        .collect::<HashSet<&T>>()
+        .without(&&v)
+        .len();
     let degm = match u_nbrs.contains(&w) {
         false => squares + 1,
         true => squares + 2,

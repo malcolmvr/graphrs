@@ -145,7 +145,9 @@ mod tests {
         let result = cluster::generalized_degree(&graph, None).unwrap();
         assert_eq!(
             result.get("n0").unwrap(),
-            &vec![(1, 2), (0, 1)].into_iter().collect::<HashMap<usize, usize>>()
+            &vec![(1, 2), (0, 1)]
+                .into_iter()
+                .collect::<HashMap<usize, usize>>()
         );
         assert_eq!(
             result.get("n1").unwrap(),

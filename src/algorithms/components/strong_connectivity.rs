@@ -30,8 +30,11 @@ where
     let mut scc_found: HashSet<T> = HashSet::new();
     let mut scc_queue: Vec<&T> = vec![];
     let mut i = 0; // preorder counter
-    let neighbors: HashMap<&T, HashSet<T>> =
-        graph.get_successors_map().into_iter().map(|(n, hs)| (n, hs.clone())).collect();
+    let neighbors: HashMap<&T, HashSet<T>> = graph
+        .get_successors_map()
+        .into_iter()
+        .map(|(n, hs)| (n, hs.clone()))
+        .collect();
     let mut components: Vec<HashSet<T>> = Vec::new();
     let empty_hs: HashSet<T> = HashSet::new();
     for source in graph.get_all_node_names() {
