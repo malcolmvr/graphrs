@@ -8,10 +8,10 @@ The versions of the libraries used for the performance testing:
 
 | Library  | Version |
 | -------- | ------- |
-| Rust     | ?       |
-| graphrs  | 0.8.0   |
+| rustc    | 1.76.0  |
+| graphrs  | 0.9.0   |
 | rayon    | 1.9.0   |
-| Python   | 3.11.?  |
+| Python   | 3.11.9  |
 | NetworkX | 3.2.1   |
 
 ### Graph creation
