@@ -1,52 +1,69 @@
 # graphrs Performance
 
-## graphrs vs NetworkX
+## graphrs vs NetworkX - Dijsktra all pairs
 
-We're going to generate a random graph with `fast_gnp_random_graph`, write the graph to a graphml file.
+### Versions
+
+The versions of the libraries used for the performance testing:
+
+| Library  | Version |
+| -------- | ------- |
+| Rust     | ?       |
+| graphrs  | 0.8.0   |
+| rayon    | 1.9.0   |
+| Python   | 3.11.?  |
+| NetworkX | 3.2.1   |
+
+### Graph creation
+
+Random graphs were created with `fast_gnp_random_graph`, then written to a graphml file. For example:
 
 ```
 let graph = generators::random::fast_gnp_random_graph(100, 0.01, true, Some(1)).unwrap();
 readwrite::graphml::write_graphml(&graph, "random.graphml");
 ```
 
-Next, we'll execute and time the graphrs `dijkstra::all_pairs` method.
+### graphrs execution and timing
+
+The graphrs `dijkstra::all_pairs_iter` and ``dijkstra::all_pairs_par_iter` methods were executed on the generated graphs and timed. For example:
 
 ```
 let start = Instant::now();
-let _all_pairs = algorithms::shortest_path::dijkstra::all_pairs(&graph, false, None, false);
-let elapsed = now..elapsed().as_secs_f64();
+let _all_pairs = algorithms::shortest_path::dijkstra::all_pairs_iter(&graph, false, None, false);
+_all_pairs.for_each(|(_a, _b)| {});
+let elapsed = now.elapsed().as_secs_f64();
 ```
 
-The graphml file is then read with Python and NetworkX's `all_pairs_dijkstra` method is executed and timed.
+Each method was executed ten times so that the mean and the standard deviation could be computed. The testing was done on an AWS m5d.4xlarge server, which has 16 vCPUs.
+
+### NetworkX execution and timing
+
+The graphml file is then read with NetworkX's `all_pairs_dijkstra` method, executed and timed. The code used:
 
 ```
 import time
 import networkx as nx
 
-graph = nx.read_graphml("/home/malcolm/Source/personal/graphrs/random.graphml")
-print(graph.number_of_nodes())
+graph = nx.read_graphml("../graphrs/random.graphml")
 
 start = time.perf_counter()
 all_pairs = nx.all_pairs_dijkstra(graph)
 for ap in all_pairs:
     pass
 end = time.perf_counter()
-print((end-start))
+elapsed = end - start
 ```
 
-Finally, we'll execute and time the graphrs `dijkstra::all_pairs_par_iter` method. This method runs the Dijkstra algorithm in parallel, across multiple threads - however many the computer has. NetworkX does not have an algorithm to parallelize getting all Dijkstra pairs
+### Results
 
-We then increase the number of nodes and repeat the measurements. We'll do all this 10 times so that we can calculate mean and stdev.
+The results (in milliseconds):
 
-The results:
+| Number of Nodes / Edges | NetworkX mean | NetworkX stdev | graphrs iter mean | graphrs iter stdev | graphrs par_iter mean | graphrs par_iter stdev |
+| ----------------------- | ------------- | -------------- | ----------------- | ------------------ | --------------------- | ---------------------- |
+| 100 / 109               | 1.24          | 0.01           | 0.54              | 0.01               | 0.25                  | 0.36                   |
+| 500 / 2,583             | 677           | 41             | 383               | 0.17               | 43.5                  | 0.90                   |
+| 1,000 / 5,063           | 2,825         | 34             | 1,575             | 7.8                | 173                   | 1.9                    |
+| 5,000 / 25,181          | 81,585        | 862            | 41,440            | 282                | 5,318                 | 76                     |
+| 10,000 / 10,157         | 2,743         | 10.0           | 1,302             | 1.5                | 140                   | 3.0                    |
 
-| Number of Nodes | Python (ms) | graphrs (ms) | graphrs par_iter (ms) |
-| --------------- | ----------- | ------------ | --------------------- |
-| 100             | 0.887       |              |
-| 500             | 298         | 56           |
-| 1,000           | 560         | 380          |
-| 5,000           | 343,561     | 47,938       |
-| 10,000          |             |              |
-
-graphrs - 10k non-parallel: 2,361,054
-Python on same: 578,511 !
+NetworkX's `all_pairs_dijkstra` (Python) does fairly well against graphrs' `dijkstra::all_pairs_iter` (Rust) - it only takes roughly twice as much time to finish. The graphrs `dijkstra::all_pairs_par_iter`, which parallelizes the work across available CPUs is where graphrs can provide a significant reduction in computation time.

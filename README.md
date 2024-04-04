@@ -1,24 +1,26 @@
 # graphrs
 
-`graphrs` is a Rust package for the creation, manipulation and analysis of [graphs](https://en.wikipedia.org/wiki/Graph_(discrete_mathematics)).
+`graphrs` is a Rust package for the creation, manipulation and analysis of [graphs](<https://en.wikipedia.org/wiki/Graph_(discrete_mathematics)>).
 
 It allows graphs to be created with support for:
-* directed and undirected edges
-* multiple edges between two nodes
-* self-loops
+
+- directed and undirected edges
+- multiple edges between two nodes
+- self-loops
 
 A `Graph` has two generic arguments:
-* `T`: Specifies the type to use for node names.
-* `A`: Specifies the type to use for node and edge attributes. Attributes are *optional*
-extra data that are associated with a node or an edge. For example, if nodes represent
-people and `T` is an `i32` of their employee ID then the node attributes might store
-their first and last names.
+
+- `T`: Specifies the type to use for node names.
+- `A`: Specifies the type to use for node and edge attributes. Attributes are _optional_
+  extra data that are associated with a node or an edge. For example, if nodes represent
+  people and `T` is an `i32` of their employee ID then the node attributes might store
+  their first and last names.
 
 ## Major structs
 
-* `Graph`
-* `Node`
-* `Edge`
+- `Graph`
+- `Node`
+- `Edge`
 
 ## Examples
 
@@ -68,7 +70,7 @@ use graphrs::{Graph, GraphSpecs, EdgeDedupeStrategy, MissingNodeStrategy, SelfLo
 
 let graph = Graph::<&str, ()>::new(
     GraphSpecs {
-        directed: true, 
+        directed: true,
         edge_dedupe_strategy: EdgeDedupeStrategy::Error,
         missing_node_strategy: MissingNodeStrategy::Error,
         multi_edges: false,
@@ -111,6 +113,10 @@ let graph = generators::social::karate_club_graph();
 let centralities = betweenness::betweenness_centrality(&graph, false, true);
 ```
 
+## Performance
+
+A performance comparison of the Dijkstra "all pairs" algorithm, between `NetworkX` and `graphrs` can be found [here](performance.md).
+
 ## Credits
 
 Some of the structure of the API and some of the algorithms were inspired by NetworkX.
@@ -118,4 +124,3 @@ Some of the structure of the API and some of the algorithms were inspired by Net
 ## License
 
 MIT
-
