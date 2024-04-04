@@ -127,6 +127,26 @@ where
     Ok(x.into_iter().map(|t| (t.0, t.1.unwrap())).collect())
 }
 
+pub fn all_pairs_iter<'a, T, A>(
+    graph: &'a Graph<T, A>,
+    weighted: bool,
+    cutoff: Option<f64>,
+    first_only: bool,
+) -> impl Iterator<Item = (T, HashMap<T, ShortestPathInfo<T>>)> + 'a
+where
+    T: Hash + Eq + Clone + Ord + Display + Send + Sync,
+    A: Clone + Send + Sync,
+{
+    let x = graph
+        .get_all_nodes()
+        .into_iter()
+        .map(move |node: &Node<T, A>| {
+            let ss = single_source(graph, weighted, node.name.clone(), None, cutoff, first_only);
+            (node.name.clone(), ss.unwrap())
+        });
+    x
+}
+
 pub fn all_pairs_par_iter<'a, T, A>(
     graph: &'a Graph<T, A>,
     weighted: bool,
