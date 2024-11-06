@@ -1,6 +1,7 @@
 use crate::algorithms::shortest_path::dijkstra;
 use crate::algorithms::shortest_path::ShortestPathInfo;
 use crate::{Error, Graph, Node};
+use rayon::iter::ParallelIterator;
 use std::collections::HashMap;
 use std::fmt::Display;
 use std::hash::Hash;
@@ -13,13 +14,14 @@ Compute the shortest-path (Dijkstra) betweenness centrality for nodes.
 * `graph`: a [Graph](../../../struct.Graph.html) instance
 * `weighted`: set to `true` to use edge weights when computing the betweenness centrality
 * `normalized`: set to `true` to normalize the node centrality values
+* `parallel`: set to `true` to compute in parallel
 
 # Examples
 
 ```
 use graphrs::{algorithms::{centrality::{betweenness}}, generators};
 let graph = generators::social::karate_club_graph();
-let centralities = betweenness::betweenness_centrality(&graph, false, true);
+let centralities = betweenness::betweenness_centrality(&graph, false, true, false);
 ```
 
 # References
@@ -30,26 +32,25 @@ pub fn betweenness_centrality<T, A>(
     graph: &Graph<T, A>,
     weighted: bool,
     normalized: bool,
+    parallel: bool,
 ) -> Result<HashMap<T, f64>, Error>
 where
     T: Hash + Eq + Clone + Ord + Display + Send + Sync,
     A: Clone + Send + Sync,
 {
-    let all_pairs = dijkstra::all_pairs(graph, weighted, None, false);
-    match all_pairs {
-        Err(e) => Err(e),
-        Ok(ap) => {
-            let mut between_counts = get_between_counts(&ap);
-            add_missing_nodes_to_between_counts(&mut between_counts, &graph.get_all_nodes());
-            let rescaled = rescale(
-                between_counts,
-                graph.get_all_nodes().len(),
-                normalized,
-                graph.specs.directed,
-            );
-            Ok(rescaled)
-        }
-    }
+    let all_pairs = match parallel {
+        true => dijkstra::all_pairs_par_iter(graph, weighted, None, false).collect(),
+        false => dijkstra::all_pairs(graph, weighted, None, false).unwrap(),
+    };
+    let mut between_counts = get_between_counts(&all_pairs);
+    add_missing_nodes_to_between_counts(&mut between_counts, &graph.get_all_nodes());
+    let rescaled = rescale(
+        between_counts,
+        graph.get_all_nodes().len(),
+        normalized,
+        graph.specs.directed,
+    );
+    Ok(rescaled)
 }
 
 fn add_missing_nodes_to_between_counts<T, A>(

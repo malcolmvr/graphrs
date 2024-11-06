@@ -1,6 +1,7 @@
 use crate::algorithms::shortest_path::dijkstra;
 use crate::algorithms::shortest_path::ShortestPathInfo;
 use crate::{Error, Graph};
+use rayon::iter::ParallelIterator;
 use std::collections::HashMap;
 use std::fmt::Display;
 use std::hash::Hash;
@@ -16,6 +17,7 @@ distance to u over all n-1 reachable nodes.
 * `graph`: a [Graph](../../../struct.Graph.html) instance
 * `weighted`: set to `true` to use edge weights when computing the betweenness centrality
 * `wf_improved`: if `true`, scale by the fraction of nodes reachable; this gives the
+* `parallel`: set to `true` to compute in parallel
 Wasserman and Faust improved formula. For single component graphs it is the same as the
 original formula.
 
@@ -24,7 +26,7 @@ original formula.
 ```
 use graphrs::{algorithms::{centrality::{closeness}}, generators};
 let graph = generators::social::karate_club_graph();
-let centralities = closeness::closeness_centrality(&graph, false, true);
+let centralities = closeness::closeness_centrality(&graph, false, true, false);
 ```
 
 # References
@@ -39,6 +41,7 @@ pub fn closeness_centrality<T, A>(
     graph: &Graph<T, A>,
     weighted: bool,
     wf_improved: bool,
+    parallel: bool,
 ) -> Result<HashMap<T, f64>, Error>
 where
     T: Hash + Eq + Clone + Ord + Display + Send + Sync,
@@ -51,17 +54,15 @@ where
         the_graph = &x;
     }
     let num_nodes = the_graph.get_all_nodes().len();
-    let all_pairs = dijkstra::all_pairs(the_graph, weighted, None, false);
-    match all_pairs {
-        Err(e) => Err(e),
-        Ok(ap) => {
-            let centralities = ap
-                .into_iter()
-                .map(|(k, v)| get_closeness_centrality_for_node(k, v, num_nodes, wf_improved))
-                .collect();
-            Ok(centralities)
-        }
-    }
+    let all_pairs = match parallel {
+        true => dijkstra::all_pairs_par_iter(the_graph, weighted, None, false).collect(),
+        false => dijkstra::all_pairs(the_graph, weighted, None, false).unwrap(),
+    };
+    let centralities = all_pairs
+        .into_iter()
+        .map(|(k, v)| get_closeness_centrality_for_node(k, v, num_nodes, wf_improved))
+        .collect();
+    Ok(centralities)
 }
 
 /// Gets the closeness centrality for a single node.

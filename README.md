@@ -110,7 +110,7 @@ assert_eq!(shortest_paths.unwrap().get("n3").unwrap().distance, 2.1);
 ```
 use graphrs::{algorithms::{centrality::{betweenness}}, generators};
 let graph = generators::social::karate_club_graph();
-let centralities = betweenness::betweenness_centrality(&graph, false, true);
+let centralities = betweenness::betweenness_centrality(&graph, false, true, false);
 ```
 
 ## Performance

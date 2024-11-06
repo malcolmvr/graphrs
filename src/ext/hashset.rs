@@ -3,7 +3,6 @@ use std::hash::Hash;
 
 /// Extends `HashSet` with the `without` method.
 pub trait HashSetExt<T> {
-    fn to_vec(&self) -> Vec<T>;
     fn without(&self, value: &T) -> HashSet<T>;
 }
 
@@ -11,13 +10,6 @@ impl<T> HashSetExt<T> for HashSet<T>
 where
     T: Clone + Eq + Hash,
 {
-    /**
-    Returns a copy of the `HashSet`, as a `Vec`.
-    */
-    fn to_vec(&self) -> Vec<T> {
-        self.into_iter().cloned().collect::<Vec<T>>()
-    }
-
     /**
     Returns a copy of the `HashSet` that doesn't contain the specified `value`.
     */
