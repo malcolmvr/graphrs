@@ -58,6 +58,7 @@ pub fn read_graphml_string(string: &str, specs: GraphSpecs) -> Result<Graph<Stri
     let mut nodes: Vec<Node<String, ()>> = vec![];
     let mut edges: Vec<Edge<String, ()>> = vec![];
     let mut last_element_name: String = "".to_string();
+    let mut edge_weight_attr_name = "weight".to_string();
     loop {
         match reader.read_event_into(&mut buf) {
             Ok(Event::Empty(ref e)) => match e.name().as_ref() {
@@ -71,6 +72,15 @@ pub fn read_graphml_string(string: &str, specs: GraphSpecs) -> Result<Graph<Stri
                     let result = add_edge(&mut edges, e);
                     if let Err(value) = result {
                         return Err(value);
+                    }
+                }
+                b"key" => {
+                    let attrs = get_attributes_as_hashmap(e);
+                    if attrs.contains_key("attr.name")
+                        && attrs.get("attr.name").unwrap() == "weight"
+                        && attrs.get("for").unwrap() == "edge"
+                    {
+                        edge_weight_attr_name = attrs.get("id").unwrap().to_string();
                     }
                 }
                 _ => (),
@@ -88,7 +98,7 @@ pub fn read_graphml_string(string: &str, specs: GraphSpecs) -> Result<Graph<Stri
                                     directed = true;
                                 }
                                 "undirected" => {
-                                    directed = true;
+                                    directed = false;
                                 }
                                 _ => {
                                     return Err(get_read_error("the <graph> element's \"edgedefault\" attribute does not have a valid value; it should be one of \"directed\" or \"undirected\""));
@@ -110,11 +120,20 @@ pub fn read_graphml_string(string: &str, specs: GraphSpecs) -> Result<Graph<Stri
                             return Err(value);
                         }
                     }
+                    b"key" => {
+                        let attrs = get_attributes_as_hashmap(e);
+                        if attrs.contains_key("attr.name")
+                            && attrs.get("attr.name").unwrap() == "weight"
+                            && attrs.get("for").unwrap() == "edge"
+                        {
+                            edge_weight_attr_name = attrs.get("id").unwrap().to_string();
+                        }
+                    }
                     b"data" => {
                         let attrs = get_attributes_as_hashmap(e);
                         if attrs.contains_key("key") {
                             let key = attrs.get("key").unwrap();
-                            if key == "weight" {
+                            if key == &edge_weight_attr_name {
                                 let mut buf = Vec::new();
                                 match reader.read_event_into(&mut buf) {
                                     Ok(Event::Text(e)) => {
@@ -206,6 +225,13 @@ where
     graphml_elem_start.push_attribute(("xmlns:xsi", "http://www.w3.org/2001/XMLSchema-instance"));
     graphml_elem_start.push_attribute(("xsi:schemaLocation", "http://graphml.graphdrawing.org/xmlns http://graphml.graphdrawing.org/xmlns/1.0/graphml.xsd"));
     assert!(writer.write_event(Event::Start(graphml_elem_start)).is_ok());
+
+    let mut key_elem = BytesStart::new("key");
+    key_elem.push_attribute(("id", "weight"));
+    key_elem.push_attribute(("for", "edge"));
+    key_elem.push_attribute(("attr.name", "weight"));
+    key_elem.push_attribute(("attr.type", "double"));
+    assert!(writer.write_event(Event::Empty(key_elem)).is_ok());
 
     let mut graph_elem_start = BytesStart::new("graph");
     let edge_default = match graph.specs.directed {
