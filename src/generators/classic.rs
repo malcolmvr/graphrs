@@ -1,5 +1,6 @@
 use crate::{Edge, Graph, GraphSpecs, MissingNodeStrategy};
 use itertools::Itertools;
+use std::sync::Arc;
 
 /**
 Generates a "complete" graph: one where every node is connected to every other node.
@@ -25,7 +26,7 @@ pub fn complete_graph(num_nodes: i32, directed: bool) -> Graph<i32, ()> {
     let edges = x
         .into_iter()
         .map(|x| Edge::new(x[0], x[1]))
-        .collect::<Vec<Edge<i32, ()>>>();
+        .collect::<Vec<Arc<Edge<i32, ()>>>>();
     let specs = match directed {
         false => GraphSpecs {
             missing_node_strategy: MissingNodeStrategy::Create,

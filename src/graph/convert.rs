@@ -2,6 +2,7 @@ use super::Graph;
 use crate::{Edge, Error, ErrorKind, GraphSpecs};
 use std::fmt::Display;
 use std::hash::Hash;
+use std::sync::Arc;
 
 impl<T, A> Graph<T, A>
 where
@@ -36,7 +37,7 @@ where
         let new_edges = self
             .get_all_edges()
             .into_iter()
-            .map(|edge| edge.clone().reversed())
+            .map(|edge| edge.clone().reversed().into())
             .collect();
         Graph::new_from_nodes_and_edges(new_nodes, new_edges, self.specs.clone())
     }
@@ -68,8 +69,9 @@ where
             .get_all_edges()
             .into_iter()
             .map(|edge| {
-                let mut new_edge = edge.clone();
-                new_edge.weight = weight;
+                let mut new_edge: Arc<Edge<T, A>> = edge.clone().into();
+                let new_edge_mut = Arc::make_mut(&mut new_edge);
+                new_edge_mut.weight = weight;
                 new_edge
             })
             .collect();
@@ -125,7 +127,7 @@ where
     }
 }
 
-fn collapse_edges<T, A>(tuple: (&(T, T), &Vec<Edge<T, A>>)) -> Edge<T, A>
+fn collapse_edges<T, A>(tuple: (&(T, T), &Vec<Arc<Edge<T, A>>>)) -> Arc<Edge<T, A>>
 where
     T: Eq + Clone + PartialOrd + Ord + Hash + Send + Sync + Display,
     A: Clone,

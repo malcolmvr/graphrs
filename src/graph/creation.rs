@@ -1,11 +1,14 @@
+use nohash::BuildNoHashHasher;
+
 use super::Graph;
 use crate::{
-    Edge, EdgeDedupeStrategy, Error, ErrorKind, GraphSpecs, MissingNodeStrategy, Node,
+    Edge, EdgeDedupeStrategy, EdgeIndex, Error, ErrorKind, GraphSpecs, MissingNodeStrategy, Node,
     SelfLoopsFalseStrategy,
 };
 use std::collections::{HashMap, HashSet};
 use std::fmt::Display;
 use std::hash::Hash;
+use std::sync::Arc;
 
 impl<T, A> Graph<T, A>
 where
@@ -26,7 +29,7 @@ where
     assert!(result.is_ok());
     ```
     */
-    pub fn add_edge(&mut self, edge: Edge<T, A>) -> Result<(), Error>
+    pub fn add_edge(&mut self, edge: Arc<Edge<T, A>>) -> Result<(), Error>
     where
         T: Hash + Eq + Clone + Ord + Display,
         A: Clone,
@@ -49,7 +52,7 @@ where
             }
         }
 
-        // add nodes
+        // check for missing nodes
         if self.specs.missing_node_strategy == MissingNodeStrategy::Error
             && (!self.nodes.contains_key(&edge.u) || !self.nodes.contains_key(&edge.v))
         {
@@ -63,36 +66,72 @@ where
                 ),
             });
         }
-        self.nodes
-            .entry(edge.u.clone())
-            .or_insert_with(|| Node::from_name(edge.u.clone()));
-        self.nodes
-            .entry(edge.v.clone())
-            .or_insert_with(|| Node::from_name(edge.v.clone()));
+
+        // check for duplicate edges
+        if self.specs.edge_dedupe_strategy == EdgeDedupeStrategy::Error
+            && self.get_edge(edge.u.clone(), edge.v.clone()).is_ok()
+        {
+            return Err(Error {
+                kind: ErrorKind::DuplicateEdge,
+                message: format!(
+                    "A duplicate edge was found: {}. \
+                    Set the `GraphSpecs.edge_dedupe_strategy` if a different
+                    behavior is desired.",
+                    edge
+                ),
+            });
+        }
+
+        // add or insert nodes
+        if !self.nodes.contains_key(&edge.u) {
+            self.add_node(Node::from_name(edge.u.clone()).into());
+        }
+        if !self.nodes.contains_key(&edge.v) {
+            self.add_node(Node::from_name(edge.v.clone()).into());
+        }
 
         // add successors and predecessors
+        let u_node_index = *self.nodes_map.get(&edge.u).unwrap();
+        let v_node_index = *self.nodes_map.get(&edge.v).unwrap();
         self.successors
             .entry(edge.u.clone())
             .or_default()
             .insert(edge.v.clone());
+        self.successors_map
+            .entry(u_node_index)
+            .or_default()
+            .insert(v_node_index);
         match self.specs.directed {
             true => {
                 self.predecessors
                     .entry(edge.v.clone())
                     .or_default()
                     .insert(edge.u.clone());
+                self.predecessors_map
+                    .entry(v_node_index)
+                    .or_default()
+                    .insert(u_node_index);
             }
             false => {
                 self.successors
                     .entry(edge.v.clone())
                     .or_default()
                     .insert(edge.u.clone());
+                self.successors_map
+                    .entry(v_node_index)
+                    .or_default()
+                    .insert(u_node_index);
             }
         }
 
+        // if undirected, order the edge as that it can be easily queried for
         let ordered = match self.specs.directed {
-            false => edge.ordered(),
-            true => edge,
+            false => edge.clone().ordered().into(),
+            true => Arc::clone(&edge),
+        };
+        let ordered_edge_index = match !self.specs.directed && u_node_index > v_node_index {
+            false => EdgeIndex::new(u_node_index, v_node_index),
+            true => EdgeIndex::new(v_node_index, u_node_index),
         };
 
         // add edge
@@ -101,28 +140,25 @@ where
                 self.edges
                     .entry((ordered.u.clone(), ordered.v.clone()))
                     .or_default()
-                    .push(ordered);
+                    .push(ordered.clone());
+                self.edges_map
+                    .entry(ordered_edge_index)
+                    .or_default()
+                    .push(ordered.clone());
             }
             false => match self.get_edge(ordered.u.clone(), ordered.v.clone()).is_ok() {
                 false => {
-                    self.edges
-                        .insert((ordered.u.clone(), ordered.v.clone()), vec![ordered]);
+                    self.edges.insert(
+                        (ordered.u.clone(), ordered.v.clone()),
+                        vec![ordered.clone()],
+                    );
+                    self.edges_map
+                        .insert(ordered_edge_index, vec![ordered.clone()]);
                 }
                 true => match self.specs.edge_dedupe_strategy {
-                    EdgeDedupeStrategy::Error => {
-                        return Err(Error {
-                            kind: ErrorKind::DuplicateEdge,
-                            message: format!(
-                                "A duplicate edge was found: {}. \
-                                Set the `GraphSpecs.edge_dedupe_strategy` if a different
-                                behavior is desired.",
-                                ordered
-                            ),
-                        });
-                    }
                     EdgeDedupeStrategy::KeepLast => {
                         self.edges
-                            .insert((ordered.u.clone(), ordered.v.clone()), vec![ordered]);
+                            .insert((ordered.u.clone(), ordered.v.clone()), vec![ordered.into()]);
                     }
                     _ => {}
                 },
@@ -174,7 +210,7 @@ where
     assert!(result.is_ok());
     ```
     */
-    pub fn add_edges(&mut self, edges: Vec<Edge<T, A>>) -> Result<(), Error>
+    pub fn add_edges(&mut self, edges: Vec<Arc<Edge<T, A>>>) -> Result<(), Error>
     where
         T: Hash + Eq + Clone + Ord + Display,
         A: Clone,
@@ -231,12 +267,29 @@ where
     graph.add_node(Node::from_name("n1"));
     ```
     */
-    pub fn add_node(&mut self, node: Node<T, A>)
+    pub fn add_node(&mut self, node: Arc<Node<T, A>>)
     where
         T: Hash + Eq + Clone + Ord,
         A: Clone,
     {
-        self.nodes.insert(node.name.clone(), node);
+        let node_rc = node.clone();
+        let node_index = self.nodes_vec.len();
+        if !self.nodes_map.contains_key(&node.name) {
+            self.nodes_map.insert(node.name.clone(), node_index);
+        }
+        if !self.nodes_map_rev.contains_key(&node_index) {
+            self.nodes_map_rev.insert(node_index, Arc::clone(&node_rc));
+        }
+        self.nodes_vec.push(Arc::clone(&node_rc));
+        self.nodes.insert(node.name.clone(), node_rc);
+        self.successors_map.insert(
+            node_index,
+            HashSet::<usize, BuildNoHashHasher<usize>>::default(),
+        );
+        self.predecessors_map.insert(
+            node_index,
+            HashSet::<usize, BuildNoHashHasher<usize>>::default(),
+        );
     }
 
     /**
@@ -256,7 +309,7 @@ where
     ]);
     ```
     */
-    pub fn add_nodes(&mut self, nodes: Vec<Node<T, A>>)
+    pub fn add_nodes(&mut self, nodes: Vec<Arc<Node<T, A>>>)
     where
         T: Hash + Eq + Clone + Ord,
         A: Clone,
@@ -283,11 +336,18 @@ where
     */
     pub fn new(specs: GraphSpecs) -> Graph<T, A> {
         Graph {
-            nodes: HashMap::<T, Node<T, A>>::new(),
-            edges: HashMap::<(T, T), Vec<Edge<T, A>>>::new(),
+            nodes: HashMap::<T, Arc<Node<T, A>>>::new(),
+            nodes_map: HashMap::<T, usize>::new(),
+            nodes_map_rev: HashMap::<usize, Arc<Node<T, A>>>::new(),
+            nodes_vec: Vec::<Arc<Node<T, A>>>::new(),
+            edges: HashMap::<(T, T), Vec<Arc<Edge<T, A>>>>::new(),
+            edges_map:
+                HashMap::<EdgeIndex, Vec<Arc<Edge<T, A>>>, BuildNoHashHasher<usize>>::default(),
             specs,
             successors: HashMap::<T, HashSet<T>>::new(),
+            successors_map: HashMap::<usize, HashSet<usize, BuildNoHashHasher<usize>>>::default(),
             predecessors: HashMap::<T, HashSet<T>>::new(),
+            predecessors_map: HashMap::<usize, HashSet<usize, BuildNoHashHasher<usize>>>::default(),
         }
     }
 
@@ -329,8 +389,8 @@ where
     ```
     */
     pub fn new_from_nodes_and_edges(
-        nodes: Vec<Node<T, A>>,
-        edges: Vec<Edge<T, A>>,
+        nodes: Vec<Arc<Node<T, A>>>,
+        edges: Vec<Arc<Edge<T, A>>>,
         specs: GraphSpecs,
     ) -> Result<Graph<T, A>, Error>
     where

@@ -43,7 +43,12 @@ where
         false => dijkstra::all_pairs(graph, weighted, None, false).unwrap(),
     };
     let mut between_counts = get_between_counts(&all_pairs);
-    add_missing_nodes_to_between_counts(&mut between_counts, &graph.get_all_nodes());
+    let nodes: Vec<&Node<T, A>> = graph
+        .get_all_nodes()
+        .into_iter()
+        .map(|arc| arc.as_ref())
+        .collect();
+    add_missing_nodes_to_between_counts(&mut between_counts, &nodes);
     let rescaled = rescale(
         between_counts,
         graph.get_all_nodes().len(),

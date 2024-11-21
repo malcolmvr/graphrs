@@ -5,6 +5,7 @@ use std::cmp::Ordering;
 use std::collections::{BinaryHeap, HashMap};
 use std::fmt::Display;
 use std::hash::Hash;
+use std::sync::Arc;
 
 /**
 As a graph is explored by a shortest-path algorithm the nodes at the
@@ -12,7 +13,7 @@ As a graph is explored by a shortest-path algorithm the nodes at the
 about a fringe node.
 */
 struct FringeNode<T> {
-    pub node_name: T,
+    pub node_index: T,
     pub count: i32,
     pub distance: f64,
 }
@@ -26,7 +27,7 @@ impl<T: Eq + Ord> Ord for FringeNode<T> {
         } else {
             let count_ordering = self.count.cmp(&other.count);
             match count_ordering {
-                Ordering::Equal => self.node_name.cmp(&other.node_name),
+                Ordering::Equal => self.node_index.cmp(&other.node_index),
                 _ => count_ordering,
             }
         }
@@ -43,7 +44,7 @@ impl<T: Eq> PartialEq for FringeNode<T> {
     fn eq(&self, other: &Self) -> bool {
         self.distance == other.distance
             && self.count == other.count
-            && self.node_name == other.node_name
+            && self.node_index == other.node_index
     }
 }
 
@@ -140,7 +141,7 @@ where
     let x = graph
         .get_all_nodes()
         .into_iter()
-        .map(move |node: &Node<T, A>| {
+        .map(move |node: &Arc<Node<T, A>>| {
             let ss = single_source(graph, weighted, node.name.clone(), None, cutoff, first_only);
             (node.name.clone(), ss.unwrap())
         });
@@ -153,19 +154,23 @@ pub fn all_pairs_par_iter<'a, T, A>(
     cutoff: Option<f64>,
     first_only: bool,
 ) -> rayon::iter::Map<
-    rayon::vec::IntoIter<&Node<T, A>>,
-    impl Fn(&'a Node<T, A>) -> (T, HashMap<T, ShortestPathInfo<T>>) + '_,
+    rayon::vec::IntoIter<usize>,
+    impl Fn(usize) -> (T, HashMap<T, ShortestPathInfo<T>>) + 'a,
 >
 where
-    T: Hash + Eq + Clone + Ord + Display + Send + Sync,
-    A: Clone + Send + Sync,
+    T: Hash + Eq + Clone + Ord + Display + Send + Sync + 'a,
+    A: Clone + Send + Sync + 'a,
 {
-    let x = graph
-        .get_all_nodes()
+    let x = (0..graph.number_of_nodes())
+        .collect::<Vec<_>>()
         .into_par_iter()
-        .map(move |node: &Node<T, A>| {
-            let ss = single_source(graph, weighted, node.name.clone(), None, cutoff, first_only);
-            (node.name.clone(), ss.unwrap())
+        .map(move |node_index: usize| {
+            let ss_index =
+                single_source_by_index(&graph, weighted, node_index, None, cutoff, first_only)
+                    .unwrap();
+            let node = graph.get_node_by_index(node_index).unwrap();
+            let ss = convert_shortest_path_info_index_map_to_t_map(&graph, ss_index);
+            (node.name.clone(), ss)
         });
     x
 }
@@ -219,9 +224,24 @@ pub fn single_source<T, A>(
 ) -> Result<HashMap<T, ShortestPathInfo<T>>, Error>
 where
     T: Hash + Eq + Clone + Ord + Display + Send + Sync,
-    A: Clone,
+    A: Clone + Send + Sync,
 {
     multi_source(graph, weighted, vec![source], target, cutoff, first_only)
+}
+
+fn single_source_by_index<T, A>(
+    graph: &Graph<T, A>,
+    weighted: bool,
+    source: usize,
+    target: Option<usize>,
+    cutoff: Option<f64>,
+    first_only: bool,
+) -> Result<HashMap<usize, ShortestPathInfo<usize>>, Error>
+where
+    T: Hash + Eq + Clone + Ord + Display + Send + Sync,
+    A: Clone,
+{
+    multi_source_by_index(graph, weighted, vec![source], target, cutoff, first_only)
 }
 
 /**
@@ -274,17 +294,49 @@ pub fn multi_source<T, A>(
 ) -> Result<HashMap<T, ShortestPathInfo<T>>, Error>
 where
     T: Hash + Eq + Clone + Ord + Display + Send + Sync,
-    A: Clone,
+    A: Clone + Send + Sync,
 {
-    let shortest_path_infos =
-        dijkstra_multisource(graph, weighted, sources, target.clone(), cutoff, first_only);
+    let sources_indexes = sources.iter().map(|s| graph.get_node_index(s)).collect();
+    let target_index = match target.clone() {
+        Some(t) => Some(graph.get_node_index(&t)),
+        None => None,
+    };
+    let shortest_path_infos = dijkstra_multisource_by_index(
+        graph,
+        weighted,
+        sources_indexes,
+        target_index,
+        cutoff,
+        first_only,
+    );
     match shortest_path_infos {
         Err(e) => Err(e),
         Ok(spis) => Ok(spis
             .into_iter()
-            .filter(|(k, _v)| target.is_none() || k == target.as_ref().unwrap())
+            .filter(|(k, _v)| target.is_none() || *k == target_index.unwrap())
+            .map(|(k, v)| {
+                (
+                    graph.get_node_by_index(k).unwrap().name.clone(),
+                    convert_shortest_path_info_index_to_t(&graph, v),
+                )
+            })
             .collect::<HashMap<T, ShortestPathInfo<T>>>()),
     }
+}
+
+pub fn multi_source_by_index<T, A>(
+    graph: &Graph<T, A>,
+    weighted: bool,
+    sources: Vec<usize>,
+    target: Option<usize>,
+    cutoff: Option<f64>,
+    first_only: bool,
+) -> Result<HashMap<usize, ShortestPathInfo<usize>>, Error>
+where
+    T: Hash + Eq + Clone + Ord + Display + Send + Sync,
+    A: Clone,
+{
+    dijkstra_multisource_by_index(graph, weighted, sources, target, cutoff, first_only)
 }
 
 /**
@@ -292,14 +344,14 @@ Uses Dijkstra's algorithm to find shortest weighted paths.
 This is a private function that does all the work of finding the
 shortest paths. All the public functions in this module call this one.
 */
-fn dijkstra_multisource<T, A>(
+fn dijkstra_multisource_by_index<T, A>(
     graph: &Graph<T, A>,
     weighted: bool,
-    sources: Vec<T>,
-    target: Option<T>,
+    sources: Vec<usize>,
+    target: Option<usize>,
     cutoff: Option<f64>,
     first_only: bool,
-) -> Result<HashMap<T, ShortestPathInfo<T>>, Error>
+) -> Result<HashMap<usize, ShortestPathInfo<usize>>, Error>
 where
     T: Hash + Eq + Clone + Ord + Display + Send + Sync,
     A: Clone,
@@ -316,56 +368,53 @@ where
         false => 1.0,
     };
 
-    let mut paths: HashMap<T, Vec<Vec<T>>> = sources
+    let mut paths: HashMap<usize, Vec<Vec<usize>>> = sources
         .iter()
         .map(|s| (s.clone(), vec![vec![s.clone()]]))
         .collect();
-    let mut dist = HashMap::<T, f64>::new();
-    let mut seen = HashMap::<T, f64>::new();
+    let mut dist = HashMap::<usize, f64>::new();
+    let mut seen = HashMap::<usize, f64>::new();
     let mut fringe = BinaryHeap::new();
     let mut count = 0;
 
     for source in sources {
-        seen.insert(source.clone(), 0.0);
+        seen.insert(source, 0.0);
         fringe.push(FringeNode {
-            node_name: source,
+            node_index: source,
             count: 0,
             distance: -0.0,
         });
     }
 
-    while !fringe.is_empty() {
-        let fringe_item = fringe.pop().unwrap();
+    while let Some(fringe_item) = fringe.pop() {
         let d = -fringe_item.distance;
-        let v = fringe_item.node_name.clone();
-        if dist.contains_key(&v.clone()) {
+        let v = fringe_item.node_index;
+        if dist.contains_key(&v) {
             continue;
         }
-        dist.insert(v.clone(), d);
-        if target.is_some() && &v.clone() == target.as_ref().unwrap() {
+        dist.insert(v, d);
+        if target.as_ref() == Some(&v) {
             break;
         }
-        for node in graph.get_successors_or_neighbors(v.clone()) {
-            let u = node.name.clone();
-            let cost = get_cost(v.clone(), u.clone());
+        for u in graph.get_successors_or_neighbors_by_index(v) {
+            let cost = get_cost(v, u);
             let vu_dist = dist.get(&v).unwrap() + cost;
-            if cutoff.is_some() && vu_dist > cutoff.unwrap() {
+            if cutoff.map_or(false, |c| vu_dist > c) {
                 continue;
             }
-            if dist.contains_key(&u) {
-                let u_dist = *dist.get(&u).unwrap();
+            if let Some(&u_dist) = dist.get(&u) {
                 if vu_dist < u_dist {
                     return Err(get_contractory_paths_error());
                 }
             } else if !seen.contains_key(&u) || vu_dist < *seen.get(&u).unwrap() {
-                seen.insert(u.clone(), vu_dist);
-                push_fringe_node(&mut count, &mut fringe, u.clone(), vu_dist);
-                let mut new_paths_v = paths.entry(v.clone()).or_default().clone();
-                new_paths_v.iter_mut().for_each(|pv| pv.push(u.clone()));
+                seen.insert(u, vu_dist);
+                push_fringe_node(&mut count, &mut fringe, u, vu_dist);
+                let mut new_paths_v = paths.get(&v).cloned().unwrap_or_default();
+                new_paths_v.iter_mut().for_each(|pv| pv.push(u));
                 paths.insert(u, new_paths_v);
             } else if !first_only && vu_dist == *seen.get(&u).unwrap() {
-                push_fringe_node(&mut count, &mut fringe, u.clone(), vu_dist);
-                add_u_to_v_paths_and_append_v_paths_to_u_paths(u.clone(), v.clone(), &mut paths);
+                push_fringe_node(&mut count, &mut fringe, u, vu_dist);
+                add_u_to_v_paths_and_append_v_paths_to_u_paths(u, v, &mut paths);
             }
         }
     }
@@ -393,7 +442,7 @@ where
 {
     *count += 1;
     fringe.push(FringeNode {
-        node_name: u,
+        node_index: u,
         count: *count,
         distance: -vu_dist,
     });
@@ -483,12 +532,12 @@ Returns the "cost" of a (`u`, `v`) edges when the `graph` is a multigraph.
 
 Finds lowest weight of the (u, v) edges.
 */
-fn get_cost_multi<T, A>(graph: &Graph<T, A>, u: T, v: T) -> f64
+fn get_cost_multi<T, A>(graph: &Graph<T, A>, u: usize, v: usize) -> f64
 where
     T: Hash + Eq + Clone + Ord + Display + Send + Sync,
     A: Clone,
 {
-    let edges = graph.get_edges(u, v).unwrap();
+    let edges = graph.get_edges_by_indexes(u, v).unwrap();
     let weights = edges.into_iter().map(|e| e.weight);
     weights.into_iter().reduce(f64::min).unwrap()
 }
@@ -496,12 +545,12 @@ where
 /**
 Returns the weight of the (u, v) edge in a `graph` that is not a multigraph.
 */
-fn get_cost_single<T, A>(graph: &Graph<T, A>, u: T, v: T) -> f64
+fn get_cost_single<T, A>(graph: &Graph<T, A>, u: usize, v: usize) -> f64
 where
     T: Hash + Eq + Clone + Ord + Display + Send + Sync,
     A: Clone,
 {
-    let edge = graph.get_edge(u, v).unwrap();
+    let edge = graph.get_edge_by_indexes(u, v).unwrap();
     edge.weight
 }
 
@@ -511,9 +560,9 @@ the keys are the names of the target nodes and the values are
 `ShortestPathInfo` objects.
 */
 fn get_shortest_path_infos<T, A>(
-    distances: HashMap<T, f64>,
-    paths: HashMap<T, Vec<Vec<T>>>,
-) -> HashMap<T, ShortestPathInfo<T>>
+    distances: HashMap<usize, f64>,
+    paths: HashMap<usize, Vec<Vec<usize>>>,
+) -> HashMap<usize, ShortestPathInfo<usize>>
 where
     T: Hash + Eq + Clone + Ord + Display + Send + Sync,
     A: Clone,
@@ -529,5 +578,46 @@ where
                 },
             )
         })
-        .collect::<HashMap<T, ShortestPathInfo<T>>>()
+        .collect::<HashMap<usize, ShortestPathInfo<usize>>>()
+}
+
+fn convert_shortest_path_info_index_to_t<T, A>(
+    graph: &Graph<T, A>,
+    spi: ShortestPathInfo<usize>,
+) -> ShortestPathInfo<T>
+where
+    T: Hash + Eq + Clone + Ord + Display + Send + Sync,
+    A: Clone + Send + Sync,
+{
+    ShortestPathInfo::<T> {
+        distance: spi.distance,
+        paths: spi
+            .paths
+            .iter()
+            .map(|p| {
+                p.iter()
+                    .map(|i| graph.get_node_by_index(*i).unwrap().name.clone())
+                    .collect()
+            })
+            .collect(),
+    }
+}
+
+fn convert_shortest_path_info_index_map_to_t_map<T, A>(
+    graph: &Graph<T, A>,
+    spi_map: HashMap<usize, ShortestPathInfo<usize>>,
+) -> HashMap<T, ShortestPathInfo<T>>
+where
+    T: Hash + Eq + Clone + Ord + Display + Send + Sync,
+    A: Clone + Send + Sync,
+{
+    spi_map
+        .into_iter()
+        .map(|(k, v)| {
+            (
+                graph.get_node_by_index(k).unwrap().name.clone(),
+                convert_shortest_path_info_index_to_t(graph, v),
+            )
+        })
+        .collect()
 }

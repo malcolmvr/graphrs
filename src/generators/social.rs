@@ -1,4 +1,5 @@
 use crate::{Edge, EdgeDedupeStrategy, Graph, GraphSpecs, Node};
+use std::sync::Arc;
 
 /**
 Returns Zachary's Karate Club graph.
@@ -45,7 +46,7 @@ pub fn karate_club_graph() -> Graph<i32, ()> {
         0 0 1 0 0 0 0 0 1 0 0 0 0 0 1 1 0 0 1 0 1 0 1 1 0 0 0 0 0 1 1 1 0 1\n\
         0 0 0 0 0 0 0 0 1 1 0 0 0 1 1 1 0 0 1 1 1 0 1 1 0 0 1 1 1 1 1 1 1 0";
 
-    let nodes: Vec<Node<i32, ()>> = (0..34).into_iter().map(Node::from_name).collect();
+    let nodes: Vec<Arc<Node<i32, ()>>> = (0..34).into_iter().map(|i| Node::from_name(i)).collect();
 
     let mut edges = Vec::with_capacity(zacharydat.len() / 2);
     for (row, line) in zacharydat.split('\n').enumerate() {

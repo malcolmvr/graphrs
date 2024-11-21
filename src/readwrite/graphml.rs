@@ -10,6 +10,7 @@ use std::fs::File;
 use std::hash::Hash;
 use std::io::{BufWriter, Write};
 use std::str;
+use std::sync::Arc;
 
 /**
 Creates a graph according to the contents of a GraphML-formatted file.
@@ -55,8 +56,8 @@ pub fn read_graphml_string(string: &str, specs: GraphSpecs) -> Result<Graph<Stri
     let mut reader = Reader::from_str(string);
     let mut buf = Vec::new();
     let mut directed: bool = true;
-    let mut nodes: Vec<Node<String, ()>> = vec![];
-    let mut edges: Vec<Edge<String, ()>> = vec![];
+    let mut nodes: Vec<Arc<Node<String, ()>>> = vec![];
+    let mut edges: Vec<Arc<Edge<String, ()>>> = vec![];
     let mut last_element_name: String = "".to_string();
     let mut edge_weight_attr_name = "weight".to_string();
     loop {
@@ -140,7 +141,7 @@ pub fn read_graphml_string(string: &str, specs: GraphSpecs) -> Result<Graph<Stri
                                         let weight = str::from_utf8(&e).unwrap();
                                         match last_element_name.as_str() {
                                             "edge" => {
-                                                let edge = edges.last_mut().unwrap();
+                                                let edge = Arc::make_mut(edges.last_mut().unwrap());
                                                 edge.weight = weight.parse::<f64>().unwrap();
                                             }
                                             _ => (),
@@ -268,7 +269,7 @@ where
     Ok(string)
 }
 
-fn add_edge(edges: &mut Vec<Edge<String, ()>>, e: &BytesStart) -> Result<(), Error> {
+fn add_edge(edges: &mut Vec<Arc<Edge<String, ()>>>, e: &BytesStart) -> Result<(), Error> {
     let attrs = get_attributes_as_hashmap(e);
     if !attrs.contains_key("source") {
         return Err(get_read_error(
@@ -287,7 +288,7 @@ fn add_edge(edges: &mut Vec<Edge<String, ()>>, e: &BytesStart) -> Result<(), Err
     Ok(())
 }
 
-fn add_node(nodes: &mut Vec<Node<String, ()>>, e: &BytesStart) -> Result<(), Error> {
+fn add_node(nodes: &mut Vec<Arc<Node<String, ()>>>, e: &BytesStart) -> Result<(), Error> {
     let attrs = get_attributes_as_hashmap(e);
     match attrs.get("id") {
         None => Err(get_read_error(

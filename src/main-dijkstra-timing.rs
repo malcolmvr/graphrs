@@ -1,4 +1,4 @@
-use graphrs::{algorithms, generators, readwrite};
+use graphrs::{algorithms, generators, readwrite, GraphSpecs};
 use rayon::prelude::*;
 // use std::iter::Iterator;
 use rand::prelude::*;
@@ -12,15 +12,20 @@ fn main() {
     //     Ok(_) => {}
     //     Err(e) => println!("Error writing graph to file: {}", e),
     // }
+    let graph = readwrite::graphml::read_graphml_file(
+        "/home/malcolm/Temp/graph800.graphml",
+        GraphSpecs::directed(),
+    )
+    .unwrap();
     let now = Instant::now();
     // let _all_pairs = algorithms::shortest_path::dijkstra::all_pairs(&graph, false, None, false);
-    // let _all_pairs =
-    //     algorithms::shortest_path::dijkstra::all_pairs_iter(&graph, false, None, false);
-    // let mut c = 0;
-    // for _ap in _all_pairs {
-    //     c = c + 1;
-    // }
-    sub().for_each(|x| println!("{}", x));
+    let _all_pairs: Vec<_> =
+        algorithms::shortest_path::dijkstra::all_pairs_iter(&graph, false, None, false).collect();
+    let mut c = 0;
+    for _ap in _all_pairs {
+        c = c + 1;
+    }
+    // sub().for_each(|x| println!("{}", x));
     // for i in sub() {
     //     println!("{}", i)
     // }
