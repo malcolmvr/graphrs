@@ -168,7 +168,7 @@ where
             let ss_index =
                 single_source_by_index(&graph, weighted, node_index, None, cutoff, first_only)
                     .unwrap();
-            let node = graph.get_node_by_index(node_index).unwrap();
+            let node = graph.get_node_by_index(&node_index).unwrap();
             let ss = convert_shortest_path_info_index_map_to_t_map(&graph, ss_index);
             (node.name.clone(), ss)
         });
@@ -316,7 +316,7 @@ where
             .filter(|(k, _v)| target.is_none() || *k == target_index.unwrap())
             .map(|(k, v)| {
                 (
-                    graph.get_node_by_index(k).unwrap().name.clone(),
+                    graph.get_node_by_index(&k).unwrap().name.clone(),
                     convert_shortest_path_info_index_to_t(&graph, v),
                 )
             })
@@ -396,7 +396,7 @@ where
         if target.as_ref() == Some(&v) {
             break;
         }
-        for u in graph.get_successors_or_neighbors_by_index(v) {
+        for u in graph.get_successors_or_neighbors_by_index(&v) {
             let cost = get_cost(v, u);
             let vu_dist = dist.get(&v).unwrap() + cost;
             if cutoff.map_or(false, |c| vu_dist > c) {
@@ -596,7 +596,7 @@ where
             .iter()
             .map(|p| {
                 p.iter()
-                    .map(|i| graph.get_node_by_index(*i).unwrap().name.clone())
+                    .map(|i| graph.get_node_by_index(i).unwrap().name.clone())
                     .collect()
             })
             .collect(),
@@ -615,7 +615,7 @@ where
         .into_iter()
         .map(|(k, v)| {
             (
-                graph.get_node_by_index(k).unwrap().name.clone(),
+                graph.get_node_by_index(&k).unwrap().name.clone(),
                 convert_shortest_path_info_index_to_t(graph, v),
             )
         })

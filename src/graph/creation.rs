@@ -54,7 +54,7 @@ where
 
         // check for missing nodes
         if self.specs.missing_node_strategy == MissingNodeStrategy::Error
-            && (!self.nodes.contains_key(&edge.u) || !self.nodes.contains_key(&edge.v))
+            && (!self.nodes_map.contains_key(&edge.u) || !self.nodes_map.contains_key(&edge.v))
         {
             return Err(Error {
                 kind: ErrorKind::NodeNotFound,
@@ -83,10 +83,10 @@ where
         }
 
         // add or insert nodes
-        if !self.nodes.contains_key(&edge.u) {
+        if !self.nodes_map.contains_key(&edge.u) {
             self.add_node(Node::from_name(edge.u.clone()).into());
         }
-        if !self.nodes.contains_key(&edge.v) {
+        if !self.nodes_map.contains_key(&edge.v) {
             self.add_node(Node::from_name(edge.v.clone()).into());
         }
 
@@ -272,24 +272,32 @@ where
         T: Hash + Eq + Clone + Ord,
         A: Clone,
     {
-        let node_rc = node.clone();
-        let node_index = self.nodes_vec.len();
-        if !self.nodes_map.contains_key(&node.name) {
-            self.nodes_map.insert(node.name.clone(), node_index);
+        match self.nodes_map.contains_key(&node.name) {
+            true => {
+                let node_index = self.get_node_index(&node.name);
+                self.nodes_vec[node_index] = node.clone();
+                self.nodes_map_rev.insert(node_index, node.clone());
+            }
+            false => {
+                let node_rc = node.clone();
+                let node_index = self.nodes_vec.len();
+                if !self.nodes_map.contains_key(&node.name) {
+                    self.nodes_map.insert(node.name.clone(), node_index);
+                }
+                if !self.nodes_map_rev.contains_key(&node_index) {
+                    self.nodes_map_rev.insert(node_index, Arc::clone(&node_rc));
+                }
+                self.nodes_vec.push(Arc::clone(&node_rc));
+                self.successors_map.insert(
+                    node_index,
+                    HashSet::<usize, BuildNoHashHasher<usize>>::default(),
+                );
+                self.predecessors_map.insert(
+                    node_index,
+                    HashSet::<usize, BuildNoHashHasher<usize>>::default(),
+                );
+            }
         }
-        if !self.nodes_map_rev.contains_key(&node_index) {
-            self.nodes_map_rev.insert(node_index, Arc::clone(&node_rc));
-        }
-        self.nodes_vec.push(Arc::clone(&node_rc));
-        self.nodes.insert(node.name.clone(), node_rc);
-        self.successors_map.insert(
-            node_index,
-            HashSet::<usize, BuildNoHashHasher<usize>>::default(),
-        );
-        self.predecessors_map.insert(
-            node_index,
-            HashSet::<usize, BuildNoHashHasher<usize>>::default(),
-        );
     }
 
     /**
@@ -336,7 +344,6 @@ where
     */
     pub fn new(specs: GraphSpecs) -> Graph<T, A> {
         Graph {
-            nodes: HashMap::<T, Arc<Node<T, A>>>::new(),
             nodes_map: HashMap::<T, usize>::new(),
             nodes_map_rev: HashMap::<usize, Arc<Node<T, A>>>::new(),
             nodes_vec: Vec::<Arc<Node<T, A>>>::new(),

@@ -126,7 +126,7 @@ where
         T: Hash + Eq + Clone + Ord,
         A: Clone,
     {
-        self.nodes.values().collect::<Vec<&Arc<Node<T, A>>>>()
+        self.nodes_vec.iter().collect()
     }
 
     /**
@@ -151,7 +151,7 @@ where
         T: Hash + Eq + Clone + Ord,
         A: Clone,
     {
-        self.nodes.keys().collect::<Vec<&T>>()
+        self.nodes_vec.iter().map(|n| &n.name).collect()
     }
 
     /**
@@ -627,21 +627,24 @@ where
         T: Hash + Eq + Clone + Ord,
         A: Clone,
     {
-        if !self.nodes.contains_key(&node_name.clone()) {
+        if !self.nodes_map.contains_key(&node_name.clone()) {
             return Err(Error {
                 kind: ErrorKind::NodeNotFound,
                 message: format!("Requested node '{}' was not found in the graph.", node_name),
             });
         }
 
-        let pred_nodes = self._get_predecessor_nodes(node_name.clone()).unwrap();
-        let succ_nodes = self._get_successor_nodes(node_name).unwrap();
+        let node_index = self.get_node_index(&node_name);
+
+        let pred_nodes = self.get_predecessor_nodes_by_index(&node_index);
+        let succ_nodes = self.get_successor_nodes_by_index(&node_index);
 
         let all_nodes = pred_nodes
             .into_iter()
             .chain(succ_nodes)
             .sorted_by(|a, b| Ord::cmp(&a, &b))
             .dedup_by(|a, b| a == b)
+            .map(|index| self.get_node_by_index(index).unwrap())
             .collect();
 
         Ok(all_nodes)
@@ -649,7 +652,7 @@ where
 
     fn get_neighbor_nodes_by_index(
         &self,
-        node_index: usize,
+        node_index: &usize,
     ) -> HashSet<usize, BuildNoHashHasher<usize>> {
         let pred_nodes = self.get_predecessor_nodes_by_index(node_index);
         let succ_nodes = self.get_successor_nodes_by_index(node_index);
@@ -678,7 +681,13 @@ where
         T: Hash + Eq + Clone + Ord,
         A: Clone,
     {
-        self.nodes.get(&name)
+        match self.nodes_map.contains_key(&name) {
+            true => {
+                let node_index = self.get_node_index(&name);
+                self.get_node_by_index(&node_index)
+            }
+            false => None,
+        }
     }
 
     /**
@@ -766,16 +775,20 @@ where
         T: Hash + Eq + Clone + Ord,
         A: Clone,
     {
-        if !self.nodes.contains_key(&node_name) {
+        if !self.nodes_map.contains_key(&node_name) {
             return Err(Error {
                 kind: ErrorKind::NodeNotFound,
                 message: format!("Requested node '{}' was not found in the graph", node_name),
             });
         }
-        let pred = self.predecessors.get(&node_name);
+        let node_index = self.get_node_index(&node_name);
+        let pred = self.predecessors_map.get(&node_index);
         match pred {
             None => Ok(vec![]),
-            Some(hashset) => Ok(self.get_nodes_for_names(hashset)),
+            Some(hashset) => Ok(hashset
+                .iter()
+                .map(|index| self.get_node_by_index(index).unwrap())
+                .collect()),
         }
     }
 
@@ -873,39 +886,43 @@ where
         T: Hash + Eq + Clone + Ord,
         A: Clone,
     {
-        if !self.nodes.contains_key(&node_name) {
+        if !self.nodes_map.contains_key(&node_name) {
             return Err(Error {
                 kind: ErrorKind::NodeNotFound,
                 message: format!("Requested node '{}' was not found in the graph.", node_name),
             });
         }
-        let succ = self.successors.get(&node_name);
+        let nodex_index = self.get_node_index(&node_name);
+        let succ = self.successors_map.get(&nodex_index);
         match succ {
             None => Ok(vec![]),
-            Some(hashset) => Ok(self.get_nodes_for_names(hashset)),
+            Some(hashset) => Ok(hashset
+                .iter()
+                .map(|index| self.get_node_by_index(index).unwrap())
+                .collect()),
         }
     }
 
     fn get_successor_nodes_by_index(
         &self,
-        node_index: usize,
+        node_index: &usize,
     ) -> &HashSet<usize, BuildNoHashHasher<usize>>
     where
         T: Hash + Eq + Clone + Ord,
         A: Clone,
     {
-        self.successors_map.get(&node_index).unwrap()
+        self.successors_map.get(node_index).unwrap()
     }
 
     fn get_predecessor_nodes_by_index(
         &self,
-        node_index: usize,
+        node_index: &usize,
     ) -> &HashSet<usize, BuildNoHashHasher<usize>>
     where
         T: Hash + Eq + Clone + Ord,
         A: Clone,
     {
-        self.predecessors_map.get(&node_index).unwrap()
+        self.predecessors_map.get(node_index).unwrap()
     }
 
     /// Gets a `HashMap` of all the successor edges.
@@ -935,7 +952,7 @@ where
 
     pub(crate) fn get_successors_or_neighbors_by_index(
         &self,
-        node_index: usize,
+        node_index: &usize,
     ) -> HashSet<usize, BuildNoHashHasher<usize>>
     where
         T: Hash + Eq + Clone + Ord + Display + Send + Sync,
@@ -1000,7 +1017,7 @@ where
     ```
     */
     pub fn number_of_nodes(&self) -> usize {
-        self.nodes.len()
+        self.nodes_vec.len()
     }
 
     /**
@@ -1025,12 +1042,12 @@ where
         }
     }
 
-    pub fn get_node_by_index(&self, node_index: usize) -> Option<&Arc<Node<T, A>>>
+    pub fn get_node_by_index(&self, node_index: &usize) -> Option<&Arc<Node<T, A>>>
     where
         T: Hash + Eq + Clone + Ord,
         A: Clone,
     {
-        self.nodes_map_rev.get(&node_index)
+        self.nodes_map_rev.get(node_index)
     }
 
     pub(crate) fn get_node_index(&self, node_name: &T) -> usize
@@ -1039,18 +1056,5 @@ where
         A: Clone,
     {
         self.nodes_map.get(node_name).unwrap().clone()
-    }
-
-    // PRIVATE METHODS
-
-    fn get_nodes_for_names(&self, names: &HashSet<T>) -> Vec<&Arc<Node<T, A>>>
-    where
-        T: Hash + Eq + Clone + Ord,
-        A: Clone,
-    {
-        names
-            .iter()
-            .map(|n| self.nodes.get(n).unwrap())
-            .collect::<Vec<&Arc<Node<T, A>>>>()
     }
 }

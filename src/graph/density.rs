@@ -23,7 +23,7 @@ where
             return 0.0;
         }
         let m = self.edges.len() as f64;
-        let n = self.nodes.len() as f64;
+        let n = self.nodes_vec.len() as f64;
         match self.specs.directed {
             false => (2.0 * m) / (n * (n - 1.0)),
             true => m / (n * (n - 1.0)),

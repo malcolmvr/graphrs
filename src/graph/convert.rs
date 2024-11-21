@@ -114,7 +114,7 @@ where
                 message: "The `to_single_edges` method is not applicable to graph where `specs.multi_edges` is `false`.".to_string(),
             });
         }
-        let new_nodes = self.nodes.values().cloned().collect();
+        let new_nodes = self.nodes_vec.clone();
         let new_edges = self.edges.iter().map(collapse_edges).collect();
         Graph::new_from_nodes_and_edges(
             new_nodes,

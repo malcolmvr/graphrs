@@ -487,7 +487,6 @@ mod tests {
     use super::*;
     use crate::{Edge, Graph, GraphSpecs};
     use itertools::Itertools;
-    use std::sync::Arc;
 
     #[rustfmt::skip]
     #[test]
