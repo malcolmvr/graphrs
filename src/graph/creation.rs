@@ -1,10 +1,9 @@
-use nohash::BuildNoHashHasher;
-
 use super::Graph;
 use crate::{
-    Edge, EdgeDedupeStrategy, EdgeIndex, Error, ErrorKind, GraphSpecs, MissingNodeStrategy, Node,
+    Edge, EdgeDedupeStrategy, Error, ErrorKind, GraphSpecs, MissingNodeStrategy, Node,
     SelfLoopsFalseStrategy,
 };
+use nohash::{IntMap, IntSet};
 use std::collections::{HashMap, HashSet};
 use std::fmt::Display;
 use std::hash::Hash;
@@ -67,9 +66,22 @@ where
             });
         }
 
+        // add or insert nodes
+        if !self.nodes_map.contains_key(&edge.u) {
+            self.add_node(Node::from_name(edge.u.clone()).into());
+        }
+        if !self.nodes_map.contains_key(&edge.v) {
+            self.add_node(Node::from_name(edge.v.clone()).into());
+        }
+
+        // get node indexes
+        let u_node_index = *self.nodes_map.get(&edge.u).unwrap();
+        let v_node_index = *self.nodes_map.get(&edge.v).unwrap();
+
         // check for duplicate edges
         if self.specs.edge_dedupe_strategy == EdgeDedupeStrategy::Error
-            && self.get_edge(edge.u.clone(), edge.v.clone()).is_ok()
+            && !self.specs.multi_edges
+            && self.get_edge_by_indexes(u_node_index, v_node_index).is_ok()
         {
             return Err(Error {
                 kind: ErrorKind::DuplicateEdge,
@@ -82,17 +94,7 @@ where
             });
         }
 
-        // add or insert nodes
-        if !self.nodes_map.contains_key(&edge.u) {
-            self.add_node(Node::from_name(edge.u.clone()).into());
-        }
-        if !self.nodes_map.contains_key(&edge.v) {
-            self.add_node(Node::from_name(edge.v.clone()).into());
-        }
-
         // add successors and predecessors
-        let u_node_index = *self.nodes_map.get(&edge.u).unwrap();
-        let v_node_index = *self.nodes_map.get(&edge.v).unwrap();
         self.successors
             .entry(edge.u.clone())
             .or_default()
@@ -129,10 +131,11 @@ where
             false => edge.clone().ordered().into(),
             true => Arc::clone(&edge),
         };
-        let ordered_edge_index = match !self.specs.directed && u_node_index > v_node_index {
-            false => EdgeIndex::new(u_node_index, v_node_index),
-            true => EdgeIndex::new(v_node_index, u_node_index),
-        };
+        let (ordered_edge_u, ordered_edge_v) =
+            match !self.specs.directed && u_node_index > v_node_index {
+                false => (u_node_index, v_node_index),
+                true => (v_node_index, u_node_index),
+            };
 
         // add edge
         match self.specs.multi_edges {
@@ -142,23 +145,36 @@ where
                     .or_default()
                     .push(ordered.clone());
                 self.edges_map
-                    .entry(ordered_edge_index)
+                    .entry(ordered_edge_u)
+                    .or_default()
+                    .entry(ordered_edge_v)
                     .or_default()
                     .push(ordered.clone());
             }
-            false => match self.get_edge(ordered.u.clone(), ordered.v.clone()).is_ok() {
+            false => match self
+                .get_edge_by_indexes(ordered_edge_u, ordered_edge_v)
+                .is_ok()
+            {
                 false => {
                     self.edges.insert(
                         (ordered.u.clone(), ordered.v.clone()),
                         vec![ordered.clone()],
                     );
                     self.edges_map
-                        .insert(ordered_edge_index, vec![ordered.clone()]);
+                        .entry(ordered_edge_u)
+                        .or_default()
+                        .insert(ordered_edge_v, vec![ordered.clone()]);
                 }
                 true => match self.specs.edge_dedupe_strategy {
                     EdgeDedupeStrategy::KeepLast => {
-                        self.edges
-                            .insert((ordered.u.clone(), ordered.v.clone()), vec![ordered.into()]);
+                        self.edges.insert(
+                            (ordered.u.clone(), ordered.v.clone()),
+                            vec![ordered.clone()],
+                        );
+                        self.edges_map
+                            .entry(ordered_edge_u)
+                            .or_default()
+                            .insert(ordered_edge_v, vec![ordered.clone()]);
                     }
                     _ => {}
                 },
@@ -288,14 +304,10 @@ where
                     self.nodes_map_rev.insert(node_index, Arc::clone(&node_rc));
                 }
                 self.nodes_vec.push(Arc::clone(&node_rc));
-                self.successors_map.insert(
-                    node_index,
-                    HashSet::<usize, BuildNoHashHasher<usize>>::default(),
-                );
-                self.predecessors_map.insert(
-                    node_index,
-                    HashSet::<usize, BuildNoHashHasher<usize>>::default(),
-                );
+                self.successors_map
+                    .insert(node_index, IntSet::<usize>::default());
+                self.predecessors_map
+                    .insert(node_index, IntSet::<usize>::default());
             }
         }
     }
@@ -344,17 +356,16 @@ where
     */
     pub fn new(specs: GraphSpecs) -> Graph<T, A> {
         Graph {
-            nodes_map: HashMap::<T, usize>::new(),
-            nodes_map_rev: HashMap::<usize, Arc<Node<T, A>>>::new(),
+            nodes_map: HashMap::<T, usize>::default(),
+            nodes_map_rev: IntMap::<usize, Arc<Node<T, A>>>::default(),
             nodes_vec: Vec::<Arc<Node<T, A>>>::new(),
             edges: HashMap::<(T, T), Vec<Arc<Edge<T, A>>>>::new(),
-            edges_map:
-                HashMap::<EdgeIndex, Vec<Arc<Edge<T, A>>>, BuildNoHashHasher<usize>>::default(),
+            edges_map: IntMap::<usize, IntMap<usize, Vec<Arc<Edge<T, A>>>>>::default(),
             specs,
             successors: HashMap::<T, HashSet<T>>::new(),
-            successors_map: HashMap::<usize, HashSet<usize, BuildNoHashHasher<usize>>>::default(),
+            successors_map: IntMap::<usize, IntSet<usize>>::default(),
             predecessors: HashMap::<T, HashSet<T>>::new(),
-            predecessors_map: HashMap::<usize, HashSet<usize, BuildNoHashHasher<usize>>>::default(),
+            predecessors_map: IntMap::<usize, IntSet<usize>>::default(),
         }
     }
 

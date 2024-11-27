@@ -1,5 +1,5 @@
-use crate::{Edge, EdgeIndex, GraphSpecs, Node};
-use nohash::BuildNoHashHasher;
+use crate::{Edge, GraphSpecs, Node};
+use nohash::{IntMap, IntSet};
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
@@ -48,11 +48,11 @@ let graph = Graph::<&str, ()>::new_from_nodes_and_edges(
 pub struct Graph<T: PartialOrd + Send, A: Clone> {
     /// The graph's nodes, stored as a `HashMap` keyed by the node names.
     nodes_map: HashMap<T, usize>,
-    nodes_map_rev: HashMap<usize, Arc<Node<T, A>>>,
+    nodes_map_rev: IntMap<usize, Arc<Node<T, A>>>,
     nodes_vec: Vec<Arc<Node<T, A>>>,
     /// The graph's edges, stored as a `HashMap` keyed by a tuple of node names.
     edges: HashMap<(T, T), Vec<Arc<Edge<T, A>>>>,
-    edges_map: HashMap<EdgeIndex, Vec<Arc<Edge<T, A>>>, BuildNoHashHasher<usize>>,
+    edges_map: IntMap<usize, IntMap<usize, Vec<Arc<Edge<T, A>>>>>,
     /// The [GraphSpecs](./struct.GraphSpecs.html) for the graph.
     pub specs: GraphSpecs,
     /// Stores the successors of nodes. A successor of u is a node v such that there
@@ -60,11 +60,12 @@ pub struct Graph<T: PartialOrd + Send, A: Clone> {
     /// all the adjacent nodes. An adjacent node to u is a node v such that there exists
     /// an edge from u to v *or* from v to u.
     successors: HashMap<T, HashSet<T>>,
-    successors_map: HashMap<usize, HashSet<usize, BuildNoHashHasher<usize>>>,
+    successors_map: IntMap<usize, IntSet<usize>>,
+    // HashMap<usize, HashSet<usize, BuildNoHashHasher<usize>>, BuildNoHashHasher<usize>>,
     /// Stores the predecessors of nodes. A predecessor of v is a node u such that there
     /// exists a directed edge from u to v. For an undirected graph `precessors` is not used.
     predecessors: HashMap<T, HashSet<T>>,
-    predecessors_map: HashMap<usize, HashSet<usize, BuildNoHashHasher<usize>>>,
+    predecessors_map: IntMap<usize, IntSet<usize>>,
 }
 
 mod convert;

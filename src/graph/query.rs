@@ -1,5 +1,5 @@
 use super::Graph;
-use crate::{ext::vec::VecExt, Edge, EdgeIndex, Error, ErrorKind, Node};
+use crate::{ext::vec::VecExt, Edge, Error, ErrorKind, Node};
 use itertools::Itertools;
 use nohash::BuildNoHashHasher;
 use std::collections::{HashMap, HashSet};
@@ -190,19 +190,18 @@ where
             });
         }
 
-        let ordered = match !self.specs.directed && u > v {
-            false => (u.clone(), v.clone()),
-            true => (v.clone(), u.clone()),
-        };
-
-        let edges = self.edges.get(&ordered);
-        match edges {
-            None => Err(Error {
-                kind: ErrorKind::EdgeNotFound,
-                message: format!("The requested edge ({}, {}) does not exist.", u, v),
-            }),
-            Some(e) => Ok(&e[0]),
+        if !self.nodes_map.contains_key(&u) || !self.nodes_map.contains_key(&v) {
+            return Err(Error {
+                kind: ErrorKind::NodeNotFound,
+                message: "One or both of the specified nodes were not found in the graph."
+                    .to_string(),
+            });
         }
+
+        let u_node_index = self.get_node_index(&u);
+        let v_node_index = self.get_node_index(&v);
+
+        self.get_edge_by_indexes(u_node_index, v_node_index)
     }
 
     pub(crate) fn get_edge_by_indexes(&self, u: usize, v: usize) -> Result<&Edge<T, A>, Error>
@@ -210,18 +209,23 @@ where
         T: Hash + Eq + Clone + Ord,
         A: Clone,
     {
-        let ordered = match !self.specs.directed && u > v {
-            false => EdgeIndex::new(u, v),
-            true => EdgeIndex::new(v, u),
+        let (ordered_u, ordered_v) = match !self.specs.directed && u > v {
+            false => (u, v),
+            true => (v, u),
         };
 
-        let edges = self.edges_map.get(&ordered);
-        match edges {
+        match self.edges_map.get(&ordered_u) {
             None => Err(Error {
                 kind: ErrorKind::EdgeNotFound,
                 message: format!("The requested edge ({}, {}) does not exist.", u, v),
             }),
-            Some(e) => Ok(&e[0]),
+            Some(edges) => match edges.get(&ordered_v) {
+                None => Err(Error {
+                    kind: ErrorKind::EdgeNotFound,
+                    message: format!("The requested edge ({}, {}) does not exist.", u, v),
+                }),
+                Some(e) => Ok(&e[0]),
+            },
         }
     }
     /**
@@ -267,19 +271,18 @@ where
             });
         }
 
-        let ordered = match !self.specs.directed && u > v {
-            false => (u.clone(), v.clone()),
-            true => (v.clone(), u.clone()),
-        };
-
-        let edges = self.edges.get(&ordered);
-        match edges {
-            None => Err(Error {
-                kind: ErrorKind::EdgeNotFound,
-                message: format!("No edges found for the requested ({}, {})", u, v),
-            }),
-            Some(e) => Ok(e.iter().collect::<Vec<&Arc<Edge<T, A>>>>()),
+        if !self.nodes_map.contains_key(&u) || !self.nodes_map.contains_key(&v) {
+            return Err(Error {
+                kind: ErrorKind::NodeNotFound,
+                message: "One or both of the specified nodes were not found in the graph."
+                    .to_string(),
+            });
         }
+
+        let u_node_index = self.get_node_index(&u);
+        let v_node_index = self.get_node_index(&v);
+
+        self.get_edges_by_indexes(u_node_index, v_node_index)
     }
 
     pub(crate) fn get_edges_by_indexes(
@@ -291,18 +294,23 @@ where
         T: Hash + Eq + Clone + Ord,
         A: Clone,
     {
-        let ordered = match !self.specs.directed && u > v {
-            false => EdgeIndex::new(u.clone(), v.clone()),
-            true => EdgeIndex::new(v.clone(), u.clone()),
+        let (ordered_u, ordered_v) = match !self.specs.directed && u > v {
+            false => (u, v),
+            true => (v, u),
         };
 
-        let edges = self.edges_map.get(&ordered);
-        match edges {
+        match self.edges_map.get(&ordered_u) {
             None => Err(Error {
                 kind: ErrorKind::EdgeNotFound,
-                message: format!("No edges found for the requested ({}, {})", u, v),
+                message: format!("The requested edge ({}, {}) does not exist.", u, v),
             }),
-            Some(e) => Ok(e.iter().collect::<Vec<&Arc<Edge<T, A>>>>()),
+            Some(edges) => match edges.get(&ordered_v) {
+                None => Err(Error {
+                    kind: ErrorKind::EdgeNotFound,
+                    message: format!("The requested edge ({}, {}) does not exist.", u, v),
+                }),
+                Some(e) => Ok(e.iter().collect()),
+            },
         }
     }
 
@@ -903,7 +911,7 @@ where
         }
     }
 
-    fn get_successor_nodes_by_index(
+    pub(crate) fn get_successor_nodes_by_index(
         &self,
         node_index: &usize,
     ) -> &HashSet<usize, BuildNoHashHasher<usize>>
@@ -914,7 +922,7 @@ where
         self.successors_map.get(node_index).unwrap()
     }
 
-    fn get_predecessor_nodes_by_index(
+    pub(crate) fn get_predecessor_nodes_by_index(
         &self,
         node_index: &usize,
     ) -> &HashSet<usize, BuildNoHashHasher<usize>>

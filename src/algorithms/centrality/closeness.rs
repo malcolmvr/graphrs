@@ -3,7 +3,7 @@ use crate::algorithms::shortest_path::ShortestPathInfo;
 use crate::{Error, Graph};
 use rayon::iter::ParallelIterator;
 use std::collections::HashMap;
-use std::fmt::Display;
+use std::fmt::{Debug, Display};
 use std::hash::Hash;
 
 /**
@@ -44,7 +44,7 @@ pub fn closeness_centrality<T, A>(
     parallel: bool,
 ) -> Result<HashMap<T, f64>, Error>
 where
-    T: Hash + Eq + Clone + Ord + Display + Send + Sync,
+    T: Hash + Eq + Clone + Ord + Debug + Display + Send + Sync,
     A: Clone + Send + Sync,
 {
     let mut the_graph = graph;

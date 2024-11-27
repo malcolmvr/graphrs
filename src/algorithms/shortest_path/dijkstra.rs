@@ -1,9 +1,10 @@
 use crate::algorithms::shortest_path::ShortestPathInfo;
 use crate::{Error, ErrorKind, Graph, Node};
+use nohash::IntMap;
 use rayon::prelude::*;
 use std::cmp::Ordering;
 use std::collections::{BinaryHeap, HashMap};
-use std::fmt::Display;
+use std::fmt::{Debug, Display};
 use std::hash::Hash;
 use std::sync::Arc;
 
@@ -102,7 +103,7 @@ pub fn all_pairs<T, A>(
     first_only: bool,
 ) -> Result<HashMap<T, HashMap<T, ShortestPathInfo<T>>>, Error>
 where
-    T: Hash + Eq + Clone + Ord + Display + Send + Sync,
+    T: Hash + Eq + Clone + Ord + Debug + Display + Send + Sync,
     A: Clone + Send + Sync,
 {
     let x = graph
@@ -128,6 +129,34 @@ where
     Ok(x.into_iter().map(|t| (t.0, t.1.unwrap())).collect())
 }
 
+// TODO: fix the multisource dijkstra - it contains a bug that gives incorrect results
+pub fn all_pairs_ms<T, A>(
+    graph: &Graph<T, A>,
+    weighted: bool,
+    cutoff: Option<f64>,
+    first_only: bool,
+) -> Result<HashMap<T, HashMap<T, ShortestPathInfo<T>>>, Error>
+where
+    T: Hash + Eq + Clone + Ord + Debug + Display + Send + Sync,
+    A: Clone + Send + Sync,
+{
+    let source_indexes = (0..graph.number_of_nodes()).collect::<Vec<_>>();
+    let shortest_paths =
+        dijkstra_multisource_by_index(graph, weighted, source_indexes, None, cutoff, first_only)?;
+    Ok(shortest_paths
+        .into_iter()
+        .map(|(k, v)| {
+            let node_name = graph.get_node_by_index(&k).unwrap().name.clone();
+            let mut inner_map = HashMap::new();
+            inner_map.insert(
+                node_name.clone(),
+                convert_shortest_path_info_index_to_t(graph, v),
+            );
+            (node_name, inner_map)
+        })
+        .collect())
+}
+
 pub fn all_pairs_iter<'a, T, A>(
     graph: &'a Graph<T, A>,
     weighted: bool,
@@ -135,7 +164,7 @@ pub fn all_pairs_iter<'a, T, A>(
     first_only: bool,
 ) -> impl Iterator<Item = (T, HashMap<T, ShortestPathInfo<T>>)> + 'a
 where
-    T: Hash + Eq + Clone + Ord + Display + Send + Sync,
+    T: Hash + Eq + Clone + Ord + Debug + Display + Send + Sync,
     A: Clone + Send + Sync,
 {
     let x = graph
@@ -223,7 +252,7 @@ pub fn single_source<T, A>(
     first_only: bool,
 ) -> Result<HashMap<T, ShortestPathInfo<T>>, Error>
 where
-    T: Hash + Eq + Clone + Ord + Display + Send + Sync,
+    T: Hash + Eq + Clone + Ord + Debug + Display + Send + Sync,
     A: Clone + Send + Sync,
 {
     multi_source(graph, weighted, vec![source], target, cutoff, first_only)
@@ -236,7 +265,7 @@ fn single_source_by_index<T, A>(
     target: Option<usize>,
     cutoff: Option<f64>,
     first_only: bool,
-) -> Result<HashMap<usize, ShortestPathInfo<usize>>, Error>
+) -> Result<IntMap<usize, ShortestPathInfo<usize>>, Error>
 where
     T: Hash + Eq + Clone + Ord + Display + Send + Sync,
     A: Clone,
@@ -296,7 +325,10 @@ where
     T: Hash + Eq + Clone + Ord + Display + Send + Sync,
     A: Clone + Send + Sync,
 {
-    let sources_indexes = sources.iter().map(|s| graph.get_node_index(s)).collect();
+    let sources_indexes = sources
+        .iter()
+        .map(|s| graph.get_node_index(s))
+        .collect::<Vec<_>>();
     let target_index = match target.clone() {
         Some(t) => Some(graph.get_node_index(&t)),
         None => None,
@@ -331,7 +363,7 @@ pub fn multi_source_by_index<T, A>(
     target: Option<usize>,
     cutoff: Option<f64>,
     first_only: bool,
-) -> Result<HashMap<usize, ShortestPathInfo<usize>>, Error>
+) -> Result<IntMap<usize, ShortestPathInfo<usize>>, Error>
 where
     T: Hash + Eq + Clone + Ord + Display + Send + Sync,
     A: Clone,
@@ -351,7 +383,7 @@ fn dijkstra_multisource_by_index<T, A>(
     target: Option<usize>,
     cutoff: Option<f64>,
     first_only: bool,
-) -> Result<HashMap<usize, ShortestPathInfo<usize>>, Error>
+) -> Result<IntMap<usize, ShortestPathInfo<usize>>, Error>
 where
     T: Hash + Eq + Clone + Ord + Display + Send + Sync,
     A: Clone,
@@ -368,12 +400,12 @@ where
         false => 1.0,
     };
 
-    let mut paths: HashMap<usize, Vec<Vec<usize>>> = sources
+    let mut paths: IntMap<usize, Vec<Vec<usize>>> = sources
         .iter()
         .map(|s| (s.clone(), vec![vec![s.clone()]]))
         .collect();
-    let mut dist = HashMap::<usize, f64>::new();
-    let mut seen = HashMap::<usize, f64>::new();
+    let mut dist = IntMap::<usize, f64>::default();
+    let mut seen = IntMap::<usize, f64>::default();
     let mut fringe = BinaryHeap::new();
     let mut count = 0;
 
@@ -389,6 +421,7 @@ where
     while let Some(fringe_item) = fringe.pop() {
         let d = -fringe_item.distance;
         let v = fringe_item.node_index;
+        // println!("    v: {}", v);
         if dist.contains_key(&v) {
             continue;
         }
@@ -397,22 +430,29 @@ where
             break;
         }
         for u in graph.get_successors_or_neighbors_by_index(&v) {
+            // println!("        u: {}", u);
             let cost = get_cost(v, u);
+            // println!("            cost: {}", cost);
             let vu_dist = dist.get(&v).unwrap() + cost;
+            // println!("            vu_dist: {}", vu_dist);
             if cutoff.map_or(false, |c| vu_dist > c) {
+                // println!("            cutoff continue");
                 continue;
             }
             if let Some(&u_dist) = dist.get(&u) {
+                // println!("            u_dist = dist.get(u)");
                 if vu_dist < u_dist {
                     return Err(get_contractory_paths_error());
                 }
             } else if !seen.contains_key(&u) || vu_dist < *seen.get(&u).unwrap() {
+                // println!("            !seen.contains_key(u)");
                 seen.insert(u, vu_dist);
                 push_fringe_node(&mut count, &mut fringe, u, vu_dist);
                 let mut new_paths_v = paths.get(&v).cloned().unwrap_or_default();
                 new_paths_v.iter_mut().for_each(|pv| pv.push(u));
                 paths.insert(u, new_paths_v);
             } else if !first_only && vu_dist == *seen.get(&u).unwrap() {
+                // println!("            !first_only");
                 push_fringe_node(&mut count, &mut fringe, u, vu_dist);
                 add_u_to_v_paths_and_append_v_paths_to_u_paths(u, v, &mut paths);
             }
@@ -421,6 +461,79 @@ where
 
     Ok(get_shortest_path_infos::<T, A>(dist, paths))
 }
+
+/*
+fn dijkstra<T, A>(
+    graph: &Graph<T, A>,
+    src: usize,
+    pq: &mut BinaryHeap<FringeNode<usize>>,
+    S: &mut [i32],
+    P: &mut [i32],
+    P_start: &mut [i32],
+    P_len: &mut [i32],
+    sigma: &mut [f64],
+    D: &mut [f64],
+    seen: &mut [f64],
+) -> usize
+where
+    T: Hash + Eq + Clone + Ord + Display + Send + Sync,
+    A: Clone,
+{
+    let V = graph.V;
+
+    pq.count = 0;
+
+    for u in 0..V {
+        pq.id[u] = -1;
+        S[u] = -1;
+        sigma[u] = 0.0;
+        D[u] = f64::INFINITY;
+        seen[u] = f64::INFINITY;
+        P_len[u] = 0;
+    }
+    sigma[src] = 1.0;
+    seen[src] = 0.0;
+    pq.push(src, src, 0.0);
+    let mut countS = 0;
+
+    while pq.count > 0 {
+        let top = pq.pop().unwrap();
+        let pred = top.pred;
+        let v = top.v;
+        let dist = top.dist;
+
+        if D[v] != f64::INFINITY {
+            continue;
+        }
+
+        sigma[v] += sigma[pred];
+        S[countS] = v as i32;
+        countS += 1;
+        D[v] = dist;
+
+        let mut cur = graph.array[v].next.as_ref();
+        while let Some(node) = cur {
+            let w = node.dest;
+            let weight = node.weight;
+            let vw_dist = dist + weight;
+
+            if D[w] == f64::INFINITY && (seen[w] == f64::INFINITY || vw_dist < seen[w]) {
+                seen[w] = vw_dist;
+                pq.push(v, w, vw_dist);
+                sigma[w] = 0.0;
+                P[P_start[w] as usize] = v as i32;
+                P_len[w] = 1;
+            } else if vw_dist == seen[w] {
+                sigma[w] += sigma[v];
+                P[(P_start[w] + P_len[w]) as usize] = v as i32;
+                P_len[w] += 1;
+            }
+            cur = node.next.as_ref();
+        }
+    }
+    countS
+}
+ */
 
 /// Returns the `Error` object for a contradictory-paths error.
 #[inline]
@@ -453,15 +566,13 @@ Adds `u` to the paths that lead to `v`, then appends all the paths that
 lead to `v` to the paths that lead to `u`.
 */
 #[inline]
-fn add_u_to_v_paths_and_append_v_paths_to_u_paths<T>(
-    u: T,
-    v: T,
-    paths: &mut HashMap<T, Vec<Vec<T>>>,
-) where
-    T: Hash + Eq + Clone + Ord + Display + Send + Sync,
-{
+fn add_u_to_v_paths_and_append_v_paths_to_u_paths(
+    u: usize,
+    v: usize,
+    paths: &mut IntMap<usize, Vec<Vec<usize>>>,
+) {
     // add u to all paths[v], then *append* them to paths[u]
-    let v_paths: Vec<Vec<T>> = paths
+    let v_paths: Vec<Vec<usize>> = paths
         .get(&v)
         .unwrap()
         .iter()
@@ -513,7 +624,7 @@ pub fn get_all_shortest_paths_involving<T, A>(
     weighted: bool,
 ) -> Vec<ShortestPathInfo<T>>
 where
-    T: Hash + Eq + Clone + Ord + Display + Send + Sync,
+    T: Hash + Eq + Clone + Ord + Debug + Display + Send + Sync,
     A: Clone + Send + Sync,
 {
     let result = all_pairs(graph, weighted, None, false);
@@ -560,9 +671,9 @@ the keys are the names of the target nodes and the values are
 `ShortestPathInfo` objects.
 */
 fn get_shortest_path_infos<T, A>(
-    distances: HashMap<usize, f64>,
-    paths: HashMap<usize, Vec<Vec<usize>>>,
-) -> HashMap<usize, ShortestPathInfo<usize>>
+    distances: IntMap<usize, f64>,
+    paths: IntMap<usize, Vec<Vec<usize>>>,
+) -> IntMap<usize, ShortestPathInfo<usize>>
 where
     T: Hash + Eq + Clone + Ord + Display + Send + Sync,
     A: Clone,
@@ -578,7 +689,7 @@ where
                 },
             )
         })
-        .collect::<HashMap<usize, ShortestPathInfo<usize>>>()
+        .collect()
 }
 
 fn convert_shortest_path_info_index_to_t<T, A>(
@@ -605,7 +716,7 @@ where
 
 fn convert_shortest_path_info_index_map_to_t_map<T, A>(
     graph: &Graph<T, A>,
-    spi_map: HashMap<usize, ShortestPathInfo<usize>>,
+    spi_map: IntMap<usize, ShortestPathInfo<usize>>,
 ) -> HashMap<T, ShortestPathInfo<T>>
 where
     T: Hash + Eq + Clone + Ord + Display + Send + Sync,

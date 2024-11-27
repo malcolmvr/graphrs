@@ -80,9 +80,6 @@ doc_comment!(include_str!("../README.md"));
 mod edge;
 pub use edge::Edge;
 
-mod edge_index;
-pub(crate) use edge_index::EdgeIndex;
-
 mod error;
 pub use error::{Error, ErrorKind};
 
