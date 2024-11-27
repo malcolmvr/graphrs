@@ -1,7 +1,6 @@
 use crate::algorithms::shortest_path::ShortestPathInfo;
 use crate::Graph;
-use nohash::IntMap;
-use orx_priority_queue::*;
+use orx_priority_queue::{DaryHeapWithMap, PriorityQueue, PriorityQueueDecKey};
 use std::collections::HashMap;
 use std::fmt::{Debug, Display};
 use std::hash::Hash;
@@ -15,12 +14,16 @@ where
     T: Hash + Eq + Clone + Ord + Debug + Display + Send + Sync,
     A: Clone + Send + Sync,
 {
-    let mut distances = IntMap::<usize, IntMap<usize, f64>>::default();
-    let mut priority_queue = DaryHeapWithMap::<usize, f64, 4>::new();
+    let number_of_nodes: usize = graph.number_of_nodes();
+    let capacity = graph.number_of_edges() + (number_of_nodes * number_of_nodes);
+    let mut distances = vec![f64::MAX; capacity]; // Vec::<f64>::with_capacity(capacity);
+    // let mut distances = IntMap::<usize, IntMap<usize, f64>>::default();
+    let mut priority_queue: DaryHeapWithMap<usize, f64, 4> = DaryHeapWithMap::<usize, f64, 4>::new();
 
     for node in 0..graph.number_of_nodes() {
         // println!("inserting node {}", node);
-        distances.entry(node).or_default().insert(node, 0.0);
+        set_distance(&mut distances, node, node, number_of_nodes, 0.0);
+        // distances.entry(node).or_default().insert(node, 0.0);
         priority_queue.push(node, 0.0);
     }
 
@@ -31,12 +34,13 @@ where
             let mut updated: bool = false;
             for node in 0..graph.number_of_nodes() {
                 let v_w_edge_weight = get_min_edge_weight(&graph, v, *w, weighted);
-                let node_w_distance = get_distance(&distances, node, *w);
-                let node_v_distance = get_distance(&distances, node, v);
+                let node_w_distance = get_distance(&distances, node, *w, number_of_nodes);
+                let node_v_distance = get_distance(&distances, node, v, number_of_nodes);
                 // println!("  s={} v={} w={} d(s,w)={} d(s,v)={} l(v,w)={:?}", node, v, w, inf(node_w_distance), inf(&node_v_distance), v_w_edge_weight);
                 if node_w_distance > node_v_distance + v_w_edge_weight {
+                    set_distance(&mut distances, node, *w, number_of_nodes, node_v_distance + v_w_edge_weight);
                     // println!("    set d({},{}) to {:?}", node, *w, node_v_distance + v_w_edge_weight);
-                    distances.entry(node).or_default().insert(*w, node_v_distance + v_w_edge_weight);
+                    // distances.entry(node).or_default().insert(*w, );
                     // print_distances(&distances);
                     updated = true;
                 }
@@ -54,12 +58,13 @@ where
         }
     }
 
-    let results = distances
-        .into_iter()
-        .fold(HashMap::new(), |mut acc, (edge_index, distance)| {
-            for (target_index, distance) in distance {
-                let source_node = graph.get_node_by_index(&edge_index).unwrap().name.clone();
-                let target_node = graph.get_node_by_index(&target_index).unwrap().name.clone();
+    let results = (0..number_of_nodes)
+        .flat_map(|u| (0..number_of_nodes).map(move |v| (u, v)))
+        .fold(HashMap::new(), |mut acc, (u, v)| {
+            let distance = get_distance(&distances, u, v, number_of_nodes);
+            if distance < f64::MAX {
+                let source_node = graph.get_node_by_index(&u).unwrap().name.clone();
+                let target_node = graph.get_node_by_index(&v).unwrap().name.clone();
                 let path = vec![source_node.clone(), target_node.clone()];
                 acc.entry(source_node.clone())
                     .or_insert_with(HashMap::new)
@@ -78,11 +83,22 @@ where
 
 }
 
-fn get_distance(distances: &IntMap<usize, IntMap<usize, f64>>, u: usize, v: usize) -> f64 {
-    if !distances.contains_key(&u) {
-        return f64::MAX;
-    }
-    *distances.get(&u).unwrap().get(&v).unwrap_or(&f64::MAX)
+fn get_distance(distances: &Vec<f64>, u: usize, v: usize, number_of_nodes: usize) -> f64 {
+    return distances[get_distance_index(u, v, number_of_nodes)];
+}
+
+fn set_distance(
+    distances: &mut Vec<f64>,
+    u: usize,
+    v: usize,
+    number_of_nodes: usize,
+    distance: f64,
+) {
+    distances[get_distance_index(u, v, number_of_nodes)] = distance;
+}
+
+fn get_distance_index(u: usize, v: usize, number_of_nodes: usize) -> usize {
+    return (v * number_of_nodes) + u;
 }
 /*
 fn inf(f: &f64) -> String {

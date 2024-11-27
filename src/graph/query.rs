@@ -1029,6 +1029,18 @@ where
     }
 
     /**
+    Returns the number of nodes in the graph.
+    ```
+    use graphrs::{generators};
+    let graph = generators::social::karate_club_graph();
+    assert_eq!(graph.number_of_nodes(), 34);
+    ```
+    */
+    pub fn number_of_edges(&self) -> usize {
+        self.edges.len()
+    }
+
+    /**
     Returns the number of edges or sum of all edge weights.
 
     # Arguments
