@@ -129,34 +129,6 @@ where
     Ok(x.into_iter().map(|t| (t.0, t.1.unwrap())).collect())
 }
 
-// TODO: fix the multisource dijkstra - it contains a bug that gives incorrect results
-pub fn all_pairs_ms<T, A>(
-    graph: &Graph<T, A>,
-    weighted: bool,
-    cutoff: Option<f64>,
-    first_only: bool,
-) -> Result<HashMap<T, HashMap<T, ShortestPathInfo<T>>>, Error>
-where
-    T: Hash + Eq + Clone + Ord + Debug + Display + Send + Sync,
-    A: Clone + Send + Sync,
-{
-    let source_indexes = (0..graph.number_of_nodes()).collect::<Vec<_>>();
-    let shortest_paths =
-        dijkstra_multisource_by_index(graph, weighted, source_indexes, None, cutoff, first_only)?;
-    Ok(shortest_paths
-        .into_iter()
-        .map(|(k, v)| {
-            let node_name = graph.get_node_by_index(&k).unwrap().name.clone();
-            let mut inner_map = HashMap::new();
-            inner_map.insert(
-                node_name.clone(),
-                convert_shortest_path_info_index_to_t(graph, v),
-            );
-            (node_name, inner_map)
-        })
-        .collect())
-}
-
 pub fn all_pairs_iter<'a, T, A>(
     graph: &'a Graph<T, A>,
     weighted: bool,
@@ -195,8 +167,7 @@ where
         .into_par_iter()
         .map(move |node_index: usize| {
             let ss_index =
-                single_source_by_index(&graph, weighted, node_index, None, cutoff, first_only)
-                    .unwrap();
+                dijkstra(&graph, weighted, node_index, None, cutoff, first_only).unwrap();
             let node = graph.get_node_by_index(&node_index).unwrap();
             let ss = convert_shortest_path_info_index_map_to_t_map(&graph, ss_index);
             (node.name.clone(), ss)
@@ -255,22 +226,20 @@ where
     T: Hash + Eq + Clone + Ord + Debug + Display + Send + Sync,
     A: Clone + Send + Sync,
 {
-    multi_source(graph, weighted, vec![source], target, cutoff, first_only)
-}
-
-fn single_source_by_index<T, A>(
-    graph: &Graph<T, A>,
-    weighted: bool,
-    source: usize,
-    target: Option<usize>,
-    cutoff: Option<f64>,
-    first_only: bool,
-) -> Result<IntMap<usize, ShortestPathInfo<usize>>, Error>
-where
-    T: Hash + Eq + Clone + Ord + Display + Send + Sync,
-    A: Clone,
-{
-    multi_source_by_index(graph, weighted, vec![source], target, cutoff, first_only)
+    let source_index = graph.get_node_index(&source);
+    let target_index = match target.clone() {
+        Some(t) => Some(graph.get_node_index(&t)),
+        None => None,
+    };
+    let result = dijkstra(
+        graph,
+        weighted,
+        source_index,
+        target_index,
+        cutoff,
+        first_only,
+    )?;
+    Ok(convert_shortest_path_info_index_map_to_t_map(graph, result))
 }
 
 /**
@@ -320,66 +289,36 @@ pub fn multi_source<T, A>(
     target: Option<T>,
     cutoff: Option<f64>,
     first_only: bool,
-) -> Result<HashMap<T, ShortestPathInfo<T>>, Error>
+) -> Result<HashMap<T, HashMap<T, ShortestPathInfo<T>>>, Error>
 where
     T: Hash + Eq + Clone + Ord + Display + Send + Sync,
     A: Clone + Send + Sync,
 {
-    let sources_indexes = sources
-        .iter()
-        .map(|s| graph.get_node_index(s))
-        .collect::<Vec<_>>();
     let target_index = match target.clone() {
         Some(t) => Some(graph.get_node_index(&t)),
         None => None,
     };
-    let shortest_path_infos = dijkstra_multisource_by_index(
-        graph,
-        weighted,
-        sources_indexes,
-        target_index,
-        cutoff,
-        first_only,
-    );
+    let shortest_path_infos: Result<HashMap<T, HashMap<T, ShortestPathInfo<T>>>, Error> = sources
+        .into_iter()
+        .map(|s| {
+            let source = graph.get_node_index(&s);
+            let result = dijkstra(graph, weighted, source, target_index, cutoff, first_only);
+            result.map(|res| {
+                let result_t = convert_shortest_path_info_index_map_to_t_map(graph, res);
+                (s, result_t)
+            })
+        })
+        .collect();
     match shortest_path_infos {
         Err(e) => Err(e),
-        Ok(spis) => Ok(spis
-            .into_iter()
-            .filter(|(k, _v)| target.is_none() || *k == target_index.unwrap())
-            .map(|(k, v)| {
-                (
-                    graph.get_node_by_index(&k).unwrap().name.clone(),
-                    convert_shortest_path_info_index_to_t(&graph, v),
-                )
-            })
-            .collect::<HashMap<T, ShortestPathInfo<T>>>()),
+        Ok(spis) => Ok(spis),
     }
 }
 
-pub fn multi_source_by_index<T, A>(
+fn dijkstra<T, A>(
     graph: &Graph<T, A>,
     weighted: bool,
-    sources: Vec<usize>,
-    target: Option<usize>,
-    cutoff: Option<f64>,
-    first_only: bool,
-) -> Result<IntMap<usize, ShortestPathInfo<usize>>, Error>
-where
-    T: Hash + Eq + Clone + Ord + Display + Send + Sync,
-    A: Clone,
-{
-    dijkstra_multisource_by_index(graph, weighted, sources, target, cutoff, first_only)
-}
-
-/**
-Uses Dijkstra's algorithm to find shortest weighted paths.
-This is a private function that does all the work of finding the
-shortest paths. All the public functions in this module call this one.
-*/
-fn dijkstra_multisource_by_index<T, A>(
-    graph: &Graph<T, A>,
-    weighted: bool,
-    sources: Vec<usize>,
+    source: usize,
     target: Option<usize>,
     cutoff: Option<f64>,
     first_only: bool,
@@ -400,59 +339,48 @@ where
         false => 1.0,
     };
 
-    let mut paths: IntMap<usize, Vec<Vec<usize>>> = sources
-        .iter()
-        .map(|s| (s.clone(), vec![vec![s.clone()]]))
-        .collect();
-    let mut dist = IntMap::<usize, f64>::default();
-    let mut seen = IntMap::<usize, f64>::default();
+    let mut paths: Vec<Vec<Vec<usize>>> = vec![vec![]; graph.number_of_nodes()];
+    paths[source] = vec![vec![source]];
+    let mut dist = vec![f64::MIN; graph.number_of_nodes()];
+    let mut seen = vec![f64::MIN; graph.number_of_nodes()];
     let mut fringe = BinaryHeap::new();
     let mut count = 0;
 
-    for source in sources {
-        seen.insert(source, 0.0);
-        fringe.push(FringeNode {
-            node_index: source,
-            count: 0,
-            distance: -0.0,
-        });
-    }
+    seen[source] = 0.0;
+    fringe.push(FringeNode {
+        node_index: source,
+        count: 0,
+        distance: -0.0,
+    });
 
     while let Some(fringe_item) = fringe.pop() {
         let d = -fringe_item.distance;
         let v = fringe_item.node_index;
-        // println!("    v: {}", v);
-        if dist.contains_key(&v) {
+        if dist[v] != f64::MIN {
             continue;
         }
-        dist.insert(v, d);
+        dist[v] = d;
         if target.as_ref() == Some(&v) {
             break;
         }
         for u in graph.get_successors_or_neighbors_by_index(&v) {
-            // println!("        u: {}", u);
             let cost = get_cost(v, u);
-            // println!("            cost: {}", cost);
-            let vu_dist = dist.get(&v).unwrap() + cost;
-            // println!("            vu_dist: {}", vu_dist);
+            let vu_dist = dist[v] + cost;
             if cutoff.map_or(false, |c| vu_dist > c) {
-                // println!("            cutoff continue");
                 continue;
             }
-            if let Some(&u_dist) = dist.get(&u) {
-                // println!("            u_dist = dist.get(u)");
+            if dist[u] != f64::MIN {
+                let u_dist = dist[u];
                 if vu_dist < u_dist {
                     return Err(get_contractory_paths_error());
                 }
-            } else if !seen.contains_key(&u) || vu_dist < *seen.get(&u).unwrap() {
-                // println!("            !seen.contains_key(u)");
+            } else if seen[u] != f64::MIN || vu_dist < seen[u] {
                 seen.insert(u, vu_dist);
                 push_fringe_node(&mut count, &mut fringe, u, vu_dist);
-                let mut new_paths_v = paths.get(&v).cloned().unwrap_or_default();
+                let mut new_paths_v = paths[v].clone();
                 new_paths_v.iter_mut().for_each(|pv| pv.push(u));
-                paths.insert(u, new_paths_v);
-            } else if !first_only && vu_dist == *seen.get(&u).unwrap() {
-                // println!("            !first_only");
+                paths[u] = new_paths_v;
+            } else if !first_only && vu_dist == seen[u] {
                 push_fringe_node(&mut count, &mut fringe, u, vu_dist);
                 add_u_to_v_paths_and_append_v_paths_to_u_paths(u, v, &mut paths);
             }
@@ -461,79 +389,6 @@ where
 
     Ok(get_shortest_path_infos::<T, A>(dist, paths))
 }
-
-/*
-fn dijkstra<T, A>(
-    graph: &Graph<T, A>,
-    src: usize,
-    pq: &mut BinaryHeap<FringeNode<usize>>,
-    S: &mut [i32],
-    P: &mut [i32],
-    P_start: &mut [i32],
-    P_len: &mut [i32],
-    sigma: &mut [f64],
-    D: &mut [f64],
-    seen: &mut [f64],
-) -> usize
-where
-    T: Hash + Eq + Clone + Ord + Display + Send + Sync,
-    A: Clone,
-{
-    let V = graph.V;
-
-    pq.count = 0;
-
-    for u in 0..V {
-        pq.id[u] = -1;
-        S[u] = -1;
-        sigma[u] = 0.0;
-        D[u] = f64::INFINITY;
-        seen[u] = f64::INFINITY;
-        P_len[u] = 0;
-    }
-    sigma[src] = 1.0;
-    seen[src] = 0.0;
-    pq.push(src, src, 0.0);
-    let mut countS = 0;
-
-    while pq.count > 0 {
-        let top = pq.pop().unwrap();
-        let pred = top.pred;
-        let v = top.v;
-        let dist = top.dist;
-
-        if D[v] != f64::INFINITY {
-            continue;
-        }
-
-        sigma[v] += sigma[pred];
-        S[countS] = v as i32;
-        countS += 1;
-        D[v] = dist;
-
-        let mut cur = graph.array[v].next.as_ref();
-        while let Some(node) = cur {
-            let w = node.dest;
-            let weight = node.weight;
-            let vw_dist = dist + weight;
-
-            if D[w] == f64::INFINITY && (seen[w] == f64::INFINITY || vw_dist < seen[w]) {
-                seen[w] = vw_dist;
-                pq.push(v, w, vw_dist);
-                sigma[w] = 0.0;
-                P[P_start[w] as usize] = v as i32;
-                P_len[w] = 1;
-            } else if vw_dist == seen[w] {
-                sigma[w] += sigma[v];
-                P[(P_start[w] + P_len[w]) as usize] = v as i32;
-                P_len[w] += 1;
-            }
-            cur = node.next.as_ref();
-        }
-    }
-    countS
-}
- */
 
 /// Returns the `Error` object for a contradictory-paths error.
 #[inline]
@@ -569,12 +424,10 @@ lead to `v` to the paths that lead to `u`.
 fn add_u_to_v_paths_and_append_v_paths_to_u_paths(
     u: usize,
     v: usize,
-    paths: &mut IntMap<usize, Vec<Vec<usize>>>,
+    paths: &mut Vec<Vec<Vec<usize>>>,
 ) {
     // add u to all paths[v], then *append* them to paths[u]
-    let v_paths: Vec<Vec<usize>> = paths
-        .get(&v)
-        .unwrap()
+    let v_paths: Vec<Vec<usize>> = paths[v]
         .iter()
         .map(|p| {
             let mut x = p.clone();
@@ -582,9 +435,8 @@ fn add_u_to_v_paths_and_append_v_paths_to_u_paths(
             x
         })
         .collect();
-    let u_paths = paths.get_mut(&u).unwrap();
     for v_path in v_paths {
-        u_paths.push(v_path);
+        paths[u].push(v_path);
     }
 }
 
@@ -666,13 +518,13 @@ where
 }
 
 /**
-Zips the `distances` and the `paths` together into a `HashMap` where
+Zips the `distances` and the `paths` together into an `IntMap` where
 the keys are the names of the target nodes and the values are
 `ShortestPathInfo` objects.
 */
 fn get_shortest_path_infos<T, A>(
-    distances: IntMap<usize, f64>,
-    paths: IntMap<usize, Vec<Vec<usize>>>,
+    distances: Vec<f64>,
+    paths: Vec<Vec<Vec<usize>>>,
 ) -> IntMap<usize, ShortestPathInfo<usize>>
 where
     T: Hash + Eq + Clone + Ord + Display + Send + Sync,
@@ -680,12 +532,14 @@ where
 {
     distances
         .into_iter()
+        .enumerate()
+        .filter(|(_k, v)| *v != f64::MIN)
         .map(|(k, v)| {
             (
                 k.clone(),
                 ShortestPathInfo {
                     distance: v,
-                    paths: paths.get(&k).unwrap().clone(),
+                    paths: paths[k].clone(),
                 },
             )
         })
