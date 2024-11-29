@@ -239,6 +239,14 @@ where
         cutoff,
         first_only,
     )?;
+    // let result = dijkstra_multisource_by_index(
+    //     graph,
+    //     weighted,
+    //     vec![source_index],
+    //     target_index,
+    //     cutoff,
+    //     first_only,
+    // )?;
     Ok(convert_shortest_path_info_index_map_to_t_map(graph, result))
 }
 
@@ -275,7 +283,7 @@ graph.add_edges(vec![
 ]);
 
 let shortest_paths = dijkstra::multi_source(&graph, true, vec!["n1", "n2"], Some("n3"), None, false);
-assert_eq!(shortest_paths.unwrap().get("n3").unwrap().distance, 1.1);
+assert_eq!(shortest_paths.unwrap().get("n2").unwrap().get("n3").unwrap().distance, 1.1);
 ```
 
 # References
@@ -327,6 +335,8 @@ where
     T: Hash + Eq + Clone + Ord + Display + Send + Sync,
     A: Clone,
 {
+    // println!("source: {:?}", source);
+
     if weighted {
         graph.ensure_weighted()?;
     }
@@ -341,8 +351,8 @@ where
 
     let mut paths: Vec<Vec<Vec<usize>>> = vec![vec![]; graph.number_of_nodes()];
     paths[source] = vec![vec![source]];
-    let mut dist = vec![f64::MIN; graph.number_of_nodes()];
-    let mut seen = vec![f64::MIN; graph.number_of_nodes()];
+    let mut dist = vec![f64::MAX; graph.number_of_nodes()];
+    let mut seen = vec![f64::MAX; graph.number_of_nodes()];
     let mut fringe = BinaryHeap::new();
     let mut count = 0;
 
@@ -356,7 +366,8 @@ where
     while let Some(fringe_item) = fringe.pop() {
         let d = -fringe_item.distance;
         let v = fringe_item.node_index;
-        if dist[v] != f64::MIN {
+        // println!("    v: {}", v);
+        if dist[v] != f64::MAX {
             continue;
         }
         dist[v] = d;
@@ -364,18 +375,22 @@ where
             break;
         }
         for u in graph.get_successors_or_neighbors_by_index(&v) {
+            // println!("        u: {}", u);
             let cost = get_cost(v, u);
+            // println!("            cost: {}", cost);
             let vu_dist = dist[v] + cost;
+            // println!("            vu_dist: {}", vu_dist);
             if cutoff.map_or(false, |c| vu_dist > c) {
                 continue;
             }
-            if dist[u] != f64::MIN {
+            if dist[u] != f64::MAX {
                 let u_dist = dist[u];
                 if vu_dist < u_dist {
                     return Err(get_contractory_paths_error());
                 }
-            } else if seen[u] != f64::MIN || vu_dist < seen[u] {
-                seen.insert(u, vu_dist);
+            } else if vu_dist < seen[u] {
+                // println!("            !seen.contains_key(u)");
+                seen[u] = vu_dist;
                 push_fringe_node(&mut count, &mut fringe, u, vu_dist);
                 let mut new_paths_v = paths[v].clone();
                 new_paths_v.iter_mut().for_each(|pv| pv.push(u));
@@ -533,7 +548,7 @@ where
     distances
         .into_iter()
         .enumerate()
-        .filter(|(_k, v)| *v != f64::MIN)
+        .filter(|(_k, v)| *v != f64::MAX)
         .map(|(k, v)| {
             (
                 k.clone(),
@@ -585,4 +600,137 @@ where
             )
         })
         .collect()
+}
+
+/// TESTING
+
+fn dijkstra_multisource_by_index<T, A>(
+    graph: &Graph<T, A>,
+    weighted: bool,
+    sources: Vec<usize>,
+    target: Option<usize>,
+    cutoff: Option<f64>,
+    first_only: bool,
+) -> Result<IntMap<usize, ShortestPathInfo<usize>>, Error>
+where
+    T: Hash + Eq + Clone + Ord + Display + Send + Sync,
+    A: Clone,
+{
+    println!("source: {:?}", sources[0]);
+    if weighted {
+        graph.ensure_weighted()?;
+    }
+
+    let get_cost = |u, v| match weighted {
+        true => match graph.specs.multi_edges {
+            false => get_cost_single(graph, u, v),
+            true => get_cost_multi(graph, u, v),
+        },
+        false => 1.0,
+    };
+
+    let mut paths: IntMap<usize, Vec<Vec<usize>>> = sources
+        .iter()
+        .map(|s| (s.clone(), vec![vec![s.clone()]]))
+        .collect();
+    let mut dist = IntMap::<usize, f64>::default();
+    let mut seen = IntMap::<usize, f64>::default();
+    let mut fringe = BinaryHeap::new();
+    let mut count = 0;
+
+    for source in sources {
+        seen.insert(source, 0.0);
+        fringe.push(FringeNode {
+            node_index: source,
+            count: 0,
+            distance: -0.0,
+        });
+    }
+
+    while let Some(fringe_item) = fringe.pop() {
+        let d = -fringe_item.distance;
+        let v = fringe_item.node_index;
+        println!("    v: {}", v);
+        if dist.contains_key(&v) {
+            continue;
+        }
+        dist.insert(v, d);
+        if target.as_ref() == Some(&v) {
+            break;
+        }
+        for u in graph.get_successors_or_neighbors_by_index(&v) {
+            println!("        u: {}", u);
+            let cost = get_cost(v, u);
+            println!("            cost: {}", cost);
+            let vu_dist = dist.get(&v).unwrap() + cost;
+            println!("            vu_dist: {}", vu_dist);
+            if cutoff.map_or(false, |c| vu_dist > c) {
+                // println!("            cutoff continue");
+                continue;
+            }
+            if let Some(&u_dist) = dist.get(&u) {
+                // println!("            u_dist = dist.get(u)");
+                if vu_dist < u_dist {
+                    return Err(get_contractory_paths_error());
+                }
+            } else if !seen.contains_key(&u) || vu_dist < *seen.get(&u).unwrap() {
+                println!("            !seen.contains_key(u)");
+                seen.insert(u, vu_dist);
+                push_fringe_node(&mut count, &mut fringe, u, vu_dist);
+                let mut new_paths_v = paths.get(&v).cloned().unwrap_or_default();
+                new_paths_v.iter_mut().for_each(|pv| pv.push(u));
+                paths.insert(u, new_paths_v);
+            } else if !first_only && vu_dist == *seen.get(&u).unwrap() {
+                // println!("            !first_only");
+                push_fringe_node(&mut count, &mut fringe, u, vu_dist);
+                add_u_to_v_paths_and_append_v_paths_to_u_paths_old(u, v, &mut paths);
+            }
+        }
+    }
+
+    Ok(get_shortest_path_infos_old::<T, A>(dist, paths))
+}
+
+fn get_shortest_path_infos_old<T, A>(
+    distances: IntMap<usize, f64>,
+    paths: IntMap<usize, Vec<Vec<usize>>>,
+) -> IntMap<usize, ShortestPathInfo<usize>>
+where
+    T: Hash + Eq + Clone + Ord + Display + Send + Sync,
+    A: Clone,
+{
+    distances
+        .into_iter()
+        .map(|(k, v)| {
+            (
+                k.clone(),
+                ShortestPathInfo {
+                    distance: v,
+                    paths: paths.get(&k).unwrap().clone(),
+                },
+            )
+        })
+        .collect()
+}
+
+fn add_u_to_v_paths_and_append_v_paths_to_u_paths_old(
+    u: usize,
+    v: usize,
+    paths: &mut IntMap<usize, Vec<Vec<usize>>>,
+) {
+    // add u to all paths[v], then *append* them to paths[u]
+    let v_paths: Vec<Vec<usize>> = paths
+        .get(&v)
+        .unwrap()
+        .iter()
+        .map(|p| {
+            let mut x = p.clone();
+            x.push(u.clone());
+            x
+        })
+        .collect();
+    let u_paths = paths.get_mut(&u).unwrap();
+    for v_path in v_paths {
+        u_paths.push(v_path);
+    }
 }
