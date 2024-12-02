@@ -1,7 +1,7 @@
 use crate::algorithms::shortest_path::ShortestPathInfo;
 use crate::{Error, ErrorKind, Graph, Node};
 use nohash::IntMap;
-use rayon::prelude::*;
+use rayon::prelude::{IntoParallelIterator, ParallelIterator};
 use std::cmp::Ordering;
 use std::collections::{BinaryHeap, HashMap};
 use std::fmt::{Debug, Display};
@@ -106,6 +106,10 @@ where
     T: Hash + Eq + Clone + Ord + Debug + Display + Send + Sync,
     A: Clone + Send + Sync,
 {
+    if weighted {
+        graph.ensure_weighted()?;
+    }
+
     let x = graph
         .get_all_nodes()
         .into_iter()
@@ -226,9 +230,9 @@ where
     T: Hash + Eq + Clone + Ord + Debug + Display + Send + Sync,
     A: Clone + Send + Sync,
 {
-    let source_index = graph.get_node_index(&source);
+    let source_index = graph.get_node_index(&source)?;
     let target_index = match target.clone() {
-        Some(t) => Some(graph.get_node_index(&t)),
+        Some(t) => Some(graph.get_node_index(&t)?),
         None => None,
     };
     let result = dijkstra(
@@ -239,14 +243,6 @@ where
         cutoff,
         first_only,
     )?;
-    // let result = dijkstra_multisource_by_index(
-    //     graph,
-    //     weighted,
-    //     vec![source_index],
-    //     target_index,
-    //     cutoff,
-    //     first_only,
-    // )?;
     Ok(convert_shortest_path_info_index_map_to_t_map(graph, result))
 }
 
@@ -303,13 +299,13 @@ where
     A: Clone + Send + Sync,
 {
     let target_index = match target.clone() {
-        Some(t) => Some(graph.get_node_index(&t)),
+        Some(t) => Some(graph.get_node_index(&t)?),
         None => None,
     };
     let shortest_path_infos: Result<HashMap<T, HashMap<T, ShortestPathInfo<T>>>, Error> = sources
         .into_iter()
         .map(|s| {
-            let source = graph.get_node_index(&s);
+            let source = graph.get_node_index(&s)?;
             let result = dijkstra(graph, weighted, source, target_index, cutoff, first_only);
             result.map(|res| {
                 let result_t = convert_shortest_path_info_index_map_to_t_map(graph, res);
@@ -337,18 +333,6 @@ where
 {
     // println!("source: {:?}", source);
 
-    if weighted {
-        graph.ensure_weighted()?;
-    }
-
-    let get_cost = |u, v| match weighted {
-        true => match graph.specs.multi_edges {
-            false => get_cost_single(graph, u, v),
-            true => get_cost_multi(graph, u, v),
-        },
-        false => 1.0,
-    };
-
     let mut paths: Vec<Vec<Vec<usize>>> = vec![vec![]; graph.number_of_nodes()];
     paths[source] = vec![vec![source]];
     let mut dist = vec![f64::MAX; graph.number_of_nodes()];
@@ -374,9 +358,13 @@ where
         if target.as_ref() == Some(&v) {
             break;
         }
-        for u in graph.get_successors_or_neighbors_by_index(&v) {
+        for adj in graph.get_successor_nodes_by_index(&v) {
+            let u = adj.node_index;
             // println!("        u: {}", u);
-            let cost = get_cost(v, u);
+            let cost = match weighted {
+                true => adj.weight,
+                false => 1.0,
+            };
             // println!("            cost: {}", cost);
             let vu_dist = dist[v] + cost;
             // println!("            vu_dist: {}", vu_dist);
@@ -427,7 +415,7 @@ where
     fringe.push(FringeNode {
         node_index: u,
         count: *count,
-        distance: -vu_dist,
+        distance: -vu_dist, // negative because BinaryHeap is a max heap
     });
 }
 
@@ -602,8 +590,7 @@ where
         .collect()
 }
 
-/// TESTING
-
+/*
 fn dijkstra_multisource_by_index<T, A>(
     graph: &Graph<T, A>,
     weighted: bool,
@@ -734,3 +721,4 @@ fn add_u_to_v_paths_and_append_v_paths_to_u_paths_old(
         u_paths.push(v_path);
     }
 }
+*/

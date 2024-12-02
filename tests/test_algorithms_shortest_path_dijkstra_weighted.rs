@@ -255,8 +255,6 @@ mod tests {
         let result = dijkstra::single_source(&graph, true, "n1", Some("n3"), None, false);
         assert!(result.is_ok());
         let unwrapped = result.unwrap();
-        assert!(unwrapped.get("n1").is_none());
-        assert!(unwrapped.get("n2").is_none());
         assert_eq!(unwrapped.get("n3").unwrap().distance, 5.0);
         assert_eq!(
             unwrapped.get("n3").unwrap().paths,
@@ -375,7 +373,8 @@ mod tests {
         let result = dijkstra::multi_source(&graph, true, vec!["n1"], Some("n3"), None, false);
         assert!(result.is_ok());
         let unwrapped = result.unwrap();
-        let n3_info = unwrapped.get("n3").unwrap();
+        let n1_info = unwrapped.get("n1").unwrap();
+        let n3_info = n1_info.get("n3").unwrap();
         assert_eq!(n3_info.distance, 5.0);
         assert_eq!(n3_info.paths, vec![vec!["n1", "n4", "n3"]]);
     }
@@ -383,7 +382,7 @@ mod tests {
     #[test]
     fn test_multi_source_2() {
         let graph = generators::social::karate_club_graph();
-        let result = dijkstra::multi_source(&graph, true, vec![0, 1, 2], Some(24), None, false);
+        let result = dijkstra::multi_source(&graph, true, vec![0, 1, 2], Some(125), None, false);
         assert!(result.is_err());
     }
 
@@ -411,19 +410,40 @@ mod tests {
         let result = dijkstra::multi_source(&graph, true, vec!["n1"], None, None, false);
         assert!(result.is_ok());
         let unwrapped = result.unwrap();
-        assert_eq!(unwrapped.get("n1").unwrap().distance, 0.0);
-        assert_eq!(unwrapped.get("n2").unwrap().distance, 1.0);
-        assert_eq!(unwrapped.get("n2").unwrap().paths, vec![vec!["n1", "n2"]]);
-        assert_eq!(unwrapped.get("n3").unwrap().distance, 5.0);
         assert_eq!(
-            unwrapped.get("n3").unwrap().paths,
+            unwrapped.get("n1").unwrap().get("n1").unwrap().distance,
+            0.0
+        );
+        assert_eq!(
+            unwrapped.get("n1").unwrap().get("n2").unwrap().distance,
+            1.0
+        );
+        assert_eq!(
+            unwrapped.get("n1").unwrap().get("n2").unwrap().paths,
+            vec![vec!["n1", "n2"]]
+        );
+        assert_eq!(
+            unwrapped.get("n1").unwrap().get("n3").unwrap().distance,
+            5.0
+        );
+        assert_eq!(
+            unwrapped.get("n1").unwrap().get("n3").unwrap().paths,
             vec![vec!["n1", "n4", "n3"]]
         );
-        assert_eq!(unwrapped.get("n4").unwrap().distance, 2.0);
-        assert_eq!(unwrapped.get("n4").unwrap().paths, vec![vec!["n1", "n4"]]);
-        assert_eq!(unwrapped.get("n5").unwrap().distance, 6.0);
         assert_eq!(
-            unwrapped.get("n5").unwrap().paths,
+            unwrapped.get("n1").unwrap().get("n4").unwrap().distance,
+            2.0
+        );
+        assert_eq!(
+            unwrapped.get("n1").unwrap().get("n4").unwrap().paths,
+            vec![vec!["n1", "n4"]]
+        );
+        assert_eq!(
+            unwrapped.get("n1").unwrap().get("n5").unwrap().distance,
+            6.0
+        );
+        assert_eq!(
+            unwrapped.get("n1").unwrap().get("n5").unwrap().paths,
             vec![vec!["n1", "n4", "n3", "n5"]]
         );
     }

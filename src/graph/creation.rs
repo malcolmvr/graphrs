@@ -1,7 +1,7 @@
 use super::Graph;
 use crate::{
     Edge, EdgeDedupeStrategy, Error, ErrorKind, GraphSpecs, MissingNodeStrategy, Node,
-    SelfLoopsFalseStrategy,
+    SelfLoopsFalseStrategy, Successor,
 };
 use nohash::{IntMap, IntSet};
 use std::collections::{HashMap, HashSet};
@@ -79,9 +79,10 @@ where
         let v_node_index = *self.nodes_map.get(&edge.v).unwrap();
 
         // check for duplicate edges
+        let edge_already_exists = self.get_edge_by_indexes(u_node_index, v_node_index).is_ok();
         if self.specs.edge_dedupe_strategy == EdgeDedupeStrategy::Error
             && !self.specs.multi_edges
-            && self.get_edge_by_indexes(u_node_index, v_node_index).is_ok()
+            && edge_already_exists
         {
             return Err(Error {
                 kind: ErrorKind::DuplicateEdge,
@@ -94,38 +95,6 @@ where
             });
         }
 
-        // add successors and predecessors
-        self.successors
-            .entry(edge.u.clone())
-            .or_default()
-            .insert(edge.v.clone());
-        self.successors_map
-            .entry(u_node_index)
-            .or_default()
-            .insert(v_node_index);
-        match self.specs.directed {
-            true => {
-                self.predecessors
-                    .entry(edge.v.clone())
-                    .or_default()
-                    .insert(edge.u.clone());
-                self.predecessors_map
-                    .entry(v_node_index)
-                    .or_default()
-                    .insert(u_node_index);
-            }
-            false => {
-                self.successors
-                    .entry(edge.v.clone())
-                    .or_default()
-                    .insert(edge.u.clone());
-                self.successors_map
-                    .entry(v_node_index)
-                    .or_default()
-                    .insert(u_node_index);
-            }
-        }
-
         // if undirected, order the edge as that it can be easily queried for
         let ordered = match self.specs.directed {
             false => edge.clone().ordered().into(),
@@ -136,6 +105,64 @@ where
                 false => (u_node_index, v_node_index),
                 true => (v_node_index, u_node_index),
             };
+
+        // add to the successors HashMap
+        self.successors
+            .entry(edge.u.clone())
+            .or_default()
+            .insert(edge.v.clone());
+
+        // add to the successors node index IntMap
+        self.successors_map
+            .entry(u_node_index)
+            .or_default()
+            .insert(v_node_index);
+
+        // add to the successors vec
+        add_to_adjacency_vec(
+            &mut self.successors_vec,
+            ordered_edge_u,
+            ordered_edge_v,
+            edge.weight,
+            edge_already_exists,
+        );
+
+        match self.specs.directed {
+            true => {
+                self.predecessors
+                    .entry(edge.v.clone())
+                    .or_default()
+                    .insert(edge.u.clone());
+                self.predecessors_map
+                    .entry(v_node_index)
+                    .or_default()
+                    .insert(u_node_index);
+                add_to_adjacency_vec(
+                    &mut self.predecessors_vec,
+                    ordered_edge_v,
+                    ordered_edge_u,
+                    edge.weight,
+                    edge_already_exists,
+                );
+            }
+            false => {
+                self.successors
+                    .entry(edge.v.clone())
+                    .or_default()
+                    .insert(edge.u.clone());
+                self.successors_map
+                    .entry(v_node_index)
+                    .or_default()
+                    .insert(u_node_index);
+                add_to_adjacency_vec(
+                    &mut self.successors_vec,
+                    ordered_edge_v,
+                    ordered_edge_u,
+                    edge.weight,
+                    edge_already_exists,
+                );
+            }
+        }
 
         // add edge
         match self.specs.multi_edges {
@@ -290,7 +317,7 @@ where
     {
         match self.nodes_map.contains_key(&node.name) {
             true => {
-                let node_index = self.get_node_index(&node.name);
+                let node_index = self.get_node_index(&node.name).unwrap();
                 self.nodes_vec[node_index] = node.clone();
                 self.nodes_map_rev.insert(node_index, node.clone());
             }
@@ -308,6 +335,8 @@ where
                     .insert(node_index, IntSet::<usize>::default());
                 self.predecessors_map
                     .insert(node_index, IntSet::<usize>::default());
+                self.successors_vec.push(vec![]);
+                self.predecessors_vec.push(vec![]);
             }
         }
     }
@@ -356,6 +385,7 @@ where
     */
     pub fn new(specs: GraphSpecs) -> Graph<T, A> {
         Graph {
+            adjacency_matrix: None,
             nodes_map: HashMap::<T, usize>::default(),
             nodes_map_rev: IntMap::<usize, Arc<Node<T, A>>>::default(),
             nodes_vec: Vec::<Arc<Node<T, A>>>::new(),
@@ -364,8 +394,10 @@ where
             specs,
             successors: HashMap::<T, HashSet<T>>::new(),
             successors_map: IntMap::<usize, IntSet<usize>>::default(),
+            successors_vec: vec![],
             predecessors: HashMap::<T, HashSet<T>>::new(),
             predecessors_map: IntMap::<usize, IntSet<usize>>::default(),
+            predecessors_vec: vec![],
         }
     }
 
@@ -422,5 +454,98 @@ where
             Err(e) => Err(e),
             Ok(_) => Ok(graph),
         }
+    }
+}
+
+fn add_to_adjacency_vec(
+    adjacency_vec: &mut Vec<Vec<Successor>>,
+    u_node_index: usize,
+    v_node_index: usize,
+    weight: f64,
+    edge_already_exists: bool,
+) {
+    match edge_already_exists {
+        true => {
+            let index = adjacency_vec[u_node_index]
+                .iter()
+                .position(|succ| succ.node_index == v_node_index)
+                .unwrap();
+            if weight < adjacency_vec[u_node_index][index].weight {
+                adjacency_vec[u_node_index][index] = Successor::new(v_node_index, weight);
+            }
+        }
+        false => adjacency_vec[u_node_index].push(Successor::new(v_node_index, weight)),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+
+    use super::*;
+    use crate::{Edge, Graph, GraphSpecs};
+
+    #[test]
+    fn test_successors_vec_directed() {
+        let edges = vec![
+            Edge::with_weight("n0", "n1", 1.1),
+            Edge::with_weight("n0", "n2", 1.3),
+            Edge::with_weight("n0", "n3", 1.4),
+            Edge::with_weight("n3", "n2", 1.5),
+        ];
+        let graph: Graph<&str, ()> =
+            Graph::new_from_nodes_and_edges(vec![], edges, GraphSpecs::directed_create_missing())
+                .unwrap();
+        assert_eq!(
+            graph.successors_vec,
+            vec![
+                vec![
+                    Successor::new(1, 1.1),
+                    Successor::new(2, 1.3),
+                    Successor::new(3, 1.4)
+                ],
+                vec![],
+                vec![],
+                vec![Successor::new(2, 1.5)],
+            ]
+        );
+        assert_eq!(
+            graph.predecessors_vec,
+            vec![
+                vec![],
+                vec![Successor::new(0, 1.1)],
+                vec![Successor::new(0, 1.3), Successor::new(3, 1.5)],
+                vec![Successor::new(0, 1.4)],
+            ]
+        );
+    }
+
+    #[test]
+    fn test_successors_vec_undirected() {
+        let edges = vec![
+            Edge::with_weight("n0", "n1", 1.1),
+            Edge::with_weight("n0", "n2", 1.3),
+            Edge::with_weight("n0", "n3", 1.4),
+            Edge::with_weight("n3", "n2", 1.5),
+        ];
+        let graph: Graph<&str, ()> =
+            Graph::new_from_nodes_and_edges(vec![], edges, GraphSpecs::undirected_create_missing())
+                .unwrap();
+        assert_eq!(
+            graph.successors_vec,
+            vec![
+                vec![
+                    Successor::new(1, 1.1),
+                    Successor::new(2, 1.3),
+                    Successor::new(3, 1.4)
+                ],
+                vec![Successor::new(0, 1.1)],
+                vec![Successor::new(0, 1.3), Successor::new(3, 1.5)],
+                vec![Successor::new(0, 1.4), Successor::new(2, 1.5)],
+            ]
+        );
+        assert_eq!(
+            graph.predecessors_vec,
+            vec![vec![], vec![], vec![], vec![],]
+        );
     }
 }

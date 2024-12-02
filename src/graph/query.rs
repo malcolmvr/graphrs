@@ -1,5 +1,6 @@
 use super::Graph;
-use crate::{ext::vec::VecExt, Edge, Error, ErrorKind, Node};
+use crate::node;
+use crate::{ext::vec::VecExt, Edge, Error, ErrorKind, Node, Successor};
 use itertools::Itertools;
 use nohash::BuildNoHashHasher;
 use std::collections::{HashMap, HashSet};
@@ -198,13 +199,15 @@ where
             });
         }
 
-        let u_node_index = self.get_node_index(&u);
-        let v_node_index = self.get_node_index(&v);
+        let u_node_index = self.get_node_index(&u).unwrap();
+        let v_node_index = self.get_node_index(&v).unwrap();
 
         self.get_edge_by_indexes(u_node_index, v_node_index)
     }
 
-    pub(crate) fn get_edge_by_indexes(&self, u: usize, v: usize) -> Result<&Edge<T, A>, Error>
+    // TODO: stuff
+    // pub(crate) fn get_edge_by_indexes(&self, u: usize, v: usize) -> Result<&Edge<T, A>, Error>
+    pub fn get_edge_by_indexes(&self, u: usize, v: usize) -> Result<&Edge<T, A>, Error>
     where
         T: Hash + Eq + Clone + Ord,
         A: Clone,
@@ -279,8 +282,8 @@ where
             });
         }
 
-        let u_node_index = self.get_node_index(&u);
-        let v_node_index = self.get_node_index(&v);
+        let u_node_index = self.get_node_index(&u).unwrap();
+        let v_node_index = self.get_node_index(&v).unwrap();
 
         self.get_edges_by_indexes(u_node_index, v_node_index)
     }
@@ -642,7 +645,7 @@ where
             });
         }
 
-        let node_index = self.get_node_index(&node_name);
+        let node_index = self.get_node_index(&node_name).unwrap();
 
         let pred_nodes = self.get_predecessor_nodes_by_index(&node_index);
         let succ_nodes = self.get_successor_nodes_by_index(&node_index);
@@ -650,22 +653,14 @@ where
         let all_nodes = pred_nodes
             .into_iter()
             .chain(succ_nodes)
-            .sorted_by(|a, b| Ord::cmp(&a, &b))
-            .dedup_by(|a, b| a == b)
-            .map(|index| self.get_node_by_index(index).unwrap())
+            .sorted_by(|a, b| Ord::cmp(&a.node_index, &b.node_index))
+            .dedup_by(|a, b| a.node_index == b.node_index)
+            .map(|adj| self.get_node_by_index(&adj.node_index).unwrap())
             .collect();
 
         Ok(all_nodes)
     }
 
-    fn get_neighbor_nodes_by_index(
-        &self,
-        node_index: &usize,
-    ) -> HashSet<usize, BuildNoHashHasher<usize>> {
-        let pred_nodes = self.get_predecessor_nodes_by_index(node_index);
-        let succ_nodes = self.get_successor_nodes_by_index(node_index);
-        pred_nodes.union(&succ_nodes).cloned().collect()
-    }
     /**
     Gets the `Node` for the specified node `name`.
 
@@ -691,7 +686,7 @@ where
     {
         match self.nodes_map.contains_key(&name) {
             true => {
-                let node_index = self.get_node_index(&name);
+                let node_index = self.get_node_index(&name).unwrap();
                 self.get_node_by_index(&node_index)
             }
             false => None,
@@ -789,7 +784,7 @@ where
                 message: format!("Requested node '{}' was not found in the graph", node_name),
             });
         }
-        let node_index = self.get_node_index(&node_name);
+        let node_index = self.get_node_index(&node_name).unwrap();
         let pred = self.predecessors_map.get(&node_index);
         match pred {
             None => Ok(vec![]),
@@ -900,7 +895,7 @@ where
                 message: format!("Requested node '{}' was not found in the graph.", node_name),
             });
         }
-        let nodex_index = self.get_node_index(&node_name);
+        let nodex_index = self.get_node_index(&node_name).unwrap();
         let succ = self.successors_map.get(&nodex_index);
         match succ {
             None => Ok(vec![]),
@@ -911,26 +906,25 @@ where
         }
     }
 
-    pub(crate) fn get_successor_nodes_by_index(
-        &self,
-        node_index: &usize,
-    ) -> &HashSet<usize, BuildNoHashHasher<usize>>
+    pub(crate) fn get_successor_nodes_by_index(&self, node_index: &usize) -> &Vec<Successor>
     where
         T: Hash + Eq + Clone + Ord,
         A: Clone,
     {
-        self.successors_map.get(node_index).unwrap()
+        &self.successors_vec[*node_index]
     }
 
-    pub(crate) fn get_predecessor_nodes_by_index(
-        &self,
-        node_index: &usize,
-    ) -> &HashSet<usize, BuildNoHashHasher<usize>>
+    // TODO: unit test this function
+    pub(crate) fn get_successor_nodes_and_weights(&self, node_index: usize) -> &Vec<Successor> {
+        &self.successors_vec[node_index]
+    }
+
+    pub(crate) fn get_predecessor_nodes_by_index(&self, node_index: &usize) -> &Vec<Successor>
     where
         T: Hash + Eq + Clone + Ord,
         A: Clone,
     {
-        self.predecessors_map.get(node_index).unwrap()
+        &self.predecessors_vec[*node_index]
     }
 
     /// Gets a `HashMap` of all the successor edges.
@@ -955,20 +949,6 @@ where
         match self.specs.directed {
             true => self.get_successor_nodes(node_name).unwrap(),
             false => self.get_neighbor_nodes(node_name).unwrap(),
-        }
-    }
-
-    pub(crate) fn get_successors_or_neighbors_by_index(
-        &self,
-        node_index: &usize,
-    ) -> HashSet<usize, BuildNoHashHasher<usize>>
-    where
-        T: Hash + Eq + Clone + Ord + Display + Send + Sync,
-        A: Clone,
-    {
-        match self.specs.directed {
-            true => self.get_successor_nodes_by_index(node_index).clone(),
-            false => self.get_neighbor_nodes_by_index(node_index).clone(),
         }
     }
     /**
@@ -1070,11 +1050,17 @@ where
         self.nodes_map_rev.get(node_index)
     }
 
-    pub(crate) fn get_node_index(&self, node_name: &T) -> usize
+    pub(crate) fn get_node_index(&self, node_name: &T) -> Result<usize, Error>
     where
         T: Hash + Eq + Clone + Ord,
         A: Clone,
     {
-        self.nodes_map.get(node_name).unwrap().clone()
+        match self.nodes_map.get(node_name) {
+            Some(node_index) => Ok(*node_index),
+            None => Err(Error {
+                kind: ErrorKind::NodeNotFound,
+                message: format!("Node '{}' not found in the graph.", node_name),
+            }),
+        }
     }
 }

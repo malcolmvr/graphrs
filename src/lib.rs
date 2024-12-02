@@ -88,6 +88,8 @@ mod ext;
 mod graph;
 pub use graph::Graph;
 
+pub(crate) use graph::successor::Successor;
+
 pub mod algorithms;
 pub mod generators;
 pub mod readwrite;

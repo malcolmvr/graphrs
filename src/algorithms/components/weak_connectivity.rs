@@ -70,3 +70,50 @@ where
     }
     connected_nodes
 }
+
+pub fn bfs_equal_size_partitions<T, A>(graph: &Graph<T, A>, num_partitions: usize) -> Vec<Vec<T>>
+where
+    T: Hash + Eq + Clone + Ord + Display + Send + Sync,
+    A: Clone + Send + Sync,
+{
+    let number_of_nodes = graph.number_of_nodes();
+    let mut partitions = vec![vec![]; num_partitions];
+    let mut visited = vec![false; graph.number_of_nodes()];
+    let mut visited_count = 0;
+    let mut queue = Vec::new();
+    let mut partition = 0;
+    let partition_max_size = (graph.number_of_nodes() / num_partitions) + 1;
+    while visited_count < number_of_nodes {
+        let node = (0..graph.number_of_nodes())
+            .find(|node| !visited[*node])
+            .unwrap();
+        queue.push(node);
+        while !queue.is_empty() {
+            let current = queue.remove(0);
+            if !visited[current] {
+                visited[current] = true;
+                partitions[partition].push(current);
+                visited_count += 1;
+                if partitions[partition].len() == partition_max_size {
+                    break;
+                }
+                for neighbor in graph.get_successor_nodes_by_index(&current) {
+                    queue.push(neighbor.node_index);
+                }
+            }
+        }
+        if partitions[partition].len() == partition_max_size {
+            queue = Vec::new();
+            partition += 1;
+        }
+    }
+    partitions
+        .iter()
+        .map(|partition| {
+            partition
+                .iter()
+                .map(|node| graph.get_node_by_index(node).unwrap().name.clone())
+                .collect()
+        })
+        .collect()
+}

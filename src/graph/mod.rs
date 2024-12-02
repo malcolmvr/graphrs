@@ -1,7 +1,9 @@
 use crate::{Edge, GraphSpecs, Node};
 use nohash::{IntMap, IntSet};
+use sprs::CsMat;
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
+use successor::Successor;
 
 /**
 The `Graph` struct represents a graph of nodes and vertices.
@@ -47,6 +49,7 @@ let graph = Graph::<&str, ()>::new_from_nodes_and_edges(
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Graph<T: PartialOrd + Send, A: Clone> {
     /// The graph's nodes, stored as a `HashMap` keyed by the node names.
+    pub adjacency_matrix: Option<CsMat<f64>>,
     nodes_map: HashMap<T, usize>,
     nodes_map_rev: IntMap<usize, Arc<Node<T, A>>>,
     nodes_vec: Vec<Arc<Node<T, A>>>,
@@ -61,11 +64,13 @@ pub struct Graph<T: PartialOrd + Send, A: Clone> {
     /// an edge from u to v *or* from v to u.
     successors: HashMap<T, HashSet<T>>,
     successors_map: IntMap<usize, IntSet<usize>>,
+    successors_vec: Vec<Vec<Successor>>,
     // HashMap<usize, HashSet<usize, BuildNoHashHasher<usize>>, BuildNoHashHasher<usize>>,
     /// Stores the predecessors of nodes. A predecessor of v is a node u such that there
     /// exists a directed edge from u to v. For an undirected graph `precessors` is not used.
     predecessors: HashMap<T, HashSet<T>>,
     predecessors_map: IntMap<usize, IntSet<usize>>,
+    predecessors_vec: Vec<Vec<Successor>>,
 }
 
 mod convert;
@@ -73,5 +78,7 @@ mod creation;
 mod degree;
 mod density;
 mod ensure;
+mod matrix;
 mod query;
 mod subgraph;
+pub mod successor;
