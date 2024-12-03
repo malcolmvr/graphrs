@@ -1,14 +1,55 @@
-use crate::algorithms::shortest_path;
-use crate::algorithms::shortest_path::dijkstra;
-use crate::algorithms::shortest_path::ShortestPathInfo;
-use crate::{Error, Graph, Node};
-use nohash::IntMap;
+#![allow(non_snake_case)]
+
+use crate::{Error, Graph};
 use rayon::iter::*;
-use rayon::prelude::*;
-use rayon::vec::IntoIter;
+use rayon::prelude::ParallelIterator;
+use std::cmp::Ordering;
+use std::collections::BinaryHeap;
 use std::collections::HashMap;
-use std::fmt::{Debug, Display};
+use std::fmt::Debug;
+use std::fmt::Display;
 use std::hash::Hash;
+
+struct SingleSourceResults {
+    S: Vec<usize>,
+    P: Vec<Vec<usize>>,
+    sigma: Vec<f64>,
+    source: usize,
+}
+
+struct FringeNode {
+    pub distance: f64,
+    pub pred: usize,
+    pub v: usize,
+}
+
+impl Ord for FringeNode {
+    fn cmp(&self, other: &Self) -> Ordering {
+        if self.distance < other.distance {
+            Ordering::Less
+        } else if self.distance > other.distance {
+            Ordering::Greater
+        } else {
+            Ordering::Equal
+        }
+    }
+}
+
+impl PartialOrd for FringeNode {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl PartialEq for FringeNode {
+    fn eq(&self, other: &Self) -> bool {
+        self.distance == other.distance
+    }
+}
+
+impl Eq for FringeNode {}
+
+// TODO: use BFS on undirected graphs
 
 /**
 Compute the shortest-path (Dijkstra) betweenness centrality for nodes.
@@ -42,115 +83,137 @@ where
     T: Hash + Eq + Clone + Ord + Debug + Display + Send + Sync,
     A: Clone + Send + Sync,
 {
-    let shortest_paths_vec = match parallel {
+    let mut betweenness = vec![0.0; graph.number_of_nodes()];
+    match parallel {
         true => {
-            let all_pairs = dijkstra::all_pairs_par_iter(graph, weighted, None, None, false, true);
-            get_shortest_paths_vec_from_all_pairs_par_iter(all_pairs)
+            let results: Vec<SingleSourceResults> = (0..graph.number_of_nodes())
+                .into_par_iter()
+                .map(|source| dijkstra(graph, weighted, source))
+                .collect();
+            for r in results {
+                accumulate_betweenness(&mut betweenness, &r);
+            }
         }
         false => {
-            let all_pairs = dijkstra::all_pairs_iter(graph, weighted, None, None, false, true);
-            get_shortest_paths_vec_from_all_pairs_iter(all_pairs)
+            for source in 0..graph.number_of_nodes() {
+                let source_source_results = dijkstra(graph, weighted, source);
+                accumulate_betweenness(&mut betweenness, &source_source_results);
+            }
         }
-    };
-    let mut between_counts = get_between_counts(shortest_paths_vec, graph);
-    let nodes: Vec<&Node<T, A>> = graph
-        .get_all_nodes()
-        .into_iter()
-        .map(|arc| arc.as_ref())
-        .collect();
-    add_missing_nodes_to_between_counts(&mut between_counts, &nodes);
-    let rescaled = rescale(
-        between_counts,
+    }
+    rescale(
+        &mut betweenness,
         graph.get_all_nodes().len(),
         normalized,
         graph.specs.directed,
     );
-    Ok(rescaled)
+    let hm = betweenness
+        .into_iter()
+        .enumerate()
+        .map(|(i, v)| (graph.get_node_by_index(&i).unwrap().name.clone(), v))
+        .collect();
+    Ok(hm)
 }
 
-fn add_missing_nodes_to_between_counts<T, A>(
-    between_counts: &mut HashMap<T, f64>,
-    nodes: &[&Node<T, A>],
-) where
+fn dijkstra<T, A>(graph: &Graph<T, A>, weighted: bool, source: usize) -> SingleSourceResults
+where
     T: Hash + Eq + Clone + Ord + Display + Send + Sync,
+    A: Clone,
 {
-    for node in nodes {
-        between_counts.entry(node.name.clone()).or_insert(0.0);
+    // println!("source: {:?}", source);
+    let mut P: Vec<Vec<usize>> = vec![vec![]; graph.number_of_nodes()];
+    let mut D = vec![f64::MAX; graph.number_of_nodes()];
+    let mut seen = vec![f64::MAX; graph.number_of_nodes()];
+    let mut fringe = BinaryHeap::<FringeNode>::new();
+    let mut sigma = vec![0.0; graph.number_of_nodes()];
+
+    sigma[source] = 1.0;
+    seen[source] = 0.0;
+
+    let mut S = vec![];
+
+    fringe.push(FringeNode {
+        distance: -0.0,
+        pred: source,
+        v: source,
+    });
+
+    while let Some(fringe_item) = fringe.pop() {
+        let dist = -fringe_item.distance;
+        let v = fringe_item.v;
+        let pred = fringe_item.pred;
+        // println!("    v: {}", v);
+        if D[v] != f64::MAX {
+            continue;
+        }
+        sigma[v] += sigma[pred];
+        S.push(v);
+        D[v] = dist;
+        for adj in graph.get_successor_nodes_by_index(&v) {
+            let w = adj.node_index;
+            // println!("        u: {}", u);
+            let cost = match weighted {
+                true => adj.weight,
+                false => 1.0,
+            };
+            // println!("            cost: {}", cost);
+            let vw_dist = dist + cost;
+            // println!("            vu_dist: {}", vu_dist);
+            if D[w] == f64::MAX && (seen[w] == f64::MAX || vw_dist < seen[w]) {
+                // println!("            vu_dist < seen[u]");
+                seen[w] = vw_dist;
+                push_fringe_node(&mut fringe, v, w, vw_dist);
+                sigma[w] = 0.0;
+                P[w] = vec![v];
+            } else if vw_dist == seen[w] {
+                sigma[w] += sigma[v];
+                P[w].push(v);
+            }
+        }
+    }
+
+    SingleSourceResults {
+        S,
+        P,
+        sigma,
+        source,
     }
 }
 
-fn get_shortest_paths_vec_from_all_pairs_iter(
-    all_pairs: impl Iterator<Item = (usize, Vec<(usize, ShortestPathInfo<usize>)>)>,
-) -> Vec<(usize, f64)> {
-    all_pairs
-        .flat_map(|(_, vec)| vec.into_iter())
-        .flat_map(|sp| get_node_counts(&sp.1.paths))
-        .collect()
+/**
+Pushes a `FringeNode` into the `fringe` `BinaryHeap`.
+Increments `count`.
+*/
+#[inline]
+fn push_fringe_node(fringe: &mut BinaryHeap<FringeNode>, v: usize, w: usize, vw_dist: f64) {
+    fringe.push(FringeNode {
+        distance: -vw_dist, // negative because BinaryHeap is a max heap
+        pred: v,
+        v: w,
+    });
 }
 
-fn get_shortest_paths_vec_from_all_pairs_par_iter<F>(
-    all_pairs: Map<IntoIter<usize>, F>,
-) -> Vec<(usize, f64)>
-where
-    F: Fn(usize) -> (usize, Vec<(usize, ShortestPathInfo<usize>)>) + Send + Sync,
-{
-    all_pairs
-        .flat_map_iter(|(_, vec)| vec.into_iter())
-        .flat_map(|sp| get_node_counts(&sp.1.paths))
-        .collect()
+fn accumulate_betweenness(betweenness: &mut Vec<f64>, result: &SingleSourceResults) {
+    let mut delta = vec![0.0; betweenness.len()];
+    let mut S = result.S.iter().rev();
+    while let Some(w) = S.next() {
+        let coeff = (1.0 + delta[*w]) / result.sigma[*w];
+        for v in result.P[*w].iter() {
+            delta[*v] += result.sigma[*v] * coeff;
+        }
+        if *w != result.source {
+            betweenness[*w] += delta[*w];
+        }
+    }
 }
 
-fn get_between_counts<T, A>(
-    shortest_paths_vec: Vec<(usize, f64)>,
-    graph: &Graph<T, A>,
-) -> HashMap<T, f64>
-where
-    T: Hash + Eq + Clone + Ord + Debug + Display + Send + Sync,
-    A: Clone + Send + Sync,
-{
-    let usize_map: IntMap<usize, f64> = shortest_paths_vec.into_iter().fold(
-        IntMap::<usize, f64>::default(),
-        |mut acc, (node, count)| {
-            *acc.entry(node).or_insert(0.0) += count;
-            acc
-        },
-    );
-
-    usize_map
-        .into_iter()
-        .map(|(node_index, count)| {
-            let node_name = graph.get_node_by_index(&node_index).unwrap().name.clone();
-            (node_name, count)
-        })
-        .collect::<HashMap<T, f64>>()
-}
-
-fn get_node_counts(paths: &[Vec<usize>]) -> Vec<(usize, f64)> {
-    let paths_count = paths.len() as f64;
-    paths
-        .iter()
-        .filter(|path| path.len() > 2)
-        .flat_map(|path| &path[1..(path.len() - 1)])
-        .map(|node| (node.clone(), 1.0 / paths_count))
-        .collect()
-}
-
-fn rescale<T>(
-    node_counts: HashMap<T, f64>,
-    num_nodes: usize,
-    normalized: bool,
-    directed: bool,
-) -> HashMap<T, f64>
-where
-    T: Hash + Eq + Clone + Ord + Display,
-{
+fn rescale(betweeneess: &mut Vec<f64>, num_nodes: usize, normalized: bool, directed: bool) {
     let scale = get_scale(num_nodes, normalized, directed);
-    match scale {
-        None => node_counts,
-        Some(s) => node_counts
-            .iter()
-            .map(|(k, v)| (k.clone(), v * s))
-            .collect(),
+    if scale.is_some() {
+        let scale = scale.unwrap();
+        for i in 0..num_nodes {
+            betweeneess[i] *= scale;
+        }
     }
 }
 
@@ -172,94 +235,7 @@ fn get_scale(num_nodes: usize, normalized: bool, directed: bool) -> Option<f64> 
 #[cfg(test)]
 mod tests {
 
-    use crate::graph;
-
     use super::*;
-
-    #[test]
-    fn test_get_node_counts_1() {
-        let result = get_node_counts(&[]);
-        assert_eq!(result, vec![]);
-    }
-
-    #[test]
-    fn test_get_node_counts_2() {
-        let result = get_node_counts(&[vec![1, 3]]);
-        assert_eq!(result, vec![]);
-    }
-
-    #[test]
-    fn test_get_node_counts_3() {
-        let result = get_node_counts(&[vec![1, 2, 3]]);
-        assert_eq!(result, vec![(2, 1.0)]);
-    }
-
-    #[test]
-    fn test_get_node_counts_4() {
-        let result = get_node_counts(&[vec![1, 3], vec![1, 2, 3]]);
-        assert_eq!(result, vec![(2, 0.5)]);
-    }
-
-    #[test]
-    fn test_get_node_counts_5() {
-        let result = get_node_counts(&[vec![1, 2, 3, 4, 5]]);
-        assert_eq!(result, vec![(2, 1.0), (3, 1.0), (4, 1.0)]);
-    }
-
-    #[test]
-    fn test_get_node_counts_6() {
-        let result = get_node_counts(&[vec![1, 2, 3, 4, 5], vec![1, 2, 6, 5]]);
-        assert_eq!(
-            result,
-            vec![(2, 0.5), (3, 0.5), (4, 0.5), (2, 0.5), (6, 0.5)]
-        );
-    }
-
-    /*
-    #[test]
-    fn test_get_between_counts_1() {
-        let nodes = vec![
-            Node::from_name("n1"),
-            Node::from_name("n2"),
-            Node::from_name("n3"),
-            Node::from_name("n4"),
-            Node::from_name("n5"),
-            Node::from_name("n6"),
-            Node::from_name("n7"),
-            Node::from_name("n8"),
-            Node::from_name("n9"),
-        ];
-        let graph = Graph::new_from_nodes_and_edges(nodes, vec![], GraphSpecs::directed());
-
-        let mut pairs: HashMap<&str, HashMap<&str, ShortestPathInfo<&str>>> = HashMap::new();
-        let mut hm1: HashMap<&str, ShortestPathInfo<&str>> = HashMap::new();
-        hm1.insert(
-            "n3",
-            ShortestPathInfo {
-                distance: 3.0,
-                paths: vec![vec![1, 2, 3], vec![1, 4, 3]],
-            },
-        );
-        pairs.insert("n1", hm1);
-        let mut hm1: HashMap<&str, ShortestPathInfo<&str>> = HashMap::new();
-        hm1.insert(
-            "n9",
-            ShortestPathInfo {
-                distance: 3.0,
-                paths: vec![vec!["n7", "n8", "n9"], vec!["n7", "n2", "n9"]],
-            },
-        );
-        pairs.insert("n7", hm1);
-        let result = get_between_counts_par_iter(&pairs, &graph);
-        assert!(result.get("n1").is_none());
-        assert_eq!(result.get("n2").unwrap(), &1.0);
-        assert!(result.get("n3").is_none());
-        assert_eq!(result.get("n4").unwrap(), &0.5);
-        assert!(result.get("n7").is_none());
-        assert_eq!(result.get("n8").unwrap(), &0.5);
-        assert!(result.get("n9").is_none());
-    }
-    */
 
     #[test]
     fn test_get_scale_1() {
@@ -289,20 +265,5 @@ mod tests {
     fn test_get_scale_5() {
         let result = get_scale(10, false, false).unwrap();
         assert_eq!(result, 0.5);
-    }
-
-    #[test]
-    fn test_add_missing_nodes_to_between_counts() {
-        let mut between_counts: HashMap<&str, f64> = HashMap::new();
-        between_counts.insert("n1", 1.0);
-        between_counts.insert("n4", 4.0);
-        let n2 = Node::from_name("n2");
-        let n3 = Node::from_name("n3");
-        let nodes: Vec<&Node<&str, ()>> = vec![&n2, &n3];
-        add_missing_nodes_to_between_counts(&mut between_counts, &nodes);
-        assert_eq!(between_counts.get("n1").unwrap(), &1.0);
-        assert_eq!(between_counts.get("n2").unwrap(), &0.0);
-        assert_eq!(between_counts.get("n3").unwrap(), &0.0);
-        assert_eq!(between_counts.get("n4").unwrap(), &4.0);
     }
 }
