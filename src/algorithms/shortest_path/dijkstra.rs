@@ -1,13 +1,11 @@
 use crate::algorithms::shortest_path::ShortestPathInfo;
-use crate::{Error, ErrorKind, Graph, Node};
+use crate::{Error, ErrorKind, Graph};
 use rayon::prelude::{IntoParallelIterator, ParallelIterator};
 use std::cmp::Ordering;
 use std::collections::{BinaryHeap, HashMap};
 use std::fmt::Display;
 use std::hash::Hash;
 use std::mem;
-use std::os::unix::fs::lchown;
-use std::sync::Arc;
 
 /**
 As a graph is explored by a shortest-path algorithm the nodes at the
