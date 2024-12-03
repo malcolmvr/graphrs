@@ -1,6 +1,6 @@
 use super::Graph;
 use crate::{Error, ErrorKind};
-use sprs::TriMat;
+use sprs::{CsMat, TriMat};
 use std::fmt::Display;
 use std::hash::Hash;
 
@@ -10,9 +10,13 @@ where
     A: Clone,
 {
     /**
-    TODO: Add documentation
+    Gets the (adjacency matrix)[https://en.wikipedia.org/wiki/Adjacency_matrix] of the graph.
+
+    For large graphs, the adjacency matrix can be very large so this method returns a sparse matrix
+    using the "sprs" crate.
+
     */
-    pub fn generate_sparse_adjacency_matrix(&mut self) -> Result<(), Error>
+    pub fn get_sparse_adjacency_matrix(&mut self) -> Result<CsMat<f64>, Error>
     where
         T: Hash + Eq + Clone + Ord + Display + Send + Sync,
         A: Clone,
@@ -40,7 +44,6 @@ where
         }
         let tri_matrix = TriMat::from_triplets((num_nodes, num_nodes), row_inds, col_inds, data);
         let matrix = tri_matrix.to_csr::<usize>();
-        self.adjacency_matrix = Some(matrix);
-        Ok(())
+        Ok(matrix)
     }
 }

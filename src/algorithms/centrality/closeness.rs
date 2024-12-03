@@ -2,6 +2,8 @@ use crate::algorithms::shortest_path::dijkstra;
 use crate::algorithms::shortest_path::ShortestPathInfo;
 use crate::{Error, Graph};
 use rayon::iter::ParallelIterator;
+use rayon::iter::*;
+use rayon::prelude::*;
 use std::collections::HashMap;
 use std::fmt::{Debug, Display};
 use std::hash::Hash;
@@ -54,10 +56,7 @@ where
         the_graph = &x;
     }
     let num_nodes = the_graph.get_all_nodes().len();
-    let all_pairs = match parallel {
-        true => dijkstra::all_pairs_par_iter(the_graph, weighted, None, false).collect(),
-        false => dijkstra::all_pairs(the_graph, weighted, None, false).unwrap(),
-    };
+    let all_pairs = dijkstra::all_pairs(the_graph, weighted, None, None, false, false).unwrap();
     let centralities = all_pairs
         .into_iter()
         .map(|(k, v)| get_closeness_centrality_for_node(k, v, num_nodes, wf_improved))

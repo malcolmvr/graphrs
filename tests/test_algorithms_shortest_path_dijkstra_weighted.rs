@@ -28,7 +28,7 @@ mod tests {
         )
         .unwrap();
 
-        let result = dijkstra::all_pairs(&graph, true, None, false);
+        let result = dijkstra::all_pairs(&graph, true, None, None, false, true);
         assert!(result.is_ok());
         let unwrapped = result.unwrap();
         assert_eq!(
@@ -161,7 +161,7 @@ mod tests {
         )
         .unwrap();
 
-        let result = dijkstra::all_pairs(&graph, true, Some(2.9), false);
+        let result = dijkstra::all_pairs(&graph, true, None, Some(2.9), false, true);
         assert!(result.is_ok());
         let unwrapped = result.unwrap();
         assert_eq!(
@@ -252,7 +252,7 @@ mod tests {
         )
         .unwrap();
 
-        let result = dijkstra::single_source(&graph, true, "n1", Some("n3"), None, false);
+        let result = dijkstra::single_source(&graph, true, "n1", Some("n3"), None, false, true);
         assert!(result.is_ok());
         let unwrapped = result.unwrap();
         assert_eq!(unwrapped.get("n3").unwrap().distance, 5.0);
@@ -281,7 +281,7 @@ mod tests {
         )
         .unwrap();
 
-        let result = dijkstra::single_source(&graph, true, "n1", Some("n4"), None, false);
+        let result = dijkstra::single_source(&graph, true, "n1", Some("n4"), None, false, true);
         assert!(result.is_ok());
         let unwrapped = result.unwrap();
         assert_eq!(unwrapped.get("n4").unwrap().distance, 2.0);
@@ -311,7 +311,7 @@ mod tests {
         )
         .unwrap();
 
-        let result = dijkstra::single_source(&graph, true, "n1", Some("n5"), None, false);
+        let result = dijkstra::single_source(&graph, true, "n1", Some("n5"), None, false, true);
         assert!(result.is_ok());
         let unwrapped = result.unwrap();
         assert_eq!(unwrapped.get("n5").unwrap().distance, 3.0);
@@ -341,7 +341,7 @@ mod tests {
         )
         .unwrap();
 
-        let result = dijkstra::single_source(&graph, true, "n1", Some("n5"), None, true);
+        let result = dijkstra::single_source(&graph, true, "n1", Some("n5"), None, true, true);
         assert!(result.is_ok());
         let unwrapped = result.unwrap();
         let n5 = unwrapped.get("n5").unwrap();
@@ -370,7 +370,8 @@ mod tests {
 
         let graph = Graph::new_from_nodes_and_edges(nodes, edges, GraphSpecs::directed()).unwrap();
 
-        let result = dijkstra::multi_source(&graph, true, vec!["n1"], Some("n3"), None, false);
+        let result =
+            dijkstra::multi_source(&graph, true, vec!["n1"], Some("n3"), None, false, true);
         assert!(result.is_ok());
         let unwrapped = result.unwrap();
         let n1_info = unwrapped.get("n1").unwrap();
@@ -382,7 +383,8 @@ mod tests {
     #[test]
     fn test_multi_source_2() {
         let graph = generators::social::karate_club_graph();
-        let result = dijkstra::multi_source(&graph, true, vec![0, 1, 2], Some(125), None, false);
+        let result =
+            dijkstra::multi_source(&graph, true, vec![0, 1, 2], Some(125), None, false, false);
         assert!(result.is_err());
     }
 
@@ -407,7 +409,7 @@ mod tests {
         )
         .unwrap();
 
-        let result = dijkstra::multi_source(&graph, true, vec!["n1"], None, None, false);
+        let result = dijkstra::multi_source(&graph, true, vec!["n1"], None, None, false, true);
         assert!(result.is_ok());
         let unwrapped = result.unwrap();
         assert_eq!(

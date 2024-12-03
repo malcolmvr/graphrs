@@ -83,7 +83,7 @@ where
             // println!("v={}, w={}", v, w);
             let mut updated: bool = false;
             for source_index in 0..sources.len() {
-                let v_w_edge_weight = successor.weight;
+                let v_w_edge_weight = match weighted { true => successor.weight, false => 1.0 };
                 let node_w_distance = get_distance(&distances, source_index, w, number_of_sources);
                 let node_v_distance = get_distance(&distances, source_index, v, number_of_sources);
                 // println!("  s={} v={} w={} d(s,w)={} d(s,v)={} l(v,w)={:?}", source_index, v, w, inf(&node_w_distance), inf(&node_v_distance), v_w_edge_weight);
@@ -170,26 +170,6 @@ fn set_distance(
 
 fn get_distance_index(u: usize, v: usize, number_of_sources: usize) -> usize {
     return (v * number_of_sources) + u;
-}
-
-fn get_min_edge_weight<T, A>(graph: &Graph<T, A>, u: usize, v: usize, weighted: bool) -> f64
-where
-    T: Hash + Eq + Clone + Ord + Debug + Display + Send + Sync,
-    A: Clone + Send + Sync,
-{
-    match weighted {
-        true => match graph.specs.multi_edges {
-            true => graph
-                .get_edges_by_indexes(u, v)
-                .unwrap()
-                .into_iter()
-                .map(|edge| edge.weight)
-                .min_by(|a, b| a.partial_cmp(b).unwrap())
-                .unwrap(),
-            false => graph.get_edge_by_indexes(u, v).unwrap().weight,
-        },
-        false => 1.0,
-    }
 }
 
 fn get_predecessor_edge_with_min_weight<T, A>(graph: &Graph<T, A>, node_index: usize) -> f64

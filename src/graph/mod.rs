@@ -1,6 +1,5 @@
 use crate::{Edge, GraphSpecs, Node};
 use nohash::{IntMap, IntSet};
-use sprs::CsMat;
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use successor::Successor;
@@ -49,7 +48,6 @@ let graph = Graph::<&str, ()>::new_from_nodes_and_edges(
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Graph<T: PartialOrd + Send, A: Clone> {
     /// The graph's nodes, stored as a `HashMap` keyed by the node names.
-    pub adjacency_matrix: Option<CsMat<f64>>,
     nodes_map: HashMap<T, usize>,
     nodes_map_rev: IntMap<usize, Arc<Node<T, A>>>,
     nodes_vec: Vec<Arc<Node<T, A>>>,
@@ -78,6 +76,7 @@ mod creation;
 mod degree;
 mod density;
 mod ensure;
+#[cfg(feature = "adjacency_matrix")]
 mod matrix;
 mod query;
 mod subgraph;

@@ -1,8 +1,6 @@
 use super::Graph;
-use crate::node;
 use crate::{ext::vec::VecExt, Edge, Error, ErrorKind, Node, Successor};
 use itertools::Itertools;
-use nohash::BuildNoHashHasher;
 use std::collections::{HashMap, HashSet};
 use std::fmt::Display;
 use std::hash::Hash;
@@ -205,9 +203,7 @@ where
         self.get_edge_by_indexes(u_node_index, v_node_index)
     }
 
-    // TODO: stuff
-    // pub(crate) fn get_edge_by_indexes(&self, u: usize, v: usize) -> Result<&Edge<T, A>, Error>
-    pub fn get_edge_by_indexes(&self, u: usize, v: usize) -> Result<&Edge<T, A>, Error>
+    pub(crate) fn get_edge_by_indexes(&self, u: usize, v: usize) -> Result<&Edge<T, A>, Error>
     where
         T: Hash + Eq + Clone + Ord,
         A: Clone,
@@ -912,11 +908,6 @@ where
         A: Clone,
     {
         &self.successors_vec[*node_index]
-    }
-
-    // TODO: unit test this function
-    pub(crate) fn get_successor_nodes_and_weights(&self, node_index: usize) -> &Vec<Successor> {
-        &self.successors_vec[node_index]
     }
 
     pub(crate) fn get_predecessor_nodes_by_index(&self, node_index: &usize) -> &Vec<Successor>

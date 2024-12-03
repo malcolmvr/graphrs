@@ -385,7 +385,6 @@ where
     */
     pub fn new(specs: GraphSpecs) -> Graph<T, A> {
         Graph {
-            adjacency_matrix: None,
             nodes_map: HashMap::<T, usize>::default(),
             nodes_map_rev: IntMap::<usize, Arc<Node<T, A>>>::default(),
             nodes_vec: Vec::<Arc<Node<T, A>>>::new(),
