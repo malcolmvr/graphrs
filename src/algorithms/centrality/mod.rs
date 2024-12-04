@@ -9,3 +9,5 @@ pub mod degree;
 
 /// Compute eigenvector centrality of nodes and edges.
 pub mod eigenvector;
+
+mod fringe_node;
