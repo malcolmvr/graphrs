@@ -1,11 +1,11 @@
 #[derive(Debug, PartialEq)]
-pub(crate) struct Successor {
+pub(crate) struct AdjacentNode {
     pub node_index: usize,
     pub weight: f64,
 }
 
-impl Successor {
+impl AdjacentNode {
     pub fn new(node_index: usize, weight: f64) -> Self {
-        Successor { node_index, weight }
+        AdjacentNode { node_index, weight }
     }
 }

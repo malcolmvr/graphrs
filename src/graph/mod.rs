@@ -1,8 +1,8 @@
 use crate::{Edge, GraphSpecs, Node};
+use adjacent_node::AdjacentNode;
 use nohash::{IntMap, IntSet};
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
-use successor::Successor;
 
 /**
 The `Graph` struct represents a graph of nodes and vertices.
@@ -62,15 +62,16 @@ pub struct Graph<T: PartialOrd + Send, A: Clone> {
     /// an edge from u to v *or* from v to u.
     successors: HashMap<T, HashSet<T>>,
     successors_map: IntMap<usize, IntSet<usize>>,
-    successors_vec: Vec<Vec<Successor>>,
+    successors_vec: Vec<Vec<AdjacentNode>>,
     // HashMap<usize, HashSet<usize, BuildNoHashHasher<usize>>, BuildNoHashHasher<usize>>,
     /// Stores the predecessors of nodes. A predecessor of v is a node u such that there
     /// exists a directed edge from u to v. For an undirected graph `precessors` is not used.
     predecessors: HashMap<T, HashSet<T>>,
     predecessors_map: IntMap<usize, IntSet<usize>>,
-    predecessors_vec: Vec<Vec<Successor>>,
+    predecessors_vec: Vec<Vec<AdjacentNode>>,
 }
 
+pub mod adjacent_node;
 mod convert;
 mod creation;
 mod degree;
@@ -80,4 +81,3 @@ mod ensure;
 mod matrix;
 mod query;
 mod subgraph;
-pub mod successor;

@@ -88,7 +88,7 @@ mod ext;
 mod graph;
 pub use graph::Graph;
 
-pub(crate) use graph::successor::Successor;
+pub(crate) use graph::adjacent_node::AdjacentNode;
 
 pub mod algorithms;
 pub mod generators;

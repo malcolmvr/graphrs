@@ -1,11 +1,10 @@
 #![allow(non_snake_case)]
 
-use super::fringe_node::FringeNode;
+use super::fringe_node::{push_fringe_node, FringeNode};
 use crate::{Error, Graph};
 use rayon::iter::*;
 use rayon::prelude::ParallelIterator;
-use std::collections::BinaryHeap;
-use std::collections::HashMap;
+use std::collections::{BinaryHeap, HashMap, VecDeque};
 use std::fmt::Debug;
 use std::fmt::Display;
 use std::hash::Hash;
@@ -16,8 +15,6 @@ struct SingleSourceResults {
     sigma: Vec<f64>,
     source: usize,
 }
-
-// TODO: use BFS on undirected graphs
 
 /**
 Compute the shortest-path (Dijkstra) betweenness centrality for nodes.
@@ -34,7 +31,7 @@ Compute the shortest-path (Dijkstra) betweenness centrality for nodes.
 ```
 use graphrs::{algorithms::{centrality::{betweenness}}, generators};
 let graph = generators::social::karate_club_graph();
-let centralities = betweenness::betweenness_centrality(&graph, false, true, false);
+let centralities = betweenness::betweenness_centrality(&graph, false, true);
 ```
 
 # References
@@ -45,18 +42,21 @@ pub fn betweenness_centrality<T, A>(
     graph: &Graph<T, A>,
     weighted: bool,
     normalized: bool,
-    parallel: bool,
 ) -> Result<HashMap<T, f64>, Error>
 where
     T: Hash + Eq + Clone + Ord + Debug + Display + Send + Sync,
     A: Clone + Send + Sync,
 {
+    let parallel = graph.number_of_nodes() > 20 && rayon::current_num_threads() > 1;
     let mut betweenness = vec![0.0; graph.number_of_nodes()];
     match parallel {
         true => {
             let results: Vec<SingleSourceResults> = (0..graph.number_of_nodes())
                 .into_par_iter()
-                .map(|source| dijkstra(graph, weighted, source))
+                .map(|source| match weighted {
+                    true => dijkstra(graph, source),
+                    false => bfs(graph, source),
+                })
                 .collect();
             for r in results {
                 accumulate_betweenness(&mut betweenness, &r);
@@ -64,7 +64,10 @@ where
         }
         false => {
             for source in 0..graph.number_of_nodes() {
-                let source_source_results = dijkstra(graph, weighted, source);
+                let source_source_results = match weighted {
+                    true => dijkstra(graph, source),
+                    false => bfs(graph, source),
+                };
                 accumulate_betweenness(&mut betweenness, &source_source_results);
             }
         }
@@ -83,7 +86,50 @@ where
     Ok(hm)
 }
 
-fn dijkstra<T, A>(graph: &Graph<T, A>, weighted: bool, source: usize) -> SingleSourceResults
+fn bfs<T, A>(graph: &Graph<T, A>, source: usize) -> SingleSourceResults
+where
+    T: Hash + Eq + Clone + Ord + Display + Send + Sync,
+    A: Clone,
+{
+    let mut P: Vec<Vec<usize>> = vec![vec![]; graph.number_of_nodes()];
+    let mut D = vec![f64::MAX; graph.number_of_nodes()];
+    let mut fringe = VecDeque::<usize>::new();
+    let mut sigma = vec![0.0; graph.number_of_nodes()];
+
+    sigma[source] = 1.0;
+    D[source] = 0.0;
+
+    let mut S = vec![];
+
+    fringe.push_back(source);
+
+    while let Some(v) = fringe.pop_front() {
+        S.push(v);
+        let Dv = D[v];
+        let sigmav = sigma[v];
+        for adj in graph.get_successor_nodes_by_index(&v) {
+            let w = adj.node_index;
+            let vw_dist = Dv + 1.0;
+            if D[w] == f64::MAX {
+                D[w] = vw_dist;
+                fringe.push_back(w);
+            }
+            if D[w] == vw_dist {
+                sigma[w] += sigmav;
+                P[w].push(v);
+            }
+        }
+    }
+
+    SingleSourceResults {
+        S,
+        P,
+        sigma,
+        source,
+    }
+}
+
+fn dijkstra<T, A>(graph: &Graph<T, A>, source: usize) -> SingleSourceResults
 where
     T: Hash + Eq + Clone + Ord + Display + Send + Sync,
     A: Clone,
@@ -120,10 +166,7 @@ where
         for adj in graph.get_successor_nodes_by_index(&v) {
             let w = adj.node_index;
             // println!("        u: {}", u);
-            let cost = match weighted {
-                true => adj.weight,
-                false => 1.0,
-            };
+            let cost = adj.weight;
             // println!("            cost: {}", cost);
             let vw_dist = dist + cost;
             // println!("            vu_dist: {}", vu_dist);
@@ -146,19 +189,6 @@ where
         sigma,
         source,
     }
-}
-
-/**
-Pushes a `FringeNode` into the `fringe` `BinaryHeap`.
-Increments `count`.
-*/
-#[inline]
-fn push_fringe_node(fringe: &mut BinaryHeap<FringeNode>, v: usize, w: usize, vw_dist: f64) {
-    fringe.push(FringeNode {
-        distance: -vw_dist, // negative because BinaryHeap is a max heap
-        pred: v,
-        v: w,
-    });
 }
 
 fn accumulate_betweenness(betweenness: &mut Vec<f64>, result: &SingleSourceResults) {
@@ -185,6 +215,7 @@ fn rescale(betweeneess: &mut Vec<f64>, num_nodes: usize, normalized: bool, direc
     }
 }
 
+#[inline]
 fn get_scale(num_nodes: usize, normalized: bool, directed: bool) -> Option<f64> {
     match normalized {
         true => match num_nodes <= 2 {

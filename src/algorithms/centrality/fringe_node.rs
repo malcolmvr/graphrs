@@ -1,4 +1,5 @@
 use std::cmp::Ordering;
+use std::collections::BinaryHeap;
 
 pub struct FringeNode {
     pub distance: f64,
@@ -31,3 +32,15 @@ impl PartialEq for FringeNode {
 }
 
 impl Eq for FringeNode {}
+
+/**
+Pushes a `FringeNode` into the `fringe` `BinaryHeap`.
+*/
+#[inline]
+pub fn push_fringe_node(fringe: &mut BinaryHeap<FringeNode>, v: usize, w: usize, vw_dist: f64) {
+    fringe.push(FringeNode {
+        distance: -vw_dist, // negative because BinaryHeap is a max heap
+        pred: v,
+        v: w,
+    });
+}

@@ -1,7 +1,7 @@
 use super::Graph;
 use crate::{
-    Edge, EdgeDedupeStrategy, Error, ErrorKind, GraphSpecs, MissingNodeStrategy, Node,
-    SelfLoopsFalseStrategy, Successor,
+    AdjacentNode, Edge, EdgeDedupeStrategy, Error, ErrorKind, GraphSpecs, MissingNodeStrategy,
+    Node, SelfLoopsFalseStrategy,
 };
 use nohash::{IntMap, IntSet};
 use std::collections::{HashMap, HashSet};
@@ -127,6 +127,7 @@ where
             edge_already_exists,
         );
 
+        // add to predecessors
         match self.specs.directed {
             true => {
                 self.predecessors
@@ -456,8 +457,11 @@ where
     }
 }
 
+/**
+Adds a node to an adjacency (successor or predecessor) vector.
+ */
 fn add_to_adjacency_vec(
-    adjacency_vec: &mut Vec<Vec<Successor>>,
+    adjacency_vec: &mut Vec<Vec<AdjacentNode>>,
     u_node_index: usize,
     v_node_index: usize,
     weight: f64,
@@ -470,10 +474,10 @@ fn add_to_adjacency_vec(
                 .position(|succ| succ.node_index == v_node_index)
                 .unwrap();
             if weight < adjacency_vec[u_node_index][index].weight {
-                adjacency_vec[u_node_index][index] = Successor::new(v_node_index, weight);
+                adjacency_vec[u_node_index][index] = AdjacentNode::new(v_node_index, weight);
             }
         }
-        false => adjacency_vec[u_node_index].push(Successor::new(v_node_index, weight)),
+        false => adjacency_vec[u_node_index].push(AdjacentNode::new(v_node_index, weight)),
     }
 }
 
@@ -498,22 +502,22 @@ mod tests {
             graph.successors_vec,
             vec![
                 vec![
-                    Successor::new(1, 1.1),
-                    Successor::new(2, 1.3),
-                    Successor::new(3, 1.4)
+                    AdjacentNode::new(1, 1.1),
+                    AdjacentNode::new(2, 1.3),
+                    AdjacentNode::new(3, 1.4)
                 ],
                 vec![],
                 vec![],
-                vec![Successor::new(2, 1.5)],
+                vec![AdjacentNode::new(2, 1.5)],
             ]
         );
         assert_eq!(
             graph.predecessors_vec,
             vec![
                 vec![],
-                vec![Successor::new(0, 1.1)],
-                vec![Successor::new(0, 1.3), Successor::new(3, 1.5)],
-                vec![Successor::new(0, 1.4)],
+                vec![AdjacentNode::new(0, 1.1)],
+                vec![AdjacentNode::new(0, 1.3), AdjacentNode::new(3, 1.5)],
+                vec![AdjacentNode::new(0, 1.4)],
             ]
         );
     }
@@ -533,13 +537,13 @@ mod tests {
             graph.successors_vec,
             vec![
                 vec![
-                    Successor::new(1, 1.1),
-                    Successor::new(2, 1.3),
-                    Successor::new(3, 1.4)
+                    AdjacentNode::new(1, 1.1),
+                    AdjacentNode::new(2, 1.3),
+                    AdjacentNode::new(3, 1.4)
                 ],
-                vec![Successor::new(0, 1.1)],
-                vec![Successor::new(0, 1.3), Successor::new(3, 1.5)],
-                vec![Successor::new(0, 1.4), Successor::new(2, 1.5)],
+                vec![AdjacentNode::new(0, 1.1)],
+                vec![AdjacentNode::new(0, 1.3), AdjacentNode::new(3, 1.5)],
+                vec![AdjacentNode::new(0, 1.4), AdjacentNode::new(2, 1.5)],
             ]
         );
         assert_eq!(

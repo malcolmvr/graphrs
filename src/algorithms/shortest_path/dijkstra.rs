@@ -7,6 +7,8 @@ use std::fmt::Display;
 use std::hash::Hash;
 use std::mem;
 
+const SERIAL_TO_PARALLEL_THRESHOLD: usize = 20;
+
 /**
 As a graph is explored by a shortest-path algorithm the nodes at the
 "fringe" of the explored part are maintained. This struct holds information
@@ -111,38 +113,31 @@ where
         graph.ensure_weighted()?;
     }
 
-    let x = graph
-        .get_all_nodes()
-        .into_iter()
-        .map(|node| {
-            let ss = single_source(
-                graph,
-                weighted,
-                node.name.clone(),
-                target.clone(),
-                cutoff,
-                first_only,
-                with_paths,
-            );
-            (node.name.clone(), ss)
-        })
-        .collect::<Vec<(T, Result<HashMap<T, ShortestPathInfo<T>>, Error>)>>();
-    let y = x
-        .iter()
-        .filter(|t| t.1.is_err())
-        .collect::<Vec<&(T, Result<HashMap<T, ShortestPathInfo<T>>, Error>)>>();
-    if !y.is_empty() {
-        match &y[0].1 {
-            Err(e) => {
-                return Err(e.clone());
-            }
-            Ok(_) => {}
+    let parallel =
+        graph.number_of_nodes() > SERIAL_TO_PARALLEL_THRESHOLD && rayon::current_num_threads() > 1;
+    let shortest_paths_vecs = match parallel {
+        true => {
+            let iterator =
+                all_pairs_par_iter(graph, weighted, target, cutoff, first_only, with_paths);
+            iterator.collect::<Vec<(usize, Vec<(usize, ShortestPathInfo<usize>)>)>>()
         }
-    }
-    Ok(x.into_iter().map(|t| (t.0, t.1.unwrap())).collect())
+        false => {
+            let iterator = all_pairs_iter(graph, weighted, target, cutoff, first_only, with_paths);
+            iterator.collect::<Vec<(usize, Vec<(usize, ShortestPathInfo<usize>)>)>>()
+        }
+    };
+    let x = shortest_paths_vecs
+        .into_iter()
+        .map(|(source, shortest_paths)| {
+            let source_name = graph.get_node_by_index(&source).unwrap().name.clone();
+            let shortest_paths_t = convert_shortest_path_info_vec_to_t_map(graph, shortest_paths);
+            (source_name, shortest_paths_t)
+        })
+        .collect();
+    Ok(x)
 }
 
-pub(crate) fn all_pairs_iter<'a, T, A>(
+fn all_pairs_iter<'a, T, A>(
     graph: &'a Graph<T, A>,
     weighted: bool,
     target: Option<T>,
@@ -162,8 +157,8 @@ where
         .collect::<Vec<_>>()
         .into_iter()
         .map(move |node_index| {
-            let ss_index = match can_use_no_options(target.clone(), cutoff, first_only) {
-                true => dijkstra_no_options(graph, weighted, node_index),
+            let ss_index = match can_use_basic(target.clone(), cutoff, first_only, with_paths) {
+                true => dijkstra_basic(graph, weighted, node_index),
                 false => dijkstra(
                     graph,
                     weighted,
@@ -203,8 +198,8 @@ where
         .collect::<Vec<_>>()
         .into_par_iter()
         .map(move |node_index| {
-            let ss_index = match can_use_no_options(target.clone(), cutoff, first_only) {
-                true => dijkstra_no_options(graph, weighted, node_index),
+            let ss_index = match can_use_basic(target.clone(), cutoff, first_only, with_paths) {
+                true => dijkstra_basic(graph, weighted, node_index),
                 false => dijkstra(
                     graph,
                     weighted,
@@ -221,23 +216,6 @@ where
     x
 }
 
-fn convert_vec_shortest_path_usize_to_t<T, A>(
-    graph: &Graph<T, A>,
-    vec: Vec<(usize, ShortestPathInfo<usize>)>,
-) -> Vec<(T, ShortestPathInfo<T>)>
-where
-    T: Hash + Eq + Clone + Ord + Display + Send + Sync,
-    A: Clone + Send + Sync,
-{
-    vec.into_iter()
-        .map(|(k, v)| {
-            (
-                graph.get_node_by_index(&k).unwrap().name.clone(),
-                convert_shortest_path_info_index_to_t(graph, v),
-            )
-        })
-        .collect()
-}
 /**
 Uses Dijkstra's algorithm to find shortest weighted paths from a single source node.
 Unlike most implementations this returns all shortest paths of equal length rather
@@ -295,8 +273,8 @@ where
         Some(t) => Some(graph.get_node_index(&t)?),
         None => None,
     };
-    let result = match can_use_no_options(target, cutoff, first_only) {
-        true => dijkstra_no_options(graph, weighted, source_index),
+    let result = match can_use_basic(target, cutoff, first_only, with_paths) {
+        true => dijkstra_basic(graph, weighted, source_index),
         false => dijkstra(
             graph,
             weighted,
@@ -307,7 +285,7 @@ where
             with_paths,
         ),
     }?;
-    Ok(convert_shortest_path_info_index_map_to_t_map(graph, result))
+    Ok(convert_shortest_path_info_vec_to_t_map(graph, result))
 }
 
 /**
@@ -363,36 +341,62 @@ where
     T: Hash + Eq + Clone + Ord + Display + Send + Sync,
     A: Clone + Send + Sync,
 {
-    let target_index = match target.clone() {
-        Some(t) => Some(graph.get_node_index(&t)?),
-        None => None,
-    };
-    let shortest_path_infos: Result<HashMap<T, HashMap<T, ShortestPathInfo<T>>>, Error> = sources
-        .into_iter()
-        .map(|s| {
-            let source = graph.get_node_index(&s)?;
-            let result = match can_use_no_options(target.clone(), cutoff, first_only) {
-                true => dijkstra_no_options(graph, weighted, source),
-                false => dijkstra(
-                    graph,
-                    weighted,
-                    source,
-                    target_index,
-                    cutoff,
-                    first_only,
-                    with_paths,
-                ),
-            };
-            result.map(|res| {
-                let result_t = convert_shortest_path_info_index_map_to_t_map(graph, res);
-                (s, result_t)
-            })
-        })
-        .collect();
-    match shortest_path_infos {
-        Err(e) => Err(e),
-        Ok(spis) => Ok(spis),
+    let parallel =
+        graph.number_of_nodes() > SERIAL_TO_PARALLEL_THRESHOLD && rayon::current_num_threads() > 1;
+
+    if !graph.has_nodes(&sources) {
+        return Err(Error {
+            kind: ErrorKind::NodeNotFound,
+            message: "One or more source nodes not found in graph".to_string(),
+        });
     }
+
+    if target.is_some() && !graph.has_node(&target.clone().unwrap()) {
+        return Err(Error {
+            kind: ErrorKind::NodeNotFound,
+            message: "Target node not found in graph".to_string(),
+        });
+    }
+
+    let shortest_paths: Vec<(T, HashMap<T, ShortestPathInfo<T>>)> = match parallel {
+        true => sources
+            .into_par_iter()
+            .map(|source| {
+                (
+                    source.clone(),
+                    single_source(
+                        graph,
+                        weighted,
+                        source.clone(),
+                        target.clone(),
+                        cutoff,
+                        first_only,
+                        with_paths,
+                    )
+                    .unwrap(),
+                )
+            })
+            .collect(),
+        false => sources
+            .into_iter()
+            .map(|source| {
+                (
+                    source.clone(),
+                    single_source(
+                        graph,
+                        weighted,
+                        source.clone(),
+                        target.clone(),
+                        cutoff,
+                        first_only,
+                        with_paths,
+                    )
+                    .unwrap(),
+                )
+            })
+            .collect(),
+    };
+    Ok(shortest_paths.into_iter().collect())
 }
 
 fn dijkstra<T, A>(
@@ -408,7 +412,6 @@ where
     T: Hash + Eq + Clone + Ord + Display + Send + Sync,
     A: Clone,
 {
-    // println!("source: {:?}", source);
     let mut paths: Vec<Vec<Vec<usize>>> = vec![];
     if with_paths {
         paths = vec![vec![]; graph.number_of_nodes()];
@@ -429,7 +432,6 @@ where
     while let Some(fringe_item) = fringe.pop() {
         let d = -fringe_item.distance;
         let v = fringe_item.node_index;
-        // println!("    v: {}", v);
         if dist[v] != f64::MAX {
             continue;
         }
@@ -439,14 +441,11 @@ where
         }
         for adj in graph.get_successor_nodes_by_index(&v) {
             let u = adj.node_index;
-            // println!("        u: {}", u);
             let cost = match weighted {
                 true => adj.weight,
                 false => 1.0,
             };
-            // println!("            cost: {}", cost);
             let vu_dist = dist[v] + cost;
-            // println!("            vu_dist: {}", vu_dist);
             if cutoff.map_or(false, |c| vu_dist > c) {
                 continue;
             }
@@ -456,7 +455,6 @@ where
                     return Err(get_contractory_paths_error());
                 }
             } else if vu_dist < seen[u] {
-                // println!("            !seen.contains_key(u)");
                 seen[u] = vu_dist;
                 push_fringe_node(&mut count, &mut fringe, u, vu_dist);
                 if with_paths {
@@ -478,7 +476,7 @@ where
     ))
 }
 
-fn dijkstra_no_options<T, A>(
+fn dijkstra_basic<T, A>(
     graph: &Graph<T, A>,
     weighted: bool,
     source: usize,
@@ -487,7 +485,6 @@ where
     T: Hash + Eq + Clone + Ord + Display + Send + Sync,
     A: Clone,
 {
-    // println!("source: {:?}", source);
     let mut paths: Vec<Vec<Vec<usize>>> = vec![vec![]; graph.number_of_nodes()];
     paths[source] = vec![vec![source]];
 
@@ -506,37 +503,27 @@ where
     while let Some(fringe_item) = fringe.pop() {
         let d = -fringe_item.distance;
         let v = fringe_item.node_index;
-        // println!("    v: {}", v);
         if dist[v] != f64::MAX {
             continue;
         }
         dist[v] = d;
         for adj in graph.get_successor_nodes_by_index(&v) {
             let u = adj.node_index;
-            // println!("        u: {}", u);
             let cost = match weighted {
                 true => adj.weight,
                 false => 1.0,
             };
-            // println!("            cost: {}", cost);
             let vu_dist = dist[v] + cost;
-            // println!("            vu_dist: {}", vu_dist);
             if vu_dist < seen[u] {
-                // println!("            vu_dist < seen[u]");
                 seen[u] = vu_dist;
                 push_fringe_node(&mut count, &mut fringe, u, vu_dist);
-                let mut new_paths_v = paths[v].clone();
-                new_paths_v.iter_mut().for_each(|pv| pv.push(u));
-                paths[u] = new_paths_v;
             } else if vu_dist == seen[u] {
-                // println!("            vu_dist == seen[u]");
                 push_fringe_node(&mut count, &mut fringe, u, vu_dist);
-                add_u_to_v_paths_and_append_v_paths_to_u_paths(u, v, &mut paths);
             }
         }
     }
 
-    Ok(get_shortest_path_infos::<T, A>(dist, &mut paths, true))
+    Ok(get_shortest_path_infos::<T, A>(dist, &mut paths, false))
 }
 
 /// Returns the `Error` object for a contradictory-paths error.
@@ -637,10 +624,7 @@ where
 }
 
 /**
-TODO: update doc
-Zips the `distances` and the `paths` together into an `IntMap` where
-the keys are the names of the target nodes and the values are
-`ShortestPathInfo` objects.
+Zips the `distances` and the `paths` together into a `Vec<(usize, ShortestPathInfo<usize>)>`.
 */
 fn get_shortest_path_infos<T, A>(
     distances: Vec<f64>,
@@ -665,6 +649,10 @@ where
         .collect()
 }
 
+/**
+Converts a `ShortestPathInfo<usize>` to a `ShortestPathInfo<T>`.
+Translates the node indexes to node names.
+ */
 fn convert_shortest_path_info_index_to_t<T, A>(
     graph: &Graph<T, A>,
     spi: ShortestPathInfo<usize>,
@@ -687,7 +675,11 @@ where
     }
 }
 
-fn convert_shortest_path_info_index_map_to_t_map<T, A>(
+/**
+Converts a `Vec<(usize, ShortestPathInfo<usize>)>` to a `HashMap<T, ShortestPathInfo<T>>`.
+Translates the node indexes to node names in a caller-friendly `HashMap`.
+*/
+fn convert_shortest_path_info_vec_to_t_map<T, A>(
     graph: &Graph<T, A>,
     spi_map: Vec<(usize, ShortestPathInfo<usize>)>,
 ) -> HashMap<T, ShortestPathInfo<T>>
@@ -706,6 +698,15 @@ where
         .collect()
 }
 
-fn can_use_no_options<T>(target: Option<T>, cutoff: Option<f64>, first_only: bool) -> bool {
-    target.is_none() && cutoff.is_none() && first_only == false
+/**
+Determines if the "basic" version of Dijkstra's algorithm can be used.
+The basic version is more efficient.
+ */
+fn can_use_basic<T>(
+    target: Option<T>,
+    cutoff: Option<f64>,
+    first_only: bool,
+    with_paths: bool,
+) -> bool {
+    target.is_none() && cutoff.is_none() && first_only == false && with_paths == false
 }

@@ -101,7 +101,7 @@ graph.add_edges(vec![
     Edge::with_weight("n2", "n3", 1.1),
 ]);
 
-let shortest_paths = dijkstra::single_source(&graph, true, "n1", Some("n3"), None, false);
+let shortest_paths = dijkstra::single_source(&graph, true, "n1", Some("n3"), None, false, true);
 assert_eq!(shortest_paths.unwrap().get("n3").unwrap().distance, 2.1);
 ```
 
@@ -110,7 +110,7 @@ assert_eq!(shortest_paths.unwrap().get("n3").unwrap().distance, 2.1);
 ```
 use graphrs::{algorithms::{centrality::{betweenness}}, generators};
 let graph = generators::social::karate_club_graph();
-let centralities = betweenness::betweenness_centrality(&graph, false, true, false);
+let centralities = betweenness::betweenness_centrality(&graph, false, true);
 ```
 
 ## Performance

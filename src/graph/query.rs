@@ -1,5 +1,5 @@
 use super::Graph;
-use crate::{ext::vec::VecExt, Edge, Error, ErrorKind, Node, Successor};
+use crate::{ext::vec::VecExt, Edge, Error, ErrorKind, Node, AdjacentNode};
 use itertools::Itertools;
 use std::collections::{HashMap, HashSet};
 use std::fmt::Display;
@@ -902,7 +902,7 @@ where
         }
     }
 
-    pub(crate) fn get_successor_nodes_by_index(&self, node_index: &usize) -> &Vec<Successor>
+    pub(crate) fn get_successor_nodes_by_index(&self, node_index: &usize) -> &Vec<AdjacentNode>
     where
         T: Hash + Eq + Clone + Ord,
         A: Clone,
@@ -910,7 +910,7 @@ where
         &self.successors_vec[*node_index]
     }
 
-    pub(crate) fn get_predecessor_nodes_by_index(&self, node_index: &usize) -> &Vec<Successor>
+    pub(crate) fn get_predecessor_nodes_by_index(&self, node_index: &usize) -> &Vec<AdjacentNode>
     where
         T: Hash + Eq + Clone + Ord,
         A: Clone,

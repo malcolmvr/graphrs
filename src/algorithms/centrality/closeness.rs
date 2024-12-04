@@ -1,6 +1,6 @@
 #![allow(non_snake_case)]
 
-use super::fringe_node::FringeNode;
+use super::fringe_node::{push_fringe_node, FringeNode};
 use crate::{Error, Graph};
 use nohash::{IntMap, IntSet};
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
@@ -29,7 +29,7 @@ original formula.
 ```
 use graphrs::{algorithms::{centrality::{closeness}}, generators};
 let graph = generators::social::karate_club_graph();
-let centralities = closeness::closeness_centrality(&graph, false, true, false);
+let centralities = closeness::closeness_centrality(&graph, false, true);
 ```
 
 # References
@@ -44,13 +44,11 @@ pub fn closeness_centrality<T, A>(
     graph: &Graph<T, A>,
     weighted: bool,
     wf_improved: bool,
-    parallel: bool,
 ) -> Result<HashMap<T, f64>, Error>
 where
     T: Hash + Eq + Clone + Ord + Debug + Display + Send + Sync,
     A: Clone + Send + Sync,
 {
-    /* */
     let mut the_graph = graph;
     let x: Graph<T, A>;
     if graph.specs.directed {
@@ -59,6 +57,7 @@ where
     }
     let num_nodes = the_graph.number_of_nodes();
     let mut centralities = HashMap::new();
+    let parallel = graph.number_of_nodes() > 20 && rayon::current_num_threads() > 1;
     match parallel {
         true => {
             let results: Vec<(T, f64)> = (0..the_graph.number_of_nodes())
@@ -179,19 +178,6 @@ where
         .enumerate()
         .filter(|(_, d)| *d != f64::MAX)
         .collect()
-}
-
-/**
-Pushes a `FringeNode` into the `fringe` `BinaryHeap`.
-Increments `count`.
-*/
-#[inline]
-fn push_fringe_node(fringe: &mut BinaryHeap<FringeNode>, v: usize, w: usize, vw_dist: f64) {
-    fringe.push(FringeNode {
-        distance: -vw_dist, // negative because BinaryHeap is a max heap
-        pred: v,
-        v: w,
-    });
 }
 
 #[inline]
