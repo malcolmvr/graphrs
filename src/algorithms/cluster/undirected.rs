@@ -57,7 +57,7 @@ where
             w_nbrs.intersection(nbrs).collect::<HashSet<&T>>().len()
         })
         .sorted()
-        .group_by_count()
+        .chunk_by_count()
         .collect();
     let ntriangles: usize = generalized_degree.iter().map(|(k, val)| k * val).sum();
     TrianglesAndDegrees {
