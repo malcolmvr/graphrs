@@ -40,7 +40,7 @@ where
     let mut return_vec = vec![];
     for v in graph.get_all_node_names() {
         if !seen.contains(v) {
-            let bfs = graph.breadth_first_search(v).to_hashset();
+            let bfs = graph.breadth_first_search(&v).to_hashset();
             seen = seen.union(&bfs).cloned().collect();
             return_vec.push(bfs);
         }

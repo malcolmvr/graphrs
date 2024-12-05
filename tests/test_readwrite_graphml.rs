@@ -21,7 +21,7 @@ mod tests {
         let edges = graph.get_all_edges();
         assert_eq!(edges.len(), 78);
 
-        // assert!(std::fs::remove_file(file).is_ok());
+        assert!(std::fs::remove_file(file).is_ok());
     }
 
     #[test]

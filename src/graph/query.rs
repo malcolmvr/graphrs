@@ -1,9 +1,10 @@
 use super::Graph;
-use crate::{ext::vec::VecExt, Edge, Error, ErrorKind, Node};
+use crate::{ext::vec::VecExt, Edge, Error, ErrorKind, Node, AdjacentNode};
 use itertools::Itertools;
 use std::collections::{HashMap, HashSet};
 use std::fmt::Display;
 use std::hash::Hash;
+use std::sync::Arc;
 
 impl<T, A> Graph<T, A>
 where
@@ -90,7 +91,7 @@ where
     assert_eq!(all_edges.len(), 2);
     ```
     **/
-    pub fn get_all_edges(&self) -> Vec<&Edge<T, A>>
+    pub fn get_all_edges(&self) -> Vec<&Arc<Edge<T, A>>>
     where
         T: Hash + Eq + Clone + Ord,
         A: Clone,
@@ -99,7 +100,7 @@ where
             .values()
             .into_iter()
             .flatten()
-            .collect::<Vec<&Edge<T, A>>>()
+            .collect::<Vec<&Arc<Edge<T, A>>>>()
     }
 
     /**
@@ -119,12 +120,12 @@ where
     assert_eq!(all_nodes.len(), 2);
     ```
     */
-    pub fn get_all_nodes(&self) -> Vec<&Node<T, A>>
+    pub fn get_all_nodes(&self) -> Vec<&Arc<Node<T, A>>>
     where
         T: Hash + Eq + Clone + Ord,
         A: Clone,
     {
-        self.nodes.values().collect::<Vec<&Node<T, A>>>()
+        self.nodes_vec.iter().collect()
     }
 
     /**
@@ -149,7 +150,7 @@ where
         T: Hash + Eq + Clone + Ord,
         A: Clone,
     {
-        self.nodes.keys().collect::<Vec<&T>>()
+        self.nodes_vec.iter().map(|n| &n.name).collect()
     }
 
     /**
@@ -188,21 +189,44 @@ where
             });
         }
 
-        let ordered = match !self.specs.directed && u > v {
-            false => (u.clone(), v.clone()),
-            true => (v.clone(), u.clone()),
+        if !self.nodes_map.contains_key(&u) || !self.nodes_map.contains_key(&v) {
+            return Err(Error {
+                kind: ErrorKind::NodeNotFound,
+                message: "One or both of the specified nodes were not found in the graph."
+                    .to_string(),
+            });
+        }
+
+        let u_node_index = self.get_node_index(&u).unwrap();
+        let v_node_index = self.get_node_index(&v).unwrap();
+
+        self.get_edge_by_indexes(u_node_index, v_node_index)
+    }
+
+    pub(crate) fn get_edge_by_indexes(&self, u: usize, v: usize) -> Result<&Edge<T, A>, Error>
+    where
+        T: Hash + Eq + Clone + Ord,
+        A: Clone,
+    {
+        let (ordered_u, ordered_v) = match !self.specs.directed && u > v {
+            false => (u, v),
+            true => (v, u),
         };
 
-        let edges = self.edges.get(&ordered);
-        match edges {
+        match self.edges_map.get(&ordered_u) {
             None => Err(Error {
                 kind: ErrorKind::EdgeNotFound,
                 message: format!("The requested edge ({}, {}) does not exist.", u, v),
             }),
-            Some(e) => Ok(&e[0]),
+            Some(edges) => match edges.get(&ordered_v) {
+                None => Err(Error {
+                    kind: ErrorKind::EdgeNotFound,
+                    message: format!("The requested edge ({}, {}) does not exist.", u, v),
+                }),
+                Some(e) => Ok(&e[0]),
+            },
         }
     }
-
     /**
     Gets the edges between `u` and `v` nodes.
 
@@ -234,7 +258,7 @@ where
     assert_eq!(edges.unwrap().len(), 2);
     ```
     */
-    pub fn get_edges(&self, u: T, v: T) -> Result<Vec<&Edge<T, A>>, Error>
+    pub fn get_edges(&self, u: T, v: T) -> Result<Vec<&Arc<Edge<T, A>>>, Error>
     where
         T: Hash + Eq + Clone + Ord,
         A: Clone,
@@ -246,18 +270,46 @@ where
             });
         }
 
-        let ordered = match !self.specs.directed && u > v {
-            false => (u.clone(), v.clone()),
-            true => (v.clone(), u.clone()),
+        if !self.nodes_map.contains_key(&u) || !self.nodes_map.contains_key(&v) {
+            return Err(Error {
+                kind: ErrorKind::NodeNotFound,
+                message: "One or both of the specified nodes were not found in the graph."
+                    .to_string(),
+            });
+        }
+
+        let u_node_index = self.get_node_index(&u).unwrap();
+        let v_node_index = self.get_node_index(&v).unwrap();
+
+        self.get_edges_by_indexes(u_node_index, v_node_index)
+    }
+
+    pub(crate) fn get_edges_by_indexes(
+        &self,
+        u: usize,
+        v: usize,
+    ) -> Result<Vec<&Arc<Edge<T, A>>>, Error>
+    where
+        T: Hash + Eq + Clone + Ord,
+        A: Clone,
+    {
+        let (ordered_u, ordered_v) = match !self.specs.directed && u > v {
+            false => (u, v),
+            true => (v, u),
         };
 
-        let edges = self.edges.get(&ordered);
-        match edges {
+        match self.edges_map.get(&ordered_u) {
             None => Err(Error {
                 kind: ErrorKind::EdgeNotFound,
-                message: format!("No edges found for the requested ({}, {})", u, v),
+                message: format!("The requested edge ({}, {}) does not exist.", u, v),
             }),
-            Some(e) => Ok(e.iter().collect::<Vec<&Edge<T, A>>>()),
+            Some(edges) => match edges.get(&ordered_v) {
+                None => Err(Error {
+                    kind: ErrorKind::EdgeNotFound,
+                    message: format!("The requested edge ({}, {}) does not exist.", u, v),
+                }),
+                Some(e) => Ok(e.iter().collect()),
+            },
         }
     }
 
@@ -282,7 +334,7 @@ where
     assert_eq!(n2_edges.len(), 2);
     ```
     */
-    pub fn get_edges_for_node(&self, name: T) -> Result<Vec<&Edge<T, A>>, Error>
+    pub fn get_edges_for_node(&self, name: T) -> Result<Vec<&Arc<Edge<T, A>>>, Error>
     where
         T: Hash + Eq + Clone + Ord,
         A: Clone,
@@ -299,7 +351,7 @@ where
         let pred_edges = pred_node_names
             .iter()
             .flat_map(|pnn| self.edges.get(&(pnn.clone(), name.clone())).unwrap());
-        let succ_edges: Vec<&Edge<T, A>> = succ_node_names
+        let succ_edges: Vec<&Arc<Edge<T, A>>> = succ_node_names
             .iter()
             .flat_map(|snn| {
                 let ordered = match !self.specs.directed && name > snn.clone() {
@@ -334,7 +386,7 @@ where
     assert_eq!(n2_edges.len(), 2);
     ```
     */
-    pub fn get_edges_for_nodes(&self, names: &[T]) -> Result<Vec<&Edge<T, A>>, Error>
+    pub fn get_edges_for_nodes(&self, names: &[T]) -> Result<Vec<&Arc<Edge<T, A>>>, Error>
     where
         T: Hash + Eq + Clone + Ord,
         A: Clone,
@@ -377,7 +429,7 @@ where
     assert_eq!(n2_in_edges.len(), 2);
     ```
     */
-    pub fn get_in_edges_for_node(&self, name: T) -> Result<Vec<&Edge<T, A>>, Error>
+    pub fn get_in_edges_for_node(&self, name: T) -> Result<Vec<&Arc<Edge<T, A>>>, Error>
     where
         T: Hash + Eq + Clone + Ord,
         A: Clone,
@@ -425,7 +477,7 @@ where
     assert_eq!(n2_in_edges.len(), 2);
     ```
     */
-    pub fn get_in_edges_for_nodes(&self, names: &[T]) -> Result<Vec<&Edge<T, A>>, Error>
+    pub fn get_in_edges_for_nodes(&self, names: &[T]) -> Result<Vec<&Arc<Edge<T, A>>>, Error>
     where
         T: Hash + Eq + Clone + Ord,
         A: Clone,
@@ -475,7 +527,7 @@ where
     assert_eq!(n2_out_edges.len(), 2);
     ```
     */
-    pub fn get_out_edges_for_node(&self, name: T) -> Result<Vec<&Edge<T, A>>, Error>
+    pub fn get_out_edges_for_node(&self, name: T) -> Result<Vec<&Arc<Edge<T, A>>>, Error>
     where
         T: Hash + Eq + Clone + Ord,
         A: Clone,
@@ -523,7 +575,7 @@ where
     assert_eq!(n1_out_edges.len(), 2);
     ```
     */
-    pub fn get_out_edges_for_nodes(&self, names: &[T]) -> Result<Vec<&Edge<T, A>>, Error>
+    pub fn get_out_edges_for_nodes(&self, names: &[T]) -> Result<Vec<&Arc<Edge<T, A>>>, Error>
     where
         T: Hash + Eq + Clone + Ord,
         A: Clone,
@@ -577,26 +629,29 @@ where
     assert_eq!(neighbors.unwrap().len(), 2);
     ```
     */
-    pub fn get_neighbor_nodes(&self, node_name: T) -> Result<Vec<&Node<T, A>>, Error>
+    pub fn get_neighbor_nodes(&self, node_name: T) -> Result<Vec<&Arc<Node<T, A>>>, Error>
     where
         T: Hash + Eq + Clone + Ord,
         A: Clone,
     {
-        if !self.nodes.contains_key(&node_name.clone()) {
+        if !self.nodes_map.contains_key(&node_name.clone()) {
             return Err(Error {
                 kind: ErrorKind::NodeNotFound,
                 message: format!("Requested node '{}' was not found in the graph.", node_name),
             });
         }
 
-        let pred_nodes = self._get_predecessor_nodes(node_name.clone()).unwrap();
-        let succ_nodes = self._get_successor_nodes(node_name).unwrap();
+        let node_index = self.get_node_index(&node_name).unwrap();
+
+        let pred_nodes = self.get_predecessor_nodes_by_index(&node_index);
+        let succ_nodes = self.get_successor_nodes_by_index(&node_index);
 
         let all_nodes = pred_nodes
             .into_iter()
             .chain(succ_nodes)
-            .sorted_by(|a, b| Ord::cmp(&a, &b))
-            .dedup_by(|a, b| a == b)
+            .sorted_by(|a, b| Ord::cmp(&a.node_index, &b.node_index))
+            .dedup_by(|a, b| a.node_index == b.node_index)
+            .map(|adj| self.get_node_by_index(&adj.node_index).unwrap())
             .collect();
 
         Ok(all_nodes)
@@ -620,12 +675,18 @@ where
     assert_eq!(node.unwrap().attributes.unwrap(), 99);
     ```
     */
-    pub fn get_node(&self, name: T) -> Option<&Node<T, A>>
+    pub fn get_node(&self, name: T) -> Option<&Arc<Node<T, A>>>
     where
         T: Hash + Eq + Clone + Ord,
         A: Clone,
     {
-        self.nodes.get(&name)
+        match self.nodes_map.contains_key(&name) {
+            true => {
+                let node_index = self.get_node_index(&name).unwrap();
+                self.get_node_by_index(&node_index)
+            }
+            false => None,
+        }
     }
 
     /**
@@ -655,7 +716,7 @@ where
     assert_eq!(predecessors.unwrap().len(), 2);
     ```
     */
-    pub fn get_predecessor_nodes(&self, node_name: T) -> Result<Vec<&Node<T, A>>, Error>
+    pub fn get_predecessor_nodes(&self, node_name: T) -> Result<Vec<&Arc<Node<T, A>>>, Error>
     where
         T: Hash + Eq + Clone + Ord,
         A: Clone,
@@ -708,21 +769,25 @@ where
         Ok(nodes.into_iter().map(|n| &n.name).collect())
     }
 
-    fn _get_predecessor_nodes(&self, node_name: T) -> Result<Vec<&Node<T, A>>, Error>
+    fn _get_predecessor_nodes(&self, node_name: T) -> Result<Vec<&Arc<Node<T, A>>>, Error>
     where
         T: Hash + Eq + Clone + Ord,
         A: Clone,
     {
-        if !self.nodes.contains_key(&node_name) {
+        if !self.nodes_map.contains_key(&node_name) {
             return Err(Error {
                 kind: ErrorKind::NodeNotFound,
                 message: format!("Requested node '{}' was not found in the graph", node_name),
             });
         }
-        let pred = self.predecessors.get(&node_name);
+        let node_index = self.get_node_index(&node_name).unwrap();
+        let pred = self.predecessors_map.get(&node_index);
         match pred {
             None => Ok(vec![]),
-            Some(hashset) => Ok(self.get_nodes_for_names(hashset)),
+            Some(hashset) => Ok(hashset
+                .iter()
+                .map(|index| self.get_node_by_index(index).unwrap())
+                .collect()),
         }
     }
 
@@ -762,7 +827,7 @@ where
     assert_eq!(successors.unwrap().len(), 2);
     ```
     */
-    pub fn get_successor_nodes(&self, node_name: T) -> Result<Vec<&Node<T, A>>, Error>
+    pub fn get_successor_nodes(&self, node_name: T) -> Result<Vec<&Arc<Node<T, A>>>, Error>
     where
         T: Hash + Eq + Clone + Ord,
         A: Clone,
@@ -815,22 +880,42 @@ where
         Ok(nodes.into_iter().map(|n| &n.name).collect())
     }
 
-    fn _get_successor_nodes(&self, node_name: T) -> Result<Vec<&Node<T, A>>, Error>
+    fn _get_successor_nodes(&self, node_name: T) -> Result<Vec<&Arc<Node<T, A>>>, Error>
     where
         T: Hash + Eq + Clone + Ord,
         A: Clone,
     {
-        if !self.nodes.contains_key(&node_name) {
+        if !self.nodes_map.contains_key(&node_name) {
             return Err(Error {
                 kind: ErrorKind::NodeNotFound,
                 message: format!("Requested node '{}' was not found in the graph.", node_name),
             });
         }
-        let succ = self.successors.get(&node_name);
+        let nodex_index = self.get_node_index(&node_name).unwrap();
+        let succ = self.successors_map.get(&nodex_index);
         match succ {
             None => Ok(vec![]),
-            Some(hashset) => Ok(self.get_nodes_for_names(hashset)),
+            Some(hashset) => Ok(hashset
+                .iter()
+                .map(|index| self.get_node_by_index(index).unwrap())
+                .collect()),
         }
+    }
+
+    pub(crate) fn get_successor_nodes_by_index(&self, node_index: &usize) -> &Vec<AdjacentNode>
+    where
+        T: Hash + Eq + Clone + Ord,
+        A: Clone,
+    {
+        &self.successors_vec[*node_index]
+    }
+
+    pub(crate) fn get_predecessor_nodes_by_index(&self, node_index: &usize) -> &Vec<AdjacentNode>
+    where
+        T: Hash + Eq + Clone + Ord,
+        A: Clone,
+    {
+        &self.predecessors_vec[*node_index]
     }
 
     /// Gets a `HashMap` of all the successor edges.
@@ -847,7 +932,7 @@ where
 
     Returns neighbors of a node if the `graph` is undirected.
     */
-    pub fn get_successors_or_neighbors(&self, node_name: T) -> Vec<&Node<T, A>>
+    pub fn get_successors_or_neighbors(&self, node_name: T) -> Vec<&Arc<Node<T, A>>>
     where
         T: Hash + Eq + Clone + Ord + Display + Send + Sync,
         A: Clone,
@@ -857,7 +942,6 @@ where
             false => self.get_neighbor_nodes(node_name).unwrap(),
         }
     }
-
     /**
     Returns `true` if the graph contains a given node, `false` otherwise.
 
@@ -904,6 +988,30 @@ where
     }
 
     /**
+    Returns the number of nodes in the graph.
+    ```
+    use graphrs::{generators};
+    let graph = generators::social::karate_club_graph();
+    assert_eq!(graph.number_of_nodes(), 34);
+    ```
+    */
+    pub fn number_of_nodes(&self) -> usize {
+        self.nodes_vec.len()
+    }
+
+    /**
+    Returns the number of nodes in the graph.
+    ```
+    use graphrs::{generators};
+    let graph = generators::social::karate_club_graph();
+    assert_eq!(graph.number_of_nodes(), 34);
+    ```
+    */
+    pub fn number_of_edges(&self) -> usize {
+        self.edges.len()
+    }
+
+    /**
     Returns the number of edges or sum of all edge weights.
 
     # Arguments
@@ -925,16 +1033,25 @@ where
         }
     }
 
-    // PRIVATE METHODS
-
-    fn get_nodes_for_names(&self, names: &HashSet<T>) -> Vec<&Node<T, A>>
+    pub fn get_node_by_index(&self, node_index: &usize) -> Option<&Arc<Node<T, A>>>
     where
         T: Hash + Eq + Clone + Ord,
         A: Clone,
     {
-        names
-            .iter()
-            .map(|n| self.nodes.get(n).unwrap())
-            .collect::<Vec<&Node<T, A>>>()
+        self.nodes_map_rev.get(node_index)
+    }
+
+    pub(crate) fn get_node_index(&self, node_name: &T) -> Result<usize, Error>
+    where
+        T: Hash + Eq + Clone + Ord,
+        A: Clone,
+    {
+        match self.nodes_map.get(node_name) {
+            Some(node_index) => Ok(*node_index),
+            None => Err(Error {
+                kind: ErrorKind::NodeNotFound,
+                message: format!("Node '{}' not found in the graph.", node_name),
+            }),
+        }
     }
 }

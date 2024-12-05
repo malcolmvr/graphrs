@@ -8,6 +8,7 @@ mod tests {
     use itertools::Itertools;
     use std::collections::HashSet;
     use std::iter::FromIterator;
+    use std::sync::Arc;
 
     #[test]
     fn test_add_edge_1() {
@@ -332,7 +333,7 @@ mod tests {
         assert!(hashset.contains("n3"));
 
         let nodes = graph.get_successor_nodes("n3");
-        let expected: Vec<&Node<&str, ()>> = vec![];
+        let expected: Vec<&Arc<Node<&str, ()>>> = vec![];
         assert_eq!(nodes.unwrap(), expected);
     }
 
@@ -353,7 +354,7 @@ mod tests {
         assert!(hashset.contains("n3"));
 
         let nodes = graph.get_successors_or_neighbors("n3");
-        let expected: Vec<&Node<&str, ()>> = vec![];
+        let expected: Vec<&Arc<Node<&str, ()>>> = vec![];
         assert_eq!(nodes, expected);
     }
 

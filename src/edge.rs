@@ -2,6 +2,7 @@ use std::cmp::{Ord, Ordering, PartialOrd};
 use std::fmt;
 use std::fmt::{Debug, Display};
 use std::hash::{Hash, Hasher};
+use std::sync::Arc;
 
 /**
 Represents a graph edge as (`u`, `v`).
@@ -48,13 +49,13 @@ where
     ];
     ```
     */
-    pub fn new(u: T, v: T) -> Edge<T, A> {
-        Edge {
+    pub fn new(u: T, v: T) -> Arc<Edge<T, A>> {
+        Arc::new(Edge {
             u,
             v,
             attributes: None,
             weight: f64::NAN,
-        }
+        })
     }
 
     /**
@@ -68,10 +69,10 @@ where
     assert_eq!(edge2.v, "n2");
     ```
     */
-    pub fn ordered(self: Edge<T, A>) -> Edge<T, A> {
+    pub fn ordered(self: &Edge<T, A>) -> Edge<T, A> {
         match self.u > self.v {
             true => self.reversed(),
-            false => self,
+            false => self.clone(),
         }
     }
 
@@ -85,11 +86,11 @@ where
     assert_eq!(edge2.v, "n2");
     ```
     */
-    pub fn reversed(self: Edge<T, A>) -> Edge<T, A> {
+    pub fn reversed(self: &Edge<T, A>) -> Edge<T, A> {
         Edge {
-            u: self.v,
-            v: self.u,
-            ..self
+            u: self.v.clone(),
+            v: self.u.clone(),
+            ..self.clone()
         }
     }
 
@@ -112,13 +113,13 @@ where
     ];
     ```
     */
-    pub fn with_weight(u: T, v: T, weight: f64) -> Edge<T, A> {
-        Edge {
+    pub fn with_weight(u: T, v: T, weight: f64) -> Arc<Edge<T, A>> {
+        Arc::new(Edge {
             u,
             v,
             attributes: None,
             weight,
-        }
+        })
     }
 }
 

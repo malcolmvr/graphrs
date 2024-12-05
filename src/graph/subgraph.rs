@@ -3,6 +3,7 @@ use crate::{Edge, Node};
 use std::collections::HashSet;
 use std::fmt::Display;
 use std::hash::Hash;
+use std::sync::Arc;
 
 impl<T, A> Graph<T, A>
 where
@@ -33,13 +34,13 @@ where
             .into_iter()
             .filter(|n| nodes_set.contains(&n.name))
             .cloned()
-            .collect::<Vec<Node<T, A>>>();
+            .collect::<Vec<Arc<Node<T, A>>>>();
         let new_edges = self
             .get_all_edges()
             .into_iter()
             .filter(|e| nodes_set.contains(&e.u) && nodes_set.contains(&e.v))
             .cloned()
-            .collect::<Vec<Edge<T, A>>>();
+            .collect::<Vec<Arc<Edge<T, A>>>>();
         Graph::new_from_nodes_and_edges(new_nodes, new_edges, self.specs.clone()).unwrap()
     }
 }

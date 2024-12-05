@@ -4,6 +4,7 @@ mod utility;
 mod tests {
 
     use graphrs::{algorithms::components, Edge, Graph, GraphSpecs};
+    use std::sync::Arc;
 
     #[test]
     fn test_strongly_connected_components_1() {
@@ -56,7 +57,7 @@ mod tests {
 
     #[test]
     fn test_strongly_connected_components_4() {
-        let edges: Vec<Edge<i32, ()>> = vec![
+        let edges: Vec<Arc<Edge<i32, ()>>> = vec![
             Edge::new(0, 1),
             Edge::new(1, 6),
             Edge::new(1, 7),

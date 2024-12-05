@@ -2,6 +2,7 @@ use std::cmp::Ordering;
 use std::fmt;
 use std::fmt::{Debug, Display};
 use std::hash::{Hash, Hasher};
+use std::sync::Arc;
 
 /**
 Represents a graph node, with `name` and `attributes`.
@@ -32,11 +33,11 @@ where
     let node = Node::<&str, ()>::from_name("n1");
     ```
     */
-    pub fn from_name(name: T) -> Node<T, A> {
-        Node {
+    pub fn from_name(name: T) -> Arc<Node<T, A>> {
+        Arc::new(Node {
             name,
             attributes: None,
-        }
+        })
     }
 
     /**
@@ -61,14 +62,14 @@ where
     let node = Node::from_name_and_attributes("n1", Attributes {a: 3, b: 4.5});
     ```
     */
-    pub fn from_name_and_attributes(name: T, attributes: A) -> Node<T, A>
+    pub fn from_name_and_attributes(name: T, attributes: A) -> Arc<Node<T, A>>
     where
         T: Hash + Eq + Clone,
     {
-        Node {
+        Arc::new(Node {
             name,
             attributes: Some(attributes),
-        }
+        })
     }
 }
 

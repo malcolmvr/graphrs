@@ -27,7 +27,7 @@ mod tests {
         )
         .unwrap();
 
-        let result = dijkstra::all_pairs(&graph, false, None, false);
+        let result = dijkstra::all_pairs(&graph, false, None, None, false, true);
         assert!(result.is_ok());
         let unwrapped = result.unwrap();
         assert_eq!(
@@ -204,11 +204,9 @@ mod tests {
         )
         .unwrap();
 
-        let result = dijkstra::single_source(&graph, false, "n1", Some("n3"), None, false);
+        let result = dijkstra::single_source(&graph, false, "n1", Some("n3"), None, false, true);
         assert!(result.is_ok());
         let unwrapped = result.unwrap();
-        assert!(unwrapped.get("n1").is_none());
-        assert!(unwrapped.get("n2").is_none());
         assert_eq!(unwrapped.get("n3").unwrap().distance, 2.0);
         assert_paths_contain_same_items(
             &unwrapped.get("n3").unwrap().paths,
@@ -241,7 +239,7 @@ mod tests {
         )
         .unwrap();
 
-        let result = dijkstra::single_source(&graph, false, "n12", Some("n9"), None, false);
+        let result = dijkstra::single_source(&graph, false, "n12", Some("n9"), None, false, true);
         assert!(result.is_ok());
         let unwrapped = result.unwrap();
         assert_eq!(unwrapped.get("n9").unwrap().distance, 3.0);
@@ -276,7 +274,7 @@ mod tests {
         )
         .unwrap();
 
-        let result = dijkstra::single_source(&graph, false, "n12", Some("n9"), None, true);
+        let result = dijkstra::single_source(&graph, false, "n12", Some("n9"), None, true, true);
         assert!(result.is_ok());
         let unwrapped = result.unwrap();
         let n9 = unwrapped.get("n9").unwrap();
@@ -307,10 +305,9 @@ mod tests {
         )
         .unwrap();
 
-        let result = dijkstra::single_source(&graph, false, "n1", Some("n5"), None, true);
+        let result = dijkstra::single_source(&graph, false, "n1", Some("n5"), None, true, true);
         assert!(result.is_ok());
         let unwrapped = result.unwrap();
-        assert_eq!(unwrapped.keys().len(), 0);
         let n5 = unwrapped.get("n5");
         assert!(n5.is_none());
     }
@@ -333,10 +330,12 @@ mod tests {
 
         let graph = Graph::new_from_nodes_and_edges(nodes, edges, GraphSpecs::directed()).unwrap();
 
-        let result = dijkstra::multi_source(&graph, false, vec!["n1"], Some("n3"), None, false);
+        let result =
+            dijkstra::multi_source(&graph, false, vec!["n1"], Some("n3"), None, false, true);
         assert!(result.is_ok());
         let unwrapped = result.unwrap();
-        let n3_info = unwrapped.get("n3").unwrap();
+        let n1_info = unwrapped.get("n1").unwrap();
+        let n3_info = n1_info.get("n3").unwrap();
         assert_eq!(n3_info.distance, 2.0);
         assert_paths_contain_same_items(
             &n3_info.paths,
@@ -365,21 +364,22 @@ mod tests {
         )
         .unwrap();
 
-        let result = dijkstra::multi_source(&graph, false, vec!["n1"], None, None, false);
+        let result = dijkstra::multi_source(&graph, false, vec!["n1"], None, None, false, true);
         assert!(result.is_ok());
         let unwrapped = result.unwrap();
-        assert_eq!(unwrapped.get("n1").unwrap().distance, 0.0);
-        assert_eq!(unwrapped.get("n2").unwrap().distance, 1.0);
-        assert_eq!(unwrapped.get("n2").unwrap().paths, vec![vec!["n1", "n2"]]);
-        assert_eq!(unwrapped.get("n3").unwrap().distance, 2.0);
+        let n1_info = unwrapped.get("n1").unwrap();
+        assert_eq!(n1_info.get("n1").unwrap().distance, 0.0);
+        assert_eq!(n1_info.get("n2").unwrap().distance, 1.0);
+        assert_eq!(n1_info.get("n2").unwrap().paths, vec![vec!["n1", "n2"]]);
+        assert_eq!(n1_info.get("n3").unwrap().distance, 2.0);
         assert_paths_contain_same_items(
-            &unwrapped.get("n3").unwrap().paths,
+            &n1_info.get("n3").unwrap().paths,
             &[vec!["n1", "n4", "n3"], vec!["n1", "n2", "n3"]],
         );
-        assert_eq!(unwrapped.get("n4").unwrap().distance, 1.0);
-        assert_eq!(unwrapped.get("n4").unwrap().paths, vec![vec!["n1", "n4"]]);
-        assert_eq!(unwrapped.get("n5").unwrap().distance, 1.0);
-        assert_eq!(unwrapped.get("n5").unwrap().paths, vec![vec!["n1", "n5"]]);
+        assert_eq!(n1_info.get("n4").unwrap().distance, 1.0);
+        assert_eq!(n1_info.get("n4").unwrap().paths, vec![vec!["n1", "n4"]]);
+        assert_eq!(n1_info.get("n5").unwrap().distance, 1.0);
+        assert_eq!(n1_info.get("n5").unwrap().paths, vec![vec!["n1", "n5"]]);
     }
 
     #[test]

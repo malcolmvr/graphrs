@@ -1,11 +1,11 @@
 use itertools::Itertools;
 
-pub struct GroupByCount<I: Iterator> {
+pub struct ChunkByCount<I: Iterator> {
     #[allow(clippy::type_complexity)]
-    inner: itertools::structs::GroupBy<I::Item, I, fn(&I::Item) -> I::Item>,
+    inner: itertools::structs::ChunkBy<I::Item, I, fn(&I::Item) -> I::Item>,
 }
 
-impl<I> Iterator for GroupByCount<I>
+impl<I> Iterator for ChunkByCount<I>
 where
     I: Iterator,
     I::Item: PartialEq,
@@ -16,12 +16,12 @@ where
         self.inner
             .into_iter()
             .next()
-            .map(|(key, group)| (key, group.count()))
+            .map(|(key, chunk)| (key, chunk.count()))
     }
 }
 
 pub trait IteratorExt: Iterator {
-    fn group_by_count(self) -> GroupByCount<Self>
+    fn chunk_by_count(self) -> ChunkByCount<Self>
     where
         Self: Sized;
 }
@@ -31,12 +31,12 @@ where
     I: Iterator,
     I::Item: Clone + PartialEq,
 {
-    fn group_by_count(self) -> GroupByCount<Self>
+    fn chunk_by_count(self) -> ChunkByCount<Self>
     where
         Self: Sized,
     {
-        GroupByCount {
-            inner: self.group_by(|i| i.clone()),
+        ChunkByCount {
+            inner: self.chunk_by(|i| i.clone()),
         }
     }
 }
@@ -50,7 +50,7 @@ mod tests {
     #[test]
     fn test_group_by_count_1() {
         let data = vec![1, 3, -2, -2, 1, 0, 1, 2];
-        let result: HashMap<i32, usize> = data.into_iter().sorted().group_by_count().collect();
+        let result: HashMap<i32, usize> = data.into_iter().sorted().chunk_by_count().collect();
         assert_eq!(result.get(&-2).unwrap(), &2);
         assert_eq!(result.get(&0).unwrap(), &1);
         assert_eq!(result.get(&1).unwrap(), &3);

@@ -67,10 +67,8 @@ struct NodeAttribute<'a> {
 };
 
 let mut graph: Graph<i32, NodeAttribute> = Graph::new(GraphSpecs::undirected());
-graph.add_node(Node {
-    name: 1,
-    attributes: Some(NodeAttribute {first_name: "Jane", last_name: "Smith"})
-});
+let node = Node::from_name_and_attributes(1, NodeAttribute {first_name: "John", last_name: "Doe"});
+graph.add_node(node);
 ```
 !*/
 
@@ -89,6 +87,8 @@ mod ext;
 
 mod graph;
 pub use graph::Graph;
+
+pub(crate) use graph::adjacent_node::AdjacentNode;
 
 pub mod algorithms;
 pub mod generators;

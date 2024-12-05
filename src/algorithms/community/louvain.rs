@@ -9,6 +9,7 @@ use rand::thread_rng;
 use std::collections::{HashMap, HashSet};
 use std::fmt::Display;
 use std::hash::Hash;
+use std::sync::Arc;
 
 /**
 Returns the best partition of a graph, using the Louvain algorithm.
@@ -378,18 +379,21 @@ where
             let u = *node_map.get(&n.name.clone()).unwrap();
             Node::from_name_and_attributes(u, vec![u].into_iter().collect::<HashSet<usize>>())
         })
-        .collect();
+        .collect::<Vec<_>>();
     let edges = graph
         .get_all_edges()
         .iter()
-        .map(|e| Edge {
-            u: *node_map.get(&e.u.clone()).unwrap(),
-            v: *node_map.get(&e.v.clone()).unwrap(),
-            weight: e.weight,
-            attributes: None,
+        .map(|e| {
+            Arc::new(Edge {
+                u: *node_map.get(&e.u.clone()).unwrap(),
+                v: *node_map.get(&e.v.clone()).unwrap(),
+                weight: e.weight,
+                attributes: None,
+            })
         })
         .collect();
-    Graph::new_from_nodes_and_edges(nodes, edges, graph.specs.clone()).unwrap()
+    Graph::new_from_nodes_and_edges(nodes.into_iter().collect(), edges, graph.specs.clone())
+        .unwrap()
 }
 
 /// Generates a new graph based on the partitions of a given graph.
@@ -489,12 +493,12 @@ mod tests {
     fn test_convert_graph() {
         let mut graph = Graph::<&str, ()>::new(GraphSpecs {multi_edges: true, ..GraphSpecs::directed_create_missing()});
         graph.add_edges(vec![
-            Edge {u: "n1", v: "n2", weight: 1.0, attributes: None},
-            Edge {u: "n1", v: "n2", weight: 1.1, attributes: None},
-            Edge {u: "n2", v: "n1", weight: 1.2, attributes: None},
-            Edge {u: "n1", v: "n3", weight: 1.3, attributes: None},
-            Edge {u: "n1", v: "n4", weight: 1.4, attributes: None},
-            Edge {u: "n4", v: "n3", weight: 1.5, attributes: None},
+            Edge::with_weight("n1", "n2", 1.0),
+            Edge::with_weight("n1", "n2", 1.1),
+            Edge::with_weight("n2", "n1", 1.2),
+            Edge::with_weight("n1", "n3", 1.3),
+            Edge::with_weight("n1", "n4", 1.4),
+            Edge::with_weight("n4", "n3", 1.5),
         ]).expect("couldn't add edges");
         let node_map = vec![("n1", 1), ("n2", 2), ("n3", 3), ("n4", 4)].into_iter().collect();
         let converted_graph = convert_graph(&graph, true, &node_map);
@@ -513,11 +517,11 @@ mod tests {
     fn test_generate_graph() {
         let mut graph = Graph::new(GraphSpecs::directed_create_missing());
         graph.add_edges(vec![
-            Edge {u: "n1", v: "n2", weight: 1.1, attributes: None},
-            Edge {u: "n2", v: "n1", weight: 1.2, attributes: None},
-            Edge {u: "n1", v: "n3", weight: 1.3, attributes: None},
-            Edge {u: "n1", v: "n4", weight: 1.4, attributes: None},
-            Edge {u: "n4", v: "n3", weight: 1.5, attributes: None},
+            Edge::with_weight("n1", "n2", 1.1),
+            Edge::with_weight("n2", "n1", 1.2),
+            Edge::with_weight("n1", "n3", 1.3),
+            Edge::with_weight("n1", "n4", 1.4),
+            Edge::with_weight("n4", "n3", 1.5),
         ]).expect("couldn't add edges");
         let communities = vec![
             vec!["n1", "n2"].into_iter().collect(),
@@ -538,11 +542,11 @@ mod tests {
     fn test_get_neighbor_weights() {
         let mut graph: Graph<&str, ()> = Graph::new(GraphSpecs::directed_create_missing());
         graph.add_edges(vec![
-            Edge {u: "n1", v: "n2", weight: 1.1, attributes: None},
-            Edge {u: "n2", v: "n1", weight: 1.2, attributes: None},
-            Edge {u: "n1", v: "n3", weight: 1.3, attributes: None},
-            Edge {u: "n1", v: "n4", weight: 1.4, attributes: None},
-            Edge {u: "n4", v: "n3", weight: 1.5, attributes: None},
+            Edge::with_weight("n1", "n2", 1.1),
+            Edge::with_weight("n2", "n1", 1.2),
+            Edge::with_weight("n1", "n3", 1.3),
+            Edge::with_weight("n1", "n4", 1.4),
+            Edge::with_weight("n4", "n3", 1.5),
         ]).expect("couldn't add edges");
         let mut nbrs = HashMap::new();
         nbrs.insert("n1", vec!["n2", "n3", "n4"].into_iter().collect::<HashSet<&str>>());
@@ -562,11 +566,11 @@ mod tests {
     fn test_map_node_names_to_hashsets() {
         let mut graph: Graph<usize, HashSet<usize>> = Graph::new(GraphSpecs::directed_create_missing());
         graph.add_edges(vec![
-            Edge {u: 1, v: 2, weight: 1.1, attributes: None},
-            Edge {u: 2, v: 1, weight: 1.2, attributes: None},
-            Edge {u: 1, v: 3, weight: 1.3, attributes: None},
-            Edge {u: 1, v: 4, weight: 1.4, attributes: None},
-            Edge {u: 4, v: 3, weight: 1.5, attributes: None},
+            Edge::with_weight(1, 2, 1.1),
+            Edge::with_weight(2, 1, 1.2),
+            Edge::with_weight(1, 3, 1.3),
+            Edge::with_weight(1, 4, 1.4),
+            Edge::with_weight(4, 3, 1.5),
         ]).expect("couldn't add edges");
         let names = map_node_names_to_hashsets(&graph);
         assert_eq!(names.iter().map(|hs| hs.len()).collect::<Vec<usize>>(), vec![1, 1, 1, 1]);
