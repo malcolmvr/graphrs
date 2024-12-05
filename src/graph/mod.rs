@@ -46,7 +46,7 @@ let graph = Graph::<&str, ()>::new_from_nodes_and_edges(
 ```
 */
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub struct Graph<T: PartialOrd + Send, A: Clone> {
+pub struct Graph<T: PartialOrd + Send + Sync, A: Clone> {
     /// The graph's nodes, stored as a `HashMap` keyed by the node names.
     nodes_map: HashMap<T, usize>,
     nodes_map_rev: IntMap<usize, Arc<Node<T, A>>>,
