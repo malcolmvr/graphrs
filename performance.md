@@ -30,7 +30,7 @@ The versions of the libraries used for the performance testing:
 
 Random graphs were created with `fast_gnp_random_graph`, then written to a graphml file. For example:
 
-```
+```rust
 let graph = generators::random::fast_gnp_random_graph(100, 0.01, true, Some(1)).unwrap();
 readwrite::graphml::write_graphml(&graph, "random.graphml");
 ```
@@ -40,7 +40,7 @@ readwrite::graphml::write_graphml(&graph, "random.graphml");
 The graphrs `dijkstra::betweenness_centrality` and `dijkstra::closeness_centrality` methods were executed
 on the generated graphs and timed. For example:
 
-```
+```rust
 let start = Instant::now();
 algorithms::centrality::betweenness::betweenness_centrality(&graph, true, true);
 let elapsed = now.elapsed().as_secs_f64();
@@ -52,7 +52,7 @@ Each method was executed ten times so that the mean and the standard deviation c
 
 The graphml created above file is then read and NetworkX's `all_pairs_dijkstra` method is executed and timed. The code used:
 
-```
+```python
 from time import perf_counter
 import networkx as nx
 
@@ -65,7 +65,7 @@ elapsed = end - start
 
 ## graph-tool execution and timing
 
-```
+```python
 from time import perf_counter
 
 graph = gt.load_graph("random.graphml", fmt="graphml")
@@ -77,7 +77,7 @@ elapsed = end - start
 
 ## igraph execution and timing
 
-```
+```python
 from time import perf_counter
 
 graph = ig.read("random.graphml")

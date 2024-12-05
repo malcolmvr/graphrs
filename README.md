@@ -16,17 +16,32 @@ A `Graph` has two generic arguments:
   people and `T` is an `i32` of their employee ID then the node attributes might store
   their first and last names.
 
+## Documentation
+
+The doc.rs documentation [is here](<https://doc.rs/graphrs>).
+
 ## Major structs
 
 - `Graph`
 - `Node`
 - `Edge`
 
+## Modules
+
+- `algorithms::centrality`
+- `algorithms::centrality`
+- `algorithms::cluster`
+- `algorithms::community`
+- `algorithms::components`
+- `algorithms::shortest_path`
+- `generators`
+- `readwrite`
+
 ## Examples
 
 ### Create a weighted, directed graph
 
-```
+```rust
 use graphrs::{Edge, Graph, GraphSpecs, Node};
 
 let nodes = vec![
@@ -53,7 +68,7 @@ let graph = Graph::<&str, ()>::new_from_nodes_and_edges(
 
 ### Create an undirected graph from just edges
 
-```
+```rust
 use graphrs::{Edge, Graph, GraphSpecs};
 
 let mut graph: Graph<&str, ()> = Graph::new(GraphSpecs::undirected_create_missing());
@@ -65,7 +80,7 @@ let result = graph.add_edges(vec![
 
 ### Create an empty graph with all possible specifications
 
-```
+```rust
 use graphrs::{Graph, GraphSpecs, EdgeDedupeStrategy, MissingNodeStrategy, SelfLoopsFalseStrategy};
 
 let graph = Graph::<&str, ()>::new(
@@ -80,16 +95,17 @@ let graph = Graph::<&str, ()>::new(
 );
 ```
 
-### Generate a "complete" graph
+### Generate graphs
 
-```
+```rust
 use graphrs::{generators};
-let graph = generators::classic::complete_graph(5, true);
+let graph_complete = generators::classic::complete_graph(5, true);
+let graph_random = generators::random::fast_gnp_random_graph(250, 0.25, true, None);
 ```
 
 ### Find the shortest path between two nodes
 
-```
+```rust
 use graphrs::{Edge, Graph, GraphSpecs, Node};
 use graphrs::{algorithms::{shortest_path::{dijkstra}}};
 
@@ -105,17 +121,35 @@ let shortest_paths = dijkstra::single_source(&graph, true, "n1", Some("n3"), Non
 assert_eq!(shortest_paths.unwrap().get("n3").unwrap().distance, 2.1);
 ```
 
-### Compute the betweenness centrality for all nodes
+### Compute the betweenness, closeness and eigenvector centrality for all nodes
 
-```
-use graphrs::{algorithms::{centrality::{betweenness}}, generators};
+```rust
+use graphrs::{algorithms::centrality, generators};
 let graph = generators::social::karate_club_graph();
-let centralities = betweenness::betweenness_centrality(&graph, false, true);
+let centralities = centrality::betweenness::betweenness_centrality(&graph, false, true);
+let closeness = centrality::closeness::closeness_centrality(&graph, false, true);
+let centralities = centrality::eigenvector::eigenvector_centrality(&graph, false, None, None);
+```
+
+### Detect communities within a graph
+
+```rust
+use graphrs::{algorithms::{community}, generators};
+let graph = generators::social::karate_club_graph();
+let partitions = community::louvain::louvain_partitions(&graph, false, None, None, Some(1));
+```
+
+### Read and write graphml files
+
+```rust,ignore
+use graphrs::{readwrite, GraphSpecs};
+let graph = readwrite::graphml::read_graphml_file("/some/file.graphml", GraphSpecs::directed());
+readwrite::graphml::write_graphml(&graph, "/some/other/file.graphml");
 ```
 
 ## Performance
 
-A performance comparison of the Dijkstra "all pairs" algorithm, between `NetworkX` and `graphrs` can be found [here](performance.md).
+A comparison of the performance of `graphrs` against `NetworkX`, `igraph` and `graph-tool` can be found [here](performance.md).
 
 ## Credits
 
