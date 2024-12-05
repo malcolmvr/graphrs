@@ -15,8 +15,18 @@ where
     For large graphs, the adjacency matrix can be very large so this method returns a sparse matrix
     using the "sprs" crate.
 
+    This is an optional feature for crate. Enable in Cargo.toml with:
+    `graphrs = { version = "x.y.z", features = ["adjacency_matrix"] }`
+
+    # Examples
+
+    ```
+    use graphrs::generators;
+    let graph = generators::social::karate_club_graph();
+    let matrix = graph.get_sparse_adjacency_matrix().unwrap();
+    ```
     */
-    pub fn get_sparse_adjacency_matrix(&mut self) -> Result<CsMat<f64>, Error>
+    pub fn get_sparse_adjacency_matrix(&self) -> Result<CsMat<f64>, Error>
     where
         T: Hash + Eq + Clone + Ord + Display + Send + Sync,
         A: Clone,

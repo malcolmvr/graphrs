@@ -147,6 +147,17 @@ let graph = readwrite::graphml::read_graphml_file("/some/file.graphml", GraphSpe
 readwrite::graphml::write_graphml(&graph, "/some/other/file.graphml");
 ```
 
+### Get an adjacency matrix
+
+This is an optional feature for crate. Enable in Cargo.toml with:
+`graphrs = { version = "x.y.z", features = ["adjacency_matrix"] }`
+
+```rust
+use graphrs::generators;
+let graph = generators::social::karate_club_graph();
+let matrix = graph.get_sparse_adjacency_matrix().unwrap();
+```
+
 ## Performance
 
 A comparison of the performance of `graphrs` against `NetworkX`, `igraph` and `graph-tool` can be found [here](performance.md).
