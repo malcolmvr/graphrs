@@ -18,7 +18,7 @@ A `Graph` has two generic arguments:
 
 ## Documentation
 
-The doc.rs documentation [is here](<https://doc.rs/graphrs>).
+The doc.rs documentation [is here](<https://docs.rs/graphrs>).
 
 ## Major structs
 
