@@ -56,25 +56,22 @@ where
         the_graph = &x;
     }
     let num_nodes = the_graph.number_of_nodes();
-    let mut centralities = HashMap::new();
+    let centralities_mutex = std::sync::Mutex::new(HashMap::new());
     let parallel = graph.number_of_nodes() > 20 && rayon::current_num_threads() > 1;
     match parallel {
         true => {
-            let results: Vec<(T, f64)> = (0..the_graph.number_of_nodes())
+            (0..the_graph.number_of_nodes())
                 .into_par_iter()
-                .map(|source| {
+                .for_each(|source| {
                     let shortest_paths = match weighted {
                         true => single_source_shortest_path_length_weighted(the_graph, source),
                         false => single_source_shortest_path_length_unweighted(the_graph, source),
                     };
                     let cc = get_node_centrality(&shortest_paths, num_nodes, wf_improved);
                     let node_name = the_graph.get_node_by_index(&source).unwrap().name.clone();
-                    (node_name, cc)
-                })
-                .collect();
-            for (node, cc) in results {
-                centralities.insert(node, cc);
-            }
+                    let mut centralities = centralities_mutex.lock().unwrap();
+                    centralities.insert(node_name.clone(), cc);
+                });
         }
         false => {
             for source in 0..the_graph.number_of_nodes() {
@@ -84,10 +81,12 @@ where
                 };
                 let cc = get_node_centrality(&shortest_paths, num_nodes, wf_improved);
                 let node_name = the_graph.get_node_by_index(&source).unwrap().name.clone();
+                let mut centralities = centralities_mutex.lock().unwrap();
                 centralities.insert(node_name, cc);
             }
         }
     }
+    let centralities = centralities_mutex.into_inner().unwrap();
     Ok(centralities)
 }
 

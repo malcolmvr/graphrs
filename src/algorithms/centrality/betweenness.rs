@@ -48,38 +48,40 @@ where
     A: Clone + Send + Sync,
 {
     let parallel = graph.number_of_nodes() > 20 && rayon::current_num_threads() > 1;
-    let mut betweenness = vec![0.0; graph.number_of_nodes()];
+    let betweenness_mutex = std::sync::Mutex::new(vec![0.0; graph.number_of_nodes()]);
     match parallel {
         true => {
-            let results: Vec<SingleSourceResults> = (0..graph.number_of_nodes())
+            (0..graph.number_of_nodes())
                 .into_par_iter()
                 .map(|source| match weighted {
                     true => dijkstra(graph, source),
                     false => bfs(graph, source),
                 })
-                .collect();
-            for r in results {
-                accumulate_betweenness(&mut betweenness, &r);
-            }
-        }
+                .for_each(|r| {
+                    let mut betweenness = betweenness_mutex.lock().unwrap();
+                    accumulate_betweenness(&mut betweenness, &r);
+                });
+        },
         false => {
             for source in 0..graph.number_of_nodes() {
                 let source_source_results = match weighted {
                     true => dijkstra(graph, source),
                     false => bfs(graph, source),
                 };
+                let mut betweenness = betweenness_mutex.lock().unwrap();
                 accumulate_betweenness(&mut betweenness, &source_source_results);
             }
         }
     }
+    let mut betweenness = betweenness_mutex.lock().unwrap();
     rescale(
         &mut betweenness,
         graph.get_all_nodes().len(),
         normalized,
         graph.specs.directed,
     );
-    let hm = betweenness
-        .into_iter()
+    let hm = betweenness.clone()
+            .into_iter()
         .enumerate()
         .map(|(i, v)| (graph.get_node_by_index(&i).unwrap().name.clone(), v))
         .collect();
