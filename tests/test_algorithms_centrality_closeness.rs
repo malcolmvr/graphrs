@@ -240,6 +240,7 @@ mod tests {
 
     #[test]
     fn test_closeness_centrality_13() {
+        // testing a larger graph tests the parallel implementation
         let graph = generators::random::fast_gnp_random_graph(100, 0.5, true, Some(1)).unwrap();
         let result = closeness::closeness_centrality(&graph, false, false).unwrap();
         assert_eq!(round(result.get(&0).unwrap(), 2), 0.66);
