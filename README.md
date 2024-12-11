@@ -164,7 +164,7 @@ let matrix = graph.get_sparse_adjacency_matrix().unwrap();
 
 ## Performance
 
-A comparison of the performance of `graphrs` against `NetworkX`, `igraph` and `graph-tool` can be found [here](performance.md).
+A comparison of the performance of `graphrs` against `NetworkX`, `igraph` and `graph-tool` can be found [here](<https://github.com/malcolmvr/graphrs/blob/main/performance.md>).
 
 ## Credits
 
