@@ -68,10 +68,10 @@ fn fast_gnp_random_graph_directed(
             }
         }
         if v < num_nodes {
-            edges.push((v, w));
+            edges.push((v, w, rng.gen::<f64>()));
         }
     }
-    match graph.add_edge_tuples(edges) {
+    match graph.add_edge_tuples_weighted(edges) {
         Err(e) => Err(e),
         Ok(_) => Ok(graph),
     }
@@ -98,10 +98,10 @@ fn fast_gnp_random_graph_undirected(
             v += 1;
         }
         if v < num_nodes {
-            edges.push((v, w));
+            edges.push((v, w, rng.gen::<f64>()));
         }
     }
-    match graph.add_edge_tuples(edges) {
+    match graph.add_edge_tuples_weighted(edges) {
         Err(e) => Err(e),
         Ok(_) => Ok(graph),
     }

@@ -16,7 +16,7 @@ Returns the strongly connected components of a directed graph.
 use graphrs::{algorithms::{components}, generators};
 let graph = generators::random::fast_gnp_random_graph(250, 0.02, true, Some(1)).unwrap();
 let strong_components = components::strongly_connected_components(&graph).unwrap();
-assert_eq!(strong_components.len(), 5);
+assert_eq!(strong_components.len(), 6);
 ```
 */
 pub fn strongly_connected_components<T, A>(graph: &Graph<T, A>) -> Result<Vec<HashSet<T>>, Error>

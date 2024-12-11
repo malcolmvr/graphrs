@@ -20,6 +20,10 @@ A `Graph` has two generic arguments:
 
 The doc.rs documentation [is here](<https://docs.rs/graphrs>).
 
+## Python bindings
+
+Python bindings are available in the [graphrs-python](<https://pypi.org/project/graphrs-python/>) package.
+
 ## Major structs
 
 - `Graph`
@@ -29,10 +33,10 @@ The doc.rs documentation [is here](<https://docs.rs/graphrs>).
 ## Modules
 
 - `algorithms::centrality`
-- `algorithms::centrality`
 - `algorithms::cluster`
 - `algorithms::community`
 - `algorithms::components`
+- `algorithms::structural_holes`
 - `algorithms::shortest_path`
 - `generators`
 - `readwrite`
@@ -149,10 +153,10 @@ readwrite::graphml::write_graphml(&graph, "/some/other/file.graphml");
 
 ### Get an adjacency matrix
 
-This is an optional feature for crate. Enable in Cargo.toml with:
+*This is an optional feature. Enable in Cargo.toml with:*
 `graphrs = { version = "x.y.z", features = ["adjacency_matrix"] }`
 
-```rust
+```rust,ignore
 use graphrs::generators;
 let graph = generators::social::karate_club_graph();
 let matrix = graph.get_sparse_adjacency_matrix().unwrap();

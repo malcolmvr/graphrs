@@ -1,6 +1,7 @@
 use super::Graph;
-use crate::{ext::vec::VecExt, Edge, Error, ErrorKind, Node, AdjacentNode};
+use crate::{ext::vec::VecExt, AdjacentNode, Edge, Error, ErrorKind, Node};
 use itertools::Itertools;
+use nohash::IntSet;
 use std::collections::{HashMap, HashSet};
 use std::fmt::Display;
 use std::hash::Hash;
@@ -902,20 +903,20 @@ where
         }
     }
 
-    pub(crate) fn get_successor_nodes_by_index(&self, node_index: &usize) -> &Vec<AdjacentNode>
-    where
-        T: Hash + Eq + Clone + Ord,
-        A: Clone,
-    {
+    pub(crate) fn get_successor_nodes_by_index(&self, node_index: &usize) -> &Vec<AdjacentNode> {
         &self.successors_vec[*node_index]
     }
 
-    pub(crate) fn get_predecessor_nodes_by_index(&self, node_index: &usize) -> &Vec<AdjacentNode>
-    where
-        T: Hash + Eq + Clone + Ord,
-        A: Clone,
-    {
+    pub(crate) fn get_predecessor_nodes_by_index(&self, node_index: &usize) -> &Vec<AdjacentNode> {
         &self.predecessors_vec[*node_index]
+    }
+
+    pub(crate) fn get_neighbors_nodes_by_index(&self, node_index: &usize) -> IntSet<usize> {
+        self.successors_vec[*node_index]
+            .iter()
+            .chain(self.predecessors_vec[*node_index].iter())
+            .map(|adj| adj.node_index)
+            .collect()
     }
 
     /// Gets a `HashMap` of all the successor edges.

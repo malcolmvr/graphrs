@@ -148,7 +148,7 @@ mod tests {
         // testing a larger graph tests the parallel implementation
         let graph = generators::random::fast_gnp_random_graph(100, 0.5, true, Some(1)).unwrap();
         let result = betweenness::betweenness_centrality(&graph, false, false).unwrap();
-        assert_eq!(round(result.get(&0).unwrap(), 2), 47.15);
+        assert_eq!(round(result.get(&0).unwrap(), 2), 50.43);
     }
 
     fn get_graph_1<'a>(directed: bool) -> Graph<&'a str, ()> {

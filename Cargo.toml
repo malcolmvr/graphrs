@@ -1,6 +1,6 @@
 [package]
 name = "graphrs"
-version = "0.11.1"
+version = "0.11.2"
 authors = ["Malcolm van Raalte <malcolm@van.raalte.ca>"]
 description = "graphrs is a Rust package for the creation, manipulation and analysis of graphs."
 edition = "2018"
@@ -16,6 +16,7 @@ exclude = [".vscode/*", "tests/*"]
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+assert_approx_eq = "1.1.0"
 doc-comment = "0.3.3"
 itertools = "0.13.0"
 nohash = "0.2.0"
@@ -31,3 +32,6 @@ vec_to_array = "0.2.5"
 
 [features]
 adjacency_matrix = ["dep:sprs"]
+
+[package.metadata."docs.rs"]
+all-features = true

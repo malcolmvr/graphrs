@@ -16,7 +16,7 @@ Returns the weakly connected components of a directed graph.
 use graphrs::{algorithms::{components}, generators};
 let graph = generators::random::fast_gnp_random_graph(250, 0.005, true, Some(1)).unwrap();
 let weak_components = components::weakly_connected_components(&graph).unwrap();
-assert_eq!(weak_components.len(), 23);
+assert_eq!(weak_components.len(), 34);
 ```
 */
 pub fn weakly_connected_components<T, A>(graph: &Graph<T, A>) -> Result<Vec<HashSet<T>>, Error>

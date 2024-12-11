@@ -125,6 +125,7 @@ where
             ordered_edge_v,
             edge.weight,
             edge_already_exists,
+            &self.specs.edge_dedupe_strategy,
         );
 
         // add to predecessors
@@ -144,6 +145,7 @@ where
                     ordered_edge_u,
                     edge.weight,
                     edge_already_exists,
+                    &self.specs.edge_dedupe_strategy,
                 );
             }
             false => {
@@ -161,6 +163,7 @@ where
                     ordered_edge_u,
                     edge.weight,
                     edge_already_exists,
+                    &self.specs.edge_dedupe_strategy,
                 );
             }
         }
@@ -293,6 +296,38 @@ where
     {
         for edge in edges {
             self.add_edge(Edge::new(edge.0, edge.1))?;
+        }
+        Ok(())
+    }
+
+    /**
+    Adds new edges to a `Graph`, or updates existing edges, or both.
+
+    If the new edges reference nodes that don't exist the graph's `specs.missing_node_strategy`
+    determines what happens.
+
+    # Arguments
+
+    * `edges`: the new edges to add to the graph
+
+    ```
+    use graphrs::{Edge, Graph, GraphSpecs};
+
+    let mut graph: Graph<&str, ()> = Graph::new(GraphSpecs::directed_create_missing());
+    let result = graph.add_edge_tuples_weighted(vec![
+        ("n1", "n2", 1.0),
+        ("n2", "n3", 2.6),
+    ]);
+    assert!(result.is_ok());
+    ```
+    */
+    pub fn add_edge_tuples_weighted(&mut self, edges: Vec<(T, T, f64)>) -> Result<(), Error>
+    where
+        T: Hash + Eq + Clone + Ord + Display,
+        A: Clone,
+    {
+        for edge in edges {
+            self.add_edge(Edge::with_weight(edge.0, edge.1, edge.2))?;
         }
         Ok(())
     }
@@ -466,6 +501,7 @@ fn add_to_adjacency_vec(
     v_node_index: usize,
     weight: f64,
     edge_already_exists: bool,
+    edge_dedupe_strategy: &EdgeDedupeStrategy,
 ) {
     match edge_already_exists {
         true => {
@@ -473,8 +509,8 @@ fn add_to_adjacency_vec(
                 .iter()
                 .position(|succ| succ.node_index == v_node_index)
                 .unwrap();
-            if weight < adjacency_vec[u_node_index][index].weight {
-                adjacency_vec[u_node_index][index] = AdjacentNode::new(v_node_index, weight);
+            if *edge_dedupe_strategy == EdgeDedupeStrategy::KeepLast {
+                adjacency_vec[u_node_index][index].weight = weight;
             }
         }
         false => adjacency_vec[u_node_index].push(AdjacentNode::new(v_node_index, weight)),

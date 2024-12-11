@@ -133,9 +133,10 @@ impl<T: Eq + PartialOrd + Send + Sync, A> Eq for Edge<T, A> {}
 
 impl<T: Debug + PartialOrd + Send + Sync, A> fmt::Debug for Edge<T, A> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("Node")
+        f.debug_struct("Edge")
             .field("u", &self.u)
             .field("v", &self.v)
+            .field("weight", &self.weight)
             .finish()
     }
 }
