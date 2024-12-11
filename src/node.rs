@@ -1,3 +1,4 @@
+use serde::{Deserialize, Serialize};
 use std::cmp::Ordering;
 use std::fmt;
 use std::fmt::{Debug, Display};
@@ -7,8 +8,7 @@ use std::sync::Arc;
 /**
 Represents a graph node, with `name` and `attributes`.
 */
-#[derive(Clone)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct Node<T: Send, A> {
     pub name: T,
     pub attributes: Option<A>,

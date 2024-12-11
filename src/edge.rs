@@ -1,3 +1,4 @@
+use serde::{Deserialize, Serialize};
 use std::cmp::{Ord, Ordering, PartialOrd};
 use std::fmt;
 use std::fmt::{Debug, Display};
@@ -9,8 +10,7 @@ Represents a graph edge as (`u`, `v`).
 
 Also allows `attributes`, as a `HashMap`, to be stored on an edge.
 */
-#[derive(Clone)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct Edge<T, A>
 where
     T: PartialOrd + Send,
