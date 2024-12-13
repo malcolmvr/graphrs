@@ -2,7 +2,9 @@
 #[cfg(test)]
 mod tests {
 
-    use graphrs::{Edge, Graph, GraphSpecs, MissingNodeStrategy};
+    use graphrs::{
+        Edge, Graph, GraphSpecs, MissingNodeStrategy, ToUndirectedCollapseEdgeWeightsStrategy,
+    };
 
     #[test]
     fn test_to_single_edges_1() {
@@ -60,5 +62,71 @@ mod tests {
         graph.add_edges(vec![Edge::new("n1", "n3"), Edge::new("n2", "n3")]);
         let new_graph = graph.set_all_edge_weights(2.0);
         assert_eq!(new_graph.get_edge("n1", "n3").unwrap().weight, 2.0);
+    }
+
+    #[test]
+    fn test_to_undirected_1() {
+        let mut graph: Graph<&str, ()> = Graph::new(GraphSpecs::directed_create_missing());
+        graph.add_edges(vec![
+            Edge::with_weight("n1", "n3", 1.0),
+            Edge::with_weight("n3", "n1", 5.0),
+            Edge::with_weight("n2", "n3", 2.0),
+        ]);
+        let new_graph = graph
+            .to_undirected(Some(ToUndirectedCollapseEdgeWeightsStrategy::Min))
+            .unwrap();
+        assert_eq!(new_graph.get_edge("n1", "n3").unwrap().weight, 1.0);
+        assert_eq!(new_graph.get_edge("n3", "n1").unwrap().weight, 1.0);
+        assert_eq!(new_graph.get_edge("n2", "n3").unwrap().weight, 2.0);
+        assert_eq!(new_graph.get_edge("n3", "n2").unwrap().weight, 2.0);
+    }
+
+    #[test]
+    fn test_to_undirected_2() {
+        let mut graph: Graph<&str, ()> = Graph::new(GraphSpecs::directed_create_missing());
+        graph.add_edges(vec![
+            Edge::with_weight("n1", "n3", 1.0),
+            Edge::with_weight("n3", "n1", 5.0),
+            Edge::with_weight("n2", "n3", 2.0),
+        ]);
+        let new_graph = graph
+            .to_undirected(Some(ToUndirectedCollapseEdgeWeightsStrategy::Max))
+            .unwrap();
+        assert_eq!(new_graph.get_edge("n1", "n3").unwrap().weight, 5.0);
+        assert_eq!(new_graph.get_edge("n3", "n1").unwrap().weight, 5.0);
+        assert_eq!(new_graph.get_edge("n2", "n3").unwrap().weight, 2.0);
+        assert_eq!(new_graph.get_edge("n3", "n2").unwrap().weight, 2.0);
+    }
+
+    #[test]
+    fn test_to_undirected_3() {
+        let mut graph: Graph<&str, ()> = Graph::new(GraphSpecs::directed_create_missing());
+        graph.add_edges(vec![
+            Edge::with_weight("n1", "n3", 1.0),
+            Edge::with_weight("n3", "n1", 5.0),
+            Edge::with_weight("n2", "n3", 2.0),
+        ]);
+        let new_graph = graph
+            .to_undirected(Some(ToUndirectedCollapseEdgeWeightsStrategy::Sum))
+            .unwrap();
+        assert_eq!(new_graph.get_edge("n1", "n3").unwrap().weight, 6.0);
+        assert_eq!(new_graph.get_edge("n3", "n1").unwrap().weight, 6.0);
+        assert_eq!(new_graph.get_edge("n2", "n3").unwrap().weight, 2.0);
+        assert_eq!(new_graph.get_edge("n3", "n2").unwrap().weight, 2.0);
+    }
+
+    #[test]
+    fn test_to_undirected_4() {
+        let mut graph: Graph<&str, ()> = Graph::new(GraphSpecs::directed_create_missing());
+        graph.add_edges(vec![
+            Edge::with_weight("n1", "n3", 1.0),
+            Edge::with_weight("n3", "n1", 5.0),
+            Edge::with_weight("n2", "n3", 2.0),
+        ]);
+        let new_graph = graph.to_undirected(None).unwrap();
+        assert!(new_graph.get_edge("n1", "n3").unwrap().weight.is_nan());
+        assert!(new_graph.get_edge("n3", "n1").unwrap().weight.is_nan());
+        assert!(new_graph.get_edge("n2", "n3").unwrap().weight.is_nan());
+        assert!(new_graph.get_edge("n3", "n2").unwrap().weight.is_nan());
     }
 }

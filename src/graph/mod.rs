@@ -80,3 +80,5 @@ mod ensure;
 mod matrix;
 mod query;
 mod subgraph;
+
+pub use convert::ToUndirectedCollapseEdgeWeightsStrategy;

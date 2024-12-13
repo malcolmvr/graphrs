@@ -1,8 +1,15 @@
 use super::Graph;
 use crate::{Edge, Error, ErrorKind, GraphSpecs};
+use std::collections::HashMap;
 use std::fmt::Display;
 use std::hash::Hash;
 use std::sync::Arc;
+
+pub enum ToUndirectedCollapseEdgeWeightsStrategy {
+    Max,
+    Min,
+    Sum,
+}
 
 impl<T, A> Graph<T, A>
 where
@@ -122,6 +129,80 @@ where
             GraphSpecs {
                 multi_edges: false,
                 ..self.specs.clone()
+            },
+        )
+    }
+
+    /**
+    Converts a directed graph to an undirected graph.
+
+    # Examples
+
+    ```
+    use graphrs::{generators, Edge, Graph, GraphSpecs, MissingNodeStrategy, Node};
+    let graph: generators::social::karate_club_graph();
+    let new_graph = graph.to_undirected().unwrap();
+    assert_eq!(new_graph.number_of_nodes(), 2);
+    assert_eq!(new_graph.number_of_edges(), 2);
+    ```
+    */
+    pub fn to_undirected(
+        &self,
+        collapse_edge_weights_strategy: Option<ToUndirectedCollapseEdgeWeightsStrategy>,
+    ) -> Result<Graph<T, A>, Error>
+    where
+        T: Hash + Eq + Clone + Ord,
+        A: Clone,
+    {
+        if !self.specs.directed {
+            return Err(Error {
+                kind: ErrorKind::WrongMethod,
+                message: "The `to_undirected` method is not applicable to undirected graphs."
+                    .to_string(),
+            });
+        }
+        let new_nodes = self.get_all_nodes().into_iter().cloned().collect();
+        let default_weight = match collapse_edge_weights_strategy {
+            Some(ToUndirectedCollapseEdgeWeightsStrategy::Max) => f64::MIN,
+            Some(ToUndirectedCollapseEdgeWeightsStrategy::Min) => f64::MAX,
+            Some(ToUndirectedCollapseEdgeWeightsStrategy::Sum) => 0.0,
+            None => f64::NAN,
+        };
+        let mut edge_map: HashMap<T, HashMap<T, f64>> = HashMap::new();
+        for edge in self.get_all_edges() {
+            let ordered = edge.ordered();
+            let existing_weight = edge_map
+                .get(&ordered.u)
+                .and_then(|m| m.get(&ordered.v))
+                .unwrap_or(&default_weight);
+            let new_weight = match collapse_edge_weights_strategy {
+                Some(ToUndirectedCollapseEdgeWeightsStrategy::Max) => {
+                    edge.weight.max(*existing_weight)
+                }
+                Some(ToUndirectedCollapseEdgeWeightsStrategy::Min) => {
+                    edge.weight.min(*existing_weight)
+                }
+                Some(ToUndirectedCollapseEdgeWeightsStrategy::Sum) => edge.weight + existing_weight,
+                None => f64::NAN,
+            };
+            edge_map
+                .entry(ordered.u)
+                .or_insert_with(HashMap::new)
+                .insert(ordered.v, new_weight);
+        }
+        let new_edges = edge_map
+            .into_iter()
+            .flat_map(|(u, m)| {
+                m.into_iter()
+                    .map(move |(v, w)| Edge::with_weight(u.clone(), v, w))
+            })
+            .collect();
+        Graph::new_from_nodes_and_edges(
+            new_nodes,
+            new_edges,
+            GraphSpecs {
+                directed: false,
+                ..self.specs
             },
         )
     }

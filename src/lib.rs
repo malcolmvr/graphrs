@@ -189,6 +189,7 @@ mod ext;
 
 mod graph;
 pub use graph::Graph;
+pub use graph::ToUndirectedCollapseEdgeWeightsStrategy;
 
 pub(crate) use graph::adjacent_node::AdjacentNode;
 
