@@ -139,11 +139,11 @@ where
     # Examples
 
     ```
-    use graphrs::{generators, Edge, Graph, GraphSpecs, MissingNodeStrategy, Node};
-    let graph: generators::social::karate_club_graph();
-    let new_graph = graph.to_undirected().unwrap();
-    assert_eq!(new_graph.number_of_nodes(), 2);
-    assert_eq!(new_graph.number_of_edges(), 2);
+    use graphrs::{generators};
+    let graph = generators::random::fast_gnp_random_graph(25, 0.25, true, Some(1)).unwrap();
+    let new_graph = graph.to_undirected(None).unwrap();
+    assert_eq!(new_graph.number_of_nodes(), 25);
+    assert_eq!(new_graph.number_of_edges(), 132);
     ```
     */
     pub fn to_undirected(

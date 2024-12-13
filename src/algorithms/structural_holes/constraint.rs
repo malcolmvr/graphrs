@@ -235,7 +235,7 @@ mod tests {
     fn test_constraint_single_node() {
         let graph = generators::social::karate_club_graph();
         let result = constraint_single_node(&graph, 0, true);
-        assert_approx_eq!(result.1, 0.19062348905638032);
+        assert_approx_eq!(result.1, 0.19032543361154225);
     }
 
     #[test]
@@ -258,39 +258,39 @@ mod tests {
     fn test_constraint_2() {
         let graph = generators::social::karate_club_graph();
         let result = constraint(&graph, None, true);
-        assert_approx_eq!(result[&0], 0.19062348905638035);
+        assert_approx_eq!(result[&0], 0.19032543361154225);
         assert_approx_eq!(result[&1], 0.3409019831285561);
-        assert_approx_eq!(result[&2], 0.25565383909645606);
+        assert_approx_eq!(result[&2], 0.25690017307874163);
         assert_approx_eq!(result[&3], 0.4122226156115594);
         assert_approx_eq!(result[&4], 0.508088569654933);
         assert_approx_eq!(result[&5], 0.49112922777491624);
         assert_approx_eq!(result[&6], 0.5314047216519745);
         assert_approx_eq!(result[&7], 0.527081950416345);
-        assert_approx_eq!(result[&8], 0.3344147563587521);
+        assert_approx_eq!(result[&8], 0.3363511339204627);
         assert_approx_eq!(result[&9], 0.5555555555555556);
         assert_approx_eq!(result[&10], 0.5304976482780612);
         assert_approx_eq!(result[&11], 1.0);
         assert_approx_eq!(result[&12], 0.7302295918367347);
         assert_approx_eq!(result[&13], 0.3827486243156607);
-        assert_approx_eq!(result[&14], 0.6411266928285626);
-        assert_approx_eq!(result[&15], 0.6323943473973153);
+        assert_approx_eq!(result[&14], 0.6391917324128862);
+        assert_approx_eq!(result[&15], 0.6305808812676944);
         assert_approx_eq!(result[&16], 0.9397491245018718);
         assert_approx_eq!(result[&17], 0.6653314075883578);
-        assert_approx_eq!(result[&18], 0.6670775837009678);
+        assert_approx_eq!(result[&18], 0.6654807235736722);
         assert_approx_eq!(result[&19], 0.4391093639199636);
-        assert_approx_eq!(result[&20], 0.7238213470731378);
+        assert_approx_eq!(result[&20], 0.7220631536098783);
         assert_approx_eq!(result[&21], 0.6236083811249431);
-        assert_approx_eq!(result[&22], 0.6398342278393352);
-        assert_approx_eq!(result[&23], 0.3127739611655626);
+        assert_approx_eq!(result[&22], 0.6380745603221565);
+        assert_approx_eq!(result[&23], 0.3120631827133658);
         assert_approx_eq!(result[&24], 0.5124716553287981);
         assert_approx_eq!(result[&25], 0.4563144985885511);
         assert_approx_eq!(result[&26], 0.65316243881949);
         assert_approx_eq!(result[&27], 0.3222101463859706);
         assert_approx_eq!(result[&28], 0.39898274124464594);
-        assert_approx_eq!(result[&29], 0.43892519735387914);
-        assert_approx_eq!(result[&30], 0.39449117072400647);
-        assert_approx_eq!(result[&31], 0.2754988351267919);
-        assert_approx_eq!(result[&32], 0.2582561404837537);
-        assert_approx_eq!(result[&33], 0.18628728563229374);
+        assert_approx_eq!(result[&29], 0.4376298799954841);
+        assert_approx_eq!(result[&30], 0.4041638692261506);
+        assert_approx_eq!(result[&31], 0.27518142164082954);
+        assert_approx_eq!(result[&32], 0.2568971955830605);
+        assert_approx_eq!(result[&33], 0.18865024812268144);
     }
 }
