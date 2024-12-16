@@ -1,8 +1,5 @@
 use crate::Graph;
-#[allow(unused_imports)]
-use assert_approx_eq::assert_approx_eq;
-use rayon::iter::*;
-use rayon::prelude::ParallelIterator;
+use rayon::prelude::{IntoParallelIterator, ParallelIterator};
 use std::collections::HashMap;
 use std::fmt::Display;
 use std::hash::Hash;
@@ -166,6 +163,7 @@ mod tests {
 
     use super::*;
     use crate::generators;
+    use assert_approx_eq::assert_approx_eq;
 
     #[test]
     fn test_mutual_weight() {

@@ -28,6 +28,8 @@ pub enum ErrorKind {
     DuplicateEdge,
     /// An argument to a function was not a valid value.
     InvalidArgument,
+    /// An error occurred while using the Lapack library.
+    LaPackError,
     /// A [Node](./struct.Node.html) was requested from a [Graph](./struct.Graph.html) but the
     /// [Node](./struct.Node.html) doesn't exist.
     NodeNotFound,
@@ -63,6 +65,7 @@ impl Display for ErrorKind {
             ErrorKind::EdgeNotFound => write!(f, "edge not found"),
             ErrorKind::EdgeWeightNotSpecified => write!(f, "edge weight not found"),
             ErrorKind::InvalidArgument => write!(f, "invalid argument"),
+            ErrorKind::LaPackError => write!(f, "error using Lapack library"),
             ErrorKind::NodeNotFound => write!(f, "node not found"),
             ErrorKind::NoPartitions => write!(f, "no partitions were found"),
             ErrorKind::NotAPartition => write!(f, "communities were not a partition"),

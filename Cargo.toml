@@ -12,6 +12,7 @@ readme = "README.md"
 keywords = ["graph", "network", "directed", "undirected", "multigraph"]
 categories = ["data-structures", "algorithms", "mathematics", "science"]
 exclude = [".vscode/*", "tests/*"]
+build = "build.rs"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -19,6 +20,9 @@ exclude = [".vscode/*", "tests/*"]
 assert_approx_eq = "1.1.0"
 doc-comment = "0.3.3"
 itertools = "0.13.0"
+lapack-sys = "0.14.0"
+nalgebra = { version = "0.33.2", optional = true }
+ndarray = { version = "0.16.1", optional = true }
 nohash = "0.2.0"
 quick-xml = "0.37.1"
 rand = "0.8.5"
@@ -27,11 +31,9 @@ rayon = "1.10.0"
 serde = { version = "1.0.215", features = ["derive"] }
 sorted-vec = "0.8.5"
 sprs = { version = "0.11.2", optional = true }
-statrs = "0.18.0"
-vec_to_array = "0.2.5"
 
 [features]
-adjacency_matrix = ["dep:sprs"]
+adjacency_matrix = ["dep:nalgebra", "dep:ndarray", "dep:sprs"]
 
 [package.metadata."docs.rs"]
 all-features = true

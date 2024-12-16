@@ -10,6 +10,9 @@ pub mod community;
 /// Find components of a graph.
 pub mod components;
 
+/// Compute resiliency measures of a graph.
+pub mod resiliency;
+
 /// Compute measures of structural holes in a graph.
 pub mod structural_holes;
 
