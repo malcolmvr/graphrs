@@ -14,6 +14,7 @@ adjacency matrix of a graph. The larger the spectral gap, the more robust the gr
 
 # Arguments
 * `graph` - A reference to a `Graph` object.
+* 'weighted' - A boolean flag to indicate if the edge weights should be used.
 
 # Raises
 * If the Lapack library fails to compute the eigenvalues of the Laplacian matrix.
