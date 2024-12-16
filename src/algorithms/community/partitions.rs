@@ -116,7 +116,7 @@ where
     };
     let community_contribution = |community: &HashSet<T>| {
         let comm_vec: Vec<T> = community.iter().cloned().collect();
-        let subgraph = graph.get_subgraph(&comm_vec);
+        let subgraph = graph.get_subgraph(&comm_vec).unwrap();
         let subgraph_edges = subgraph.get_all_edges();
         let subgraph_edges_weight = match weighted {
             true => subgraph_edges.iter().map(|e| e.weight).sum(),
