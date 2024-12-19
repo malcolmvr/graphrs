@@ -16,6 +16,14 @@ adjacency matrix of a graph. The larger the spectral gap, the more robust the gr
 * `graph` - A reference to a `Graph` object.
 * 'weighted' - A boolean flag to indicate if the edge weights should be used.
 
+# Dependencies
+
+This function depends on the Lapack library to compute the eigenvalues of the adjacency matrix.
+The "adjacency_matrix" feature must be enabled in the Cargo.toml file to use this function.
+LAPACK and BLAS need to be installed. For example, on Debian-based systems, you can install them with:
+`apt-get install libblas-dev liblapack-dev`. For Fedora-based systems, you can install them with:
+`dnf install blas-devel lapack-devel`.
+
 # Raises
 * If the Lapack library fails to compute the eigenvalues of the Laplacian matrix.
 
