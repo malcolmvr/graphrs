@@ -1,7 +1,9 @@
 #![allow(non_snake_case)]
 
 use super::fringe_node::{push_fringe_node, FringeNode};
-use crate::{Error, Graph};
+use crate::{edge, Error, Graph};
+use core::f64;
+use rand::distributions;
 use rayon::iter::*;
 use rayon::prelude::ParallelIterator;
 use std::collections::{BinaryHeap, HashMap, VecDeque};
@@ -61,7 +63,7 @@ where
                     let mut betweenness = betweenness_mutex.lock().unwrap();
                     accumulate_betweenness(&mut betweenness, &r);
                 });
-        },
+        }
         false => {
             for source in 0..graph.number_of_nodes() {
                 let source_source_results = match weighted {
@@ -80,8 +82,9 @@ where
         normalized,
         graph.specs.directed,
     );
-    let hm = betweenness.clone()
-            .into_iter()
+    let hm = betweenness
+        .clone()
+        .into_iter()
         .enumerate()
         .map(|(i, v)| (graph.get_node_by_index(&i).unwrap().name.clone(), v))
         .collect();
@@ -191,6 +194,140 @@ where
         sigma,
         source,
     }
+}
+
+pub fn brandes_unweighted<T, A>(graph: &Graph<T, A>) -> Result<HashMap<T, f64>, Error>
+where
+    T: Hash + Eq + Clone + Ord + Debug + Display + Send + Sync,
+    A: Clone + Send + Sync,
+{
+    let mut CB = vec![0.0; graph.number_of_nodes()];
+    let mut sigma = vec![0.0; graph.number_of_nodes()];
+    let mut delta = vec![0.0; graph.number_of_nodes()];
+    let mut prev = vec![vec![]; graph.number_of_nodes()];
+    let mut dist = vec![f64::NAN; graph.number_of_nodes()];
+    for s in 0..graph.number_of_nodes() {
+        println!("s: {}", s);
+        for v in 0..graph.number_of_nodes() {
+            delta[v] = 0.0;
+            prev[v] = vec![];
+            sigma[v] = 0.0;
+            dist[v] = f64::NAN;
+        }
+        sigma[s] = 1.0;
+        dist[s] = 0.0;
+        let mut Q = VecDeque::<usize>::new();
+        Q.push_back(s);
+        let mut stack = Vec::<usize>::new();
+        while let Some(u) = Q.pop_front() {
+            println!("    u: {}", u);
+            stack.push(u);
+            for adj in graph.get_successor_nodes_by_index(&u) {
+                let v = adj.node_index;
+                if dist[v].is_nan() {
+                    dist[v] = dist[u] + 1.0;
+                    Q.push_back(v);
+                }
+                if dist[v] == dist[u] + 1.0 {
+                    sigma[v] += sigma[u];
+                    prev[v].push(u);
+                }
+            }
+        }
+        while let Some(v) = stack.pop() {
+            for u in &prev[v] {
+                delta[*u] += (sigma[*u] / sigma[v]) * (1.0 + delta[v]);
+            }
+            if v != s {
+                CB[v] += delta[v];
+            }
+        }
+    }
+    let hm = CB
+        .clone()
+        .into_iter()
+        .enumerate()
+        .map(|(i, v)| (graph.get_node_by_index(&i).unwrap().name.clone(), v / 2.0))
+        .collect();
+    Ok(hm)
+}
+
+pub fn brandes_weighted<T, A>(graph: &Graph<T, A>) -> Result<HashMap<T, f64>, Error>
+where
+    T: Hash + Eq + Clone + Ord + Debug + Display + Send + Sync,
+    A: Clone + Send + Sync,
+{
+    let mut CB = vec![0.0; graph.number_of_nodes()];
+    let mut sigma = vec![0.0; graph.number_of_nodes()];
+    let mut delta = vec![0.0; graph.number_of_nodes()];
+    let mut Pred: Vec<Vec<usize>> = vec![vec![]; graph.number_of_nodes()];
+    let mut dist = vec![f64::INFINITY; graph.number_of_nodes()];
+    let mut S = Vec::<usize>::new();
+    for s in 0..graph.number_of_nodes() {
+        for w in 0..graph.number_of_nodes() {
+            delta[w] = 0.0;
+            Pred[w] = vec![];
+            sigma[w] = 0.0;
+            dist[w] = f64::INFINITY;
+        }
+        sigma[s] = 1.0;
+        dist[s] = 0.0;
+        let mut Q = BinaryHeap::<FringeNode>::new();
+        Q.push(FringeNode {
+            distance: -0.0,
+            pred: s,
+            v: s,
+        });
+        while let Some(fringe_item) = Q.pop() {
+            let v = fringe_item.v;
+            S.push(v);
+            for adj in graph.get_successor_nodes_by_index(&v) {
+                let w = adj.node_index;
+                let edge_weight = adj.weight;
+                let vw_dist = dist[v] + edge_weight;
+                if dist[w] > vw_dist {
+                    dist[w] = vw_dist;
+                    push_fringe_node(&mut Q, v, w, vw_dist);
+                    sigma[w] = 0.0;
+                    Pred[w] = vec![];
+                }
+                if dist[w] == vw_dist {
+                    sigma[w] += sigma[v];
+                    Pred[w].push(v);
+                }
+            }
+        }
+        while let Some(w) = S.pop() {
+            for v in &Pred[w] {
+                delta[*v] += (sigma[*v] / sigma[w]) * (1.0 + delta[w]);
+            }
+            if w != s {
+                CB[w] += delta[w];
+            }
+        }
+    }
+    // rescale(
+    //     &mut CB,
+    //     graph.get_all_nodes().len(),
+    //     true,
+    //     graph.specs.directed,
+    // );
+    let hm = CB
+        .clone()
+        .into_iter()
+        .enumerate()
+        .map(|(i, v)| {
+            (
+                graph.get_node_by_index(&i).unwrap().name.clone(),
+                match graph.specs.directed {
+                    true => v,
+                    false => v / 2.0,
+                },
+            )
+        })
+        .collect();
+
+    Ok(hm)
 }
 
 fn accumulate_betweenness(betweenness: &mut Vec<f64>, result: &SingleSourceResults) {

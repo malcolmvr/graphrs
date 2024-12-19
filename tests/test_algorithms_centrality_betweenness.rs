@@ -151,6 +151,31 @@ mod tests {
         assert_eq!(round(result.get(&0).unwrap(), 2), 50.43);
     }
 
+    #[test]
+    fn test_brandes_unweighted_1() {
+        // undirected, unweighted, normalized
+        let graph = get_graph_1(false);
+        let result = betweenness::brandes_unweighted(&graph).unwrap();
+        println!("{:?}", result);
+        assert_eq!(result.get("n1").unwrap(), &1.5);
+        assert_eq!(result.get("n2").unwrap(), &(1.0 / 3.0));
+        assert_eq!(result.get("n3").unwrap(), &1.5);
+        assert_eq!(result.get("n4").unwrap(), &(1.0 / 3.0));
+        assert_eq!(result.get("n5").unwrap(), &(1.0 / 3.0));
+    }
+
+    #[test]
+    fn test_brandes_weighted_1() {
+        // directed, weighted, not normalized
+        let graph = get_graph_1(true);
+        let result = betweenness::brandes_weighted(&graph).unwrap();
+        assert_eq!(result.get("n1").unwrap(), &0.0);
+        assert_eq!(result.get("n2").unwrap(), &0.0);
+        assert_eq!(result.get("n3").unwrap(), &6.0);
+        assert_eq!(result.get("n4").unwrap(), &6.0);
+        assert_eq!(result.get("n5").unwrap(), &0.0);
+    }
+
     fn get_graph_1<'a>(directed: bool) -> Graph<&'a str, ()> {
         let edges = vec![
             Edge::with_weight("n1", "n2", 1.0),
