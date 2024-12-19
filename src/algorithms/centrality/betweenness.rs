@@ -61,7 +61,7 @@ where
                     let mut betweenness = betweenness_mutex.lock().unwrap();
                     accumulate_betweenness(&mut betweenness, &r);
                 });
-        },
+        }
         false => {
             for source in 0..graph.number_of_nodes() {
                 let source_source_results = match weighted {
@@ -80,8 +80,9 @@ where
         normalized,
         graph.specs.directed,
     );
-    let hm = betweenness.clone()
-            .into_iter()
+    let hm = betweenness
+        .clone()
+        .into_iter()
         .enumerate()
         .map(|(i, v)| (graph.get_node_by_index(&i).unwrap().name.clone(), v))
         .collect();
