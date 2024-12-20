@@ -2,12 +2,11 @@ use crate::{
     algorithms::community::partitions, Edge, EdgeDedupeStrategy, Error, ErrorKind, Graph,
     GraphSpecs, Node,
 };
-use itertools::Itertools;
 use nohash::{IntMap, IntSet};
 use rand::prelude::*;
 use rand::seq::SliceRandom;
 use rand::thread_rng;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 use std::fmt::Display;
 use std::hash::Hash;
 use std::sync::Arc;

@@ -3,7 +3,7 @@ mod utility;
 #[cfg(test)]
 mod tests {
 
-    use graphrs::{algorithms::community::louvain, generators, readwrite, Edge, Graph, GraphSpecs};
+    use graphrs::{algorithms::community::louvain, generators, Edge, Graph, GraphSpecs};
     use itertools::Itertools;
 
     #[test]
