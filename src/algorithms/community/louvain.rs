@@ -98,8 +98,6 @@ where
     let mut graph_com = convert_graph(&graph, weighted);
     let (mut partition, mut inner_partition, _improvement) =
         compute_one_level(&graph_com, m, &partition, resolution.unwrap_or(1.0), seed);
-    println!("partition: {:?}", partition);
-    println!("inner_partition: {:?}", inner_partition);
     let mut improvement = true;
     let mut partitions: Vec<Vec<IntSet<usize>>> = vec![];
     while improvement {
@@ -107,15 +105,11 @@ where
         let new_mod =
             partitions::modularity_by_indexes(&graph_com, &inner_partition, weighted, resolution)
                 .unwrap();
-        println!("new_mod: {}", new_mod);
         if new_mod - modularity <= _threshold {
             return Ok(convert_usize_partitons_to_t(partitions, &graph));
         }
         modularity = new_mod;
         graph_com = generate_graph(&graph_com, inner_partition);
-        println!("graph nodes: {:?}", graph_com.get_all_nodes());
-        println!("graph len edges: {:?}", graph_com.number_of_edges());
-        println!("graph edges: {:?}", graph_com.get_all_edges());
         let z = compute_one_level(&graph_com, m, &partition, resolution.unwrap_or(1.0), seed);
         partition = z.0;
         inner_partition = z.1;
@@ -157,28 +151,20 @@ fn compute_one_level(
     resolution: f64,
     seed: Option<u64>,
 ) -> (Vec<IntSet<usize>>, Vec<IntSet<usize>>, bool) {
-    println!("m: {}", m);
     let mut node2com: Vec<usize> = (0..graph.number_of_nodes()).collect();
     let mut _partition = partition.clone();
     let mut inner_partition = map_node_indexes_to_hashsets(graph);
     let mut deg_info = get_degree_information(graph, partition);
-    // let shuffled_indexes = get_shuffled_node_indexes(graph, seed);
-    let shuffled_indexes: Vec<usize> = (0..graph.number_of_nodes()).collect();
+    let shuffled_indexes = get_shuffled_node_indexes(graph, seed);
+    // let shuffled_indexes: Vec<usize> = (0..graph.number_of_nodes()).collect();
     let mut nb_moves = 1;
     let mut improvement = false;
     while nb_moves > 0 {
         nb_moves = 0;
         for u in &shuffled_indexes {
-            // println!("u: {}", u);
-            // if *u == 1 && graph.number_of_nodes() == 8 {
-            //     panic!("stop");
-            // }
             let mut best_mod = 0.0;
-            // println!("  best_mod: {}", best_mod);
             let mut best_com: usize = node2com[*u];
-            // println!("  best_com: {}", best_com);
             let weights2com = get_neighbor_weights(graph, u, &node2com);
-            // println!("  weights2com: {:?}", weights2com);
             subtract_degree_from_best_com(
                 best_com,
                 u,
@@ -188,10 +174,8 @@ fn compute_one_level(
                 &mut deg_info,
                 graph.specs.directed,
             );
-            // println!("  deg_info: {:?}", deg_info);
             #[rustfmt::skip]
             update_best_com(&mut best_com, &mut best_mod, weights2com, &deg_info, m, resolution, graph.specs.directed);
-            // println!("  best_com: {}", best_com);
             add_degree_to_best_com(best_com, &mut deg_info, graph.specs.directed);
             if best_com != node2com[*u] {
                 let node_hs = vec![u].into_iter().copied().collect::<IntSet<usize>>();
@@ -202,7 +186,6 @@ fn compute_one_level(
                     .clone()
                     .unwrap_or(node_hs);
                 let n2c = node2com[*u];
-                // println!("  u, com: {} {:?}", u, com);
                 _partition[n2c] = _partition[n2c].difference(&com).cloned().collect();
                 inner_partition[n2c].remove(u);
                 _partition[best_com] = _partition[best_com].union(&com).cloned().collect();
@@ -210,7 +193,6 @@ fn compute_one_level(
                 node2com[*u] = best_com;
                 improvement = true;
                 nb_moves += 1;
-                // println!("  nb_moves: {}", nb_moves);
             }
         }
     }
@@ -284,7 +266,6 @@ fn update_best_com(
                     - resolution * (deg_info.stot[nbr_com] * deg_info.degree) / (2.0 * m.powf(2.0))
             }
         };
-        // println!("    nbr_com, wt: {} {:?} {:?}", nbr_com, wt, gain);
         if gain > *best_mod {
             *best_mod = gain;
             *best_com = nbr_com;
@@ -366,7 +347,6 @@ where
             .collect();
     } else {
         degrees = graph.get_weighted_degree_for_all_node_indexes();
-        println!("degrees: {:?}", degrees);
         stot = (0..partition.len())
             .into_iter()
             .map(|i| degrees[i])
@@ -438,7 +418,6 @@ fn generate_graph(
     graph: &Graph<usize, IntSet<usize>>,
     partition: Vec<IntSet<usize>>,
 ) -> Graph<usize, IntSet<usize>> {
-    println!("generate graph");
     let mut new_graph = Graph::new(GraphSpecs {
         self_loops: true,
         edge_dedupe_strategy: EdgeDedupeStrategy::KeepLast,
@@ -463,7 +442,6 @@ fn generate_graph(
             .get_edge(*com1, *com2)
             .unwrap_or(&Edge::with_weight(*com1, *com2, 0.0))
             .weight;
-        // println!("com1, com2: {} {}", com1, com2);
         new_graph
             .add_edge(Edge::with_weight(
                 *com1,

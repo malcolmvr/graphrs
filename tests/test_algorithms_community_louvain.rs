@@ -126,7 +126,6 @@ mod tests {
     fn test_louvain_communities_2() {
         let graph = generators::social::karate_club_graph();
         let communities = louvain::louvain_communities(&graph, false, None, None, Some(1)).unwrap();
-        println!("{} {:?}", communities.len(), communities);
         assert_eq!(communities.len(), 4);
         assert_eq!(communities[0].iter().sum::<i32>(), 41);
         assert_eq!(communities[1].iter().sum::<i32>(), 115);
@@ -137,15 +136,7 @@ mod tests {
     #[test]
     fn test_louvain_communities_3() {
         let graph = generators::random::fast_gnp_random_graph(12, 0.1, true, Some(1)).unwrap();
-        match readwrite::graphml::write_graphml_file(
-            &graph,
-            "/home/malcolm/Temp/current_graph.graphml",
-        ) {
-            Ok(_) => {}
-            Err(e) => println!("Error writing graph to file: {}", e),
-        }
         let communities = louvain::louvain_communities(&graph, true, None, None, Some(1)).unwrap();
-        println!("{} {:?}", communities.len(), communities);
         assert_eq!(communities.len(), 5);
         assert_eq!(communities[0].iter().sum::<i32>(), 18);
         assert_eq!(communities[1].iter().sum::<i32>(), 9);

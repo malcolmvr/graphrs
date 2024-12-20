@@ -33,7 +33,6 @@ where
         T: Hash + Eq + Clone + Ord + Display,
         A: Clone,
     {
-        // println!("edge: {} {} {:?}", edge.u, edge.v, edge.weight);
         // check for self loops
         if !self.specs.self_loops && edge.u == edge.v {
             match self.specs.self_loops_false_strategy {
@@ -516,13 +515,6 @@ fn add_to_adjacency_vec(
         }
         false => adjacency_vec[u_node_index].push(AdjacentNode::new(v_node_index, weight)),
     }
-    // if u_node_index == 0 && v_node_index == 0 {
-    //     println!(
-    //         "u_node_index: {}, v_node_index: {}, weight: {}, edge_already_exists: {}",
-    //         u_node_index, v_node_index, weight, edge_already_exists
-    //     );
-    //     println!("adjacency_vec[0]: {:?}", adjacency_vec[0]);
-    // }
 }
 
 #[cfg(test)]

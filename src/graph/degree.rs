@@ -361,7 +361,6 @@ where
     }
 
     pub(crate) fn get_weighted_degree_for_all_node_indexes(&self) -> Vec<f64> {
-        println!("successors[0]: {:?}", self.successors_vec[0]);
         self.successors_vec
             .iter()
             .enumerate()
