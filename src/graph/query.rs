@@ -928,6 +928,15 @@ where
         &self.successors
     }
 
+    /// Gets a `HashMap` of all the successor edges.
+    pub(crate) fn get_successors_vec(&self) -> &Vec<Vec<AdjacentNode>>
+    where
+        T: Hash + Eq + Clone + Ord,
+        A: Clone,
+    {
+        &self.successors_vec
+    }
+
     /**
     Returns successors of a node if the `graph` is directed.
 
