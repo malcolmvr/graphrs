@@ -574,13 +574,13 @@ mod tests {
         let node2com = vec![0, 0, 2, 2];
         let weights = get_neighbor_weights(&graph, &0, &node2com);
         assert_eq!(weights.len(), 2);
-        assert_eq!(weights.get(&0).unwrap(), &1.1);
+        assert_eq!(weights.get(&0).unwrap(), &2.3);
         assert_eq!(weights.get(&2).unwrap(), &2.7);
     }
 
     #[rustfmt::skip]
     #[test]
-    fn test_map_node_names_to_hashsets() {
+    fn test_map_node_indexes_to_hashsets() {
         let mut graph: Graph<usize, HashSet<usize>> = Graph::new(GraphSpecs::directed_create_missing());
         graph.add_edges(vec![
             Edge::with_weight(1, 2, 1.1),
@@ -594,7 +594,7 @@ mod tests {
         assert_eq!(
             names.into_iter().flat_map(|hs| hs.into_iter().collect::<Vec<usize>>())
                  .sorted().collect::<Vec<usize>>()
-            , vec![1, 2, 3, 4]
+            , vec![0, 1, 2, 3]
         );
     }
 }

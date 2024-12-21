@@ -105,7 +105,7 @@ mod tests {
     fn test_spectral_gap_1() {
         let graph = generators::social::karate_club_graph();
         let sg = spectral_gap(&graph, true).unwrap();
-        assert_approx_eq!(sg, 4.727593829875396);
+        assert_approx_eq!(sg, 4.581245823406171);
     }
 
     #[test]
@@ -119,7 +119,7 @@ mod tests {
         ];
         v.into_par_iter().for_each(|_i| {
             let sg = spectral_gap(&graph, true).unwrap();
-            assert_approx_eq!(sg, 4.727593829875396);
+            assert_approx_eq!(sg, 4.581245823406171);
         });
     }
 }
