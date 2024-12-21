@@ -1,4 +1,5 @@
 use crate::{Error, ErrorKind, Graph};
+use nohash::IntSet;
 use std::collections::{HashMap, HashSet};
 use std::fmt::Display;
 use std::hash::Hash;
@@ -41,6 +42,25 @@ where
     let sum_names = communities.iter().map(|hs| hs.len()).sum::<usize>();
     let all_nodes_len = graph.get_all_nodes().len();
     node_names_count == all_nodes_len && sum_names == all_nodes_len
+}
+
+pub(crate) fn is_partition_of_indexes<T, A>(
+    graph: &Graph<T, A>,
+    communities: &[IntSet<usize>],
+) -> bool
+where
+    T: Hash + Eq + Clone + Ord + Display + Send + Sync,
+    A: Clone + Send + Sync,
+{
+    let num_nodes = graph.number_of_nodes();
+    let node_indexes_count = communities
+        .iter()
+        .flatten()
+        .copied()
+        .filter(|n| *n < num_nodes)
+        .collect::<IntSet<usize>>()
+        .len();
+    node_indexes_count == num_nodes
 }
 
 /**
@@ -133,9 +153,76 @@ where
     Ok(communities.iter().map(community_contribution).sum())
 }
 
+pub(crate) fn modularity_by_indexes<T, A>(
+    graph: &Graph<T, A>,
+    communities: &[IntSet<usize>],
+    weighted: bool,
+    resolution: Option<f64>,
+) -> Result<f64, Error>
+where
+    T: Hash + Eq + Clone + Ord + Display + Send + Sync,
+    A: Clone + Send + Sync,
+{
+    if !is_partition_of_indexes(graph, communities) {
+        return Err(Error {
+            kind: ErrorKind::NotAPartition,
+            message: "The specified communities did not form a partition of a Graph.".to_string(),
+        });
+    }
+    // compute four variables depending on whether or not the graph is directed and `weighted` is true/false
+    let (out_degree, in_degree, m, norm) = match graph.specs.directed {
+        true => {
+            let (outd, ind) = match weighted {
+                true => (
+                    graph.get_weighted_out_degree_for_all_node_indexes(),
+                    graph.get_weighted_in_degree_for_all_node_indexes(),
+                ),
+                false => (
+                    convert_values_to_f64_vec(graph.get_out_degree_for_all_node_indexes()),
+                    convert_values_to_f64_vec(graph.get_in_degree_for_all_node_indexes()),
+                ),
+            };
+            let m: f64 = outd.iter().sum();
+            let norm = (1.0 / m).powf(2.0);
+            (outd, ind, m, norm)
+        }
+        false => {
+            let deg = match weighted {
+                true => graph.get_weighted_degree_for_all_node_indexes(),
+                false => convert_values_to_f64_vec(graph.get_degree_for_all_node_indexes()),
+            };
+            let deg_sum: f64 = deg.iter().sum();
+            let m = deg_sum / 2.0;
+            let norm = (1.0 / deg_sum).powf(2.0);
+            (deg.clone(), deg, m, norm)
+        }
+    };
+    let community_contribution = |community: &IntSet<usize>| {
+        let comm_vec: Vec<usize> = community.iter().cloned().collect();
+        let subgraph = graph.get_subgraph_by_indexes(&comm_vec).unwrap();
+        let subgraph_edges = subgraph.get_all_edges();
+        let subgraph_edges_weight = match weighted {
+            true => subgraph_edges.iter().map(|e| e.weight).sum(),
+            false => subgraph_edges.len() as f64,
+        };
+        let out_degree_sum: f64 = community.iter().map(|n| out_degree[*n]).sum();
+        let in_degree_sum = match graph.specs.directed {
+            true => community.iter().map(|n| in_degree[*n]).sum(),
+            false => out_degree_sum,
+        };
+        subgraph_edges_weight / m
+            - resolution.unwrap_or(1.0) * out_degree_sum * in_degree_sum * norm
+    };
+    Ok(communities.iter().map(community_contribution).sum())
+}
+
 fn convert_values_to_f64<T, A>(hashmap: HashMap<T, usize>) -> HashMap<T, f64>
 where
     T: Eq + Hash,
 {
     hashmap.into_iter().map(|(k, v)| (k, v as f64)).collect()
+}
+
+fn convert_values_to_f64_vec(values: Vec<usize>) -> Vec<f64> {
+    values.into_iter().map(|v| v as f64).collect()
 }

@@ -162,7 +162,7 @@ where
                     ordered_edge_v,
                     ordered_edge_u,
                     edge.weight,
-                    edge_already_exists,
+                    edge_already_exists || u_node_index == v_node_index,
                     &self.specs.edge_dedupe_strategy,
                 );
             }

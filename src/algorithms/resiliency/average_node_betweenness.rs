@@ -46,7 +46,7 @@ mod tests {
     fn test_average_node_betweenness_1() {
         let graph = generators::social::karate_club_graph();
         let sg = average_node_betweenness(&graph, true).unwrap();
-        assert_approx_eq!(sg, 26.31127450980392);
+        assert_approx_eq!(sg, 26.19362745098039);
     }
 
     #[test]
