@@ -1,9 +1,8 @@
 #![allow(non_snake_case)]
 
 use super::fringe_node::{push_fringe_node, FringeNode};
-use crate::{edge, Error, Graph};
+use crate::{Error, Graph};
 use core::f64;
-use rand::distributions;
 use rayon::iter::*;
 use rayon::prelude::ParallelIterator;
 use std::collections::{BinaryHeap, HashMap, VecDeque};
@@ -264,6 +263,7 @@ where
     let mut dist = vec![f64::INFINITY; graph.number_of_nodes()];
     let mut S = Vec::<usize>::new();
     for s in 0..graph.number_of_nodes() {
+        println!("s: {}", s);
         for w in 0..graph.number_of_nodes() {
             delta[w] = 0.0;
             Pred[w] = vec![];
@@ -280,18 +280,24 @@ where
         });
         while let Some(fringe_item) = Q.pop() {
             let v = fringe_item.v;
+            println!("  v: {}", v);
             S.push(v);
             for adj in graph.get_successor_nodes_by_index(&v) {
                 let w = adj.node_index;
+                println!("    w: {}", w);
                 let edge_weight = adj.weight;
                 let vw_dist = dist[v] + edge_weight;
+                println!("      dist[w]: {}, vw_dist: {}", dist[w], vw_dist);
                 if dist[w] > vw_dist {
                     dist[w] = vw_dist;
+                    println!("      dist[{}] = {}", w, vw_dist);
                     push_fringe_node(&mut Q, v, w, vw_dist);
                     sigma[w] = 0.0;
                     Pred[w] = vec![];
                 }
                 if dist[w] == vw_dist {
+                    #[rustfmt::skip]
+                    println!("      sigma[{}] += sigma[{}], sigma[{}] is {}", w, v, w, sigma[w]);
                     sigma[w] += sigma[v];
                     Pred[w].push(v);
                 }
@@ -300,8 +306,12 @@ where
         while let Some(w) = S.pop() {
             for v in &Pred[w] {
                 delta[*v] += (sigma[*v] / sigma[w]) * (1.0 + delta[w]);
+                #[rustfmt::skip]
+                println!("  delta[{}] += ({} / {}) * (1.0 + {}) | {}", *v, sigma[*v], sigma[w], delta[w], delta[*v]);
             }
             if w != s {
+                #[rustfmt::skip]
+                println!("  CB[{}] = {}, delta[{}] = {}, CB[{}] = {}", w, CB[w], w, delta[w], w, CB[w] + delta[w]);
                 CB[w] += delta[w];
             }
         }
