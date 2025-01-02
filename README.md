@@ -148,7 +148,7 @@ let partitions = community::louvain::louvain_partitions(&graph, false, None, Non
 ```rust,ignore
 use graphrs::{readwrite, GraphSpecs};
 let graph = readwrite::graphml::read_graphml_file("/some/file.graphml", GraphSpecs::directed());
-readwrite::graphml::write_graphml(&graph, "/some/other/file.graphml");
+readwrite::graphml::write_graphml_file(&graph, "/some/other/file.graphml");
 ```
 
 ### Get an adjacency matrix
