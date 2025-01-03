@@ -186,7 +186,6 @@ mod error;
 pub use error::{Error, ErrorKind};
 
 mod ext;
-pub use ext::iterator::IteratorExt;
 
 mod graph;
 pub use graph::Graph;
