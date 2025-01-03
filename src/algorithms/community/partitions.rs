@@ -63,6 +63,22 @@ where
     node_indexes_count == num_nodes
 }
 
+pub(crate) fn get_singleton_partition<T, A>(graph: &Graph<T, A>) -> Vec<IntSet<usize>>
+where
+    T: Hash + Eq + Clone + Ord + Display + Send + Sync,
+    A: Clone,
+{
+    let partition: Vec<IntSet<usize>> = (0..graph.number_of_nodes())
+        .into_iter()
+        .map(|i| {
+            let mut set = IntSet::default();
+            set.insert(i);
+            set
+        })
+        .collect();
+    partition
+}
+
 /**
 Compute the modularity of the given graph partitions.
 
@@ -115,8 +131,8 @@ where
                     graph.get_weighted_in_degree_for_all_nodes().unwrap(),
                 ),
                 false => (
-                    convert_values_to_f64::<T, A>(graph.get_out_degree_for_all_nodes().unwrap()),
-                    convert_values_to_f64::<T, A>(graph.get_in_degree_for_all_nodes().unwrap()),
+                    convert_values_to_f64::<T>(graph.get_out_degree_for_all_nodes().unwrap()),
+                    convert_values_to_f64::<T>(graph.get_in_degree_for_all_nodes().unwrap()),
                 ),
             };
             let m: f64 = outd.values().sum();
@@ -126,7 +142,7 @@ where
         false => {
             let deg = match weighted {
                 true => graph.get_weighted_degree_for_all_nodes(),
-                false => convert_values_to_f64::<T, A>(graph.get_degree_for_all_nodes()),
+                false => convert_values_to_f64::<T>(graph.get_degree_for_all_nodes()),
             };
             let deg_sum: f64 = deg.values().sum();
             let m = deg_sum / 2.0;
@@ -216,7 +232,67 @@ where
     Ok(communities.iter().map(community_contribution).sum())
 }
 
-fn convert_values_to_f64<T, A>(hashmap: HashMap<T, usize>) -> HashMap<T, f64>
+pub(crate) fn partition_is_singleton(partition: &[IntSet<usize>], num_nodes: usize) -> bool {
+    let len = partition.len();
+    let flattened_len = partition.into_iter().flatten().count();
+    flattened_len == len && len == num_nodes
+}
+
+pub(crate) fn partitions_eq(
+    partition1: &Vec<IntSet<usize>>,
+    partition2: &Vec<IntSet<usize>>,
+) -> bool {
+    let first_of_each_set1: Vec<&usize> = partition1
+        .iter()
+        .map(|hs| hs.iter().next().unwrap())
+        .collect();
+    let matching_partition2_indexes: Vec<usize> = first_of_each_set1
+        .iter()
+        .map(|i| partition2.iter().position(|hs| hs.contains(i)).unwrap())
+        .collect();
+    partition1
+        .into_iter()
+        .zip(matching_partition2_indexes)
+        .all(|(hs1, i)| hs1 == &partition2[i])
+}
+
+/// Converts a graph partition of usize replacements of node names T to
+/// a partition using the node names T.
+pub(crate) fn convert_usize_partitions_vec_to_t<T, A>(
+    partitions_vec: Vec<Vec<IntSet<usize>>>,
+    graph: &Graph<T, A>,
+) -> Vec<Vec<HashSet<T>>>
+where
+    T: Hash + Eq + Clone + Ord + Display + Send + Sync,
+    A: Clone + Send + Sync,
+{
+    partitions_vec
+        .into_iter()
+        .map(|v| convert_usize_partitions_to_t(v, graph))
+        .collect()
+}
+
+/// Converts a graph partition of usize replacements of node names T to
+/// a partition using the node names T.
+pub(crate) fn convert_usize_partitions_to_t<T, A>(
+    partitions: Vec<IntSet<usize>>,
+    graph: &Graph<T, A>,
+) -> Vec<HashSet<T>>
+where
+    T: Hash + Eq + Clone + Ord + Display + Send + Sync,
+    A: Clone + Send + Sync,
+{
+    partitions
+        .into_iter()
+        .map(|hs| {
+            hs.into_iter()
+                .map(|u| graph.get_node_by_index(&u).unwrap().name.clone())
+                .collect::<HashSet<T>>()
+        })
+        .collect::<Vec<HashSet<T>>>()
+}
+
+fn convert_values_to_f64<T>(hashmap: HashMap<T, usize>) -> HashMap<T, f64>
 where
     T: Eq + Hash,
 {
@@ -225,4 +301,138 @@ where
 
 fn convert_values_to_f64_vec(values: Vec<usize>) -> Vec<f64> {
     values.into_iter().map(|v| v as f64).collect()
+}
+
+#[cfg(test)]
+mod tests {
+
+    use super::*;
+    use crate::{Edge, Graph, GraphSpecs};
+    use std::collections::HashMap;
+
+    #[test]
+    fn test_convert_values_to_f64() {
+        let hashmap: HashMap<&str, usize> = vec![("a", 1), ("b", 2), ("c", 3)]
+            .into_iter()
+            .collect::<HashMap<&str, usize>>();
+        let f64_hashmap = convert_values_to_f64(hashmap);
+        assert_eq!(f64_hashmap.get("a").unwrap(), &1.0);
+        assert_eq!(f64_hashmap.get("b").unwrap(), &2.0);
+        assert_eq!(f64_hashmap.get("c").unwrap(), &3.0);
+    }
+
+    #[test]
+    fn test_convert_values_to_f64_vec() {
+        let values = vec![1, 2, 3];
+        let f64_vec = convert_values_to_f64_vec(values);
+        assert_eq!(f64_vec, vec![1.0, 2.0, 3.0]);
+    }
+
+    #[test]
+    fn test_convert_usize_partitions_to_t() {
+        let edges = vec![
+            Edge::new("n1", "n2"),
+            Edge::new("n3", "n4"),
+            Edge::new("n5", "n6"),
+        ];
+        let graph: Graph<&str, ()> =
+            Graph::new_from_nodes_and_edges(vec![], edges, GraphSpecs::undirected_create_missing())
+                .unwrap();
+        let partitions = vec![
+            vec![0, 1].into_iter().collect(),
+            vec![2, 3].into_iter().collect(),
+            vec![4, 5].into_iter().collect(),
+        ];
+        let converted = convert_usize_partitions_to_t(partitions, &graph);
+        let hs1: HashSet<&str> = vec!["n1", "n2"].into_iter().collect();
+        let hs2: HashSet<&str> = vec!["n3", "n4"].into_iter().collect();
+        let hs3: HashSet<&str> = vec!["n5", "n6"].into_iter().collect();
+        assert_eq!(converted[0], hs1);
+        assert_eq!(converted[1], hs2);
+        assert_eq!(converted[2], hs3);
+    }
+
+    #[test]
+    fn test_convert_usize_partitions_vec_to_t() {
+        let edges = vec![
+            Edge::new("n1", "n2"),
+            Edge::new("n3", "n4"),
+            Edge::new("n5", "n6"),
+        ];
+        let graph: Graph<&str, ()> =
+            Graph::new_from_nodes_and_edges(vec![], edges, GraphSpecs::undirected_create_missing())
+                .unwrap();
+        let partitions = vec![
+            vec![0, 1].into_iter().collect(),
+            vec![2, 3].into_iter().collect(),
+            vec![4, 5].into_iter().collect(),
+        ];
+        let converted = convert_usize_partitions_vec_to_t(vec![partitions], &graph);
+        let hs1: HashSet<&str> = vec!["n1", "n2"].into_iter().collect();
+        let hs2: HashSet<&str> = vec!["n3", "n4"].into_iter().collect();
+        let hs3: HashSet<&str> = vec!["n5", "n6"].into_iter().collect();
+        assert_eq!(converted[0][0], hs1);
+        assert_eq!(converted[0][1], hs2);
+        assert_eq!(converted[0][2], hs3);
+    }
+
+    #[test]
+    fn test_partition_is_singleton() {
+        let partition = vec![
+            vec![0, 1].into_iter().collect(),
+            vec![2, 3].into_iter().collect(),
+            vec![4, 5].into_iter().collect(),
+        ];
+        assert!(!partition_is_singleton(&partition, 6));
+        let partition = vec![
+            vec![0].into_iter().collect(),
+            vec![1].into_iter().collect(),
+            vec![2].into_iter().collect(),
+        ];
+        assert!(partition_is_singleton(&partition, 3));
+    }
+
+    #[test]
+    fn test_partitions_eq1() {
+        let partition1 = vec![
+            vec![0, 1].into_iter().collect(),
+            vec![2, 3].into_iter().collect(),
+            vec![4, 5].into_iter().collect(),
+        ];
+        let partition2 = vec![
+            vec![0, 1].into_iter().collect(),
+            vec![2, 3].into_iter().collect(),
+            vec![4, 5].into_iter().collect(),
+        ];
+        assert!(partitions_eq(&partition1, &partition2));
+    }
+
+    #[test]
+    fn test_partitions_eq2() {
+        let partition1 = vec![
+            vec![2, 3].into_iter().collect(),
+            vec![0, 1].into_iter().collect(),
+            vec![4, 5].into_iter().collect(),
+        ];
+        let partition2 = vec![
+            vec![0, 1].into_iter().collect(),
+            vec![2, 3].into_iter().collect(),
+            vec![4, 5].into_iter().collect(),
+        ];
+        assert!(partitions_eq(&partition1, &partition2));
+    }
+
+    #[test]
+    fn test_partitions_eq3() {
+        let partition1 = vec![
+            vec![0, 1, 2].into_iter().collect(),
+            vec![3, 4, 5].into_iter().collect(),
+        ];
+        let partition2 = vec![
+            vec![0, 1].into_iter().collect(),
+            vec![2, 3].into_iter().collect(),
+            vec![4, 5].into_iter().collect(),
+        ];
+        assert!(!partitions_eq(&partition1, &partition2));
+    }
 }

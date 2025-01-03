@@ -1,5 +1,6 @@
 use std::collections::HashSet;
 use std::hash::Hash;
+use nohash::{IntSet, IsEnabled};
 
 /// Extends `HashSet` with the `without` method.
 pub trait HashSetExt<T> {
@@ -14,6 +15,23 @@ where
     Returns a copy of the `HashSet` that doesn't contain the specified `value`.
     */
     fn without(&self, value: &T) -> HashSet<T> {
+        self.iter().filter(|v| *v != value).cloned().collect()
+    }
+}
+
+/// Extends `HashSet` with the `without` method.
+pub trait IntSetExt<T> {
+    fn without(&self, value: &T) -> IntSet<T>;
+}
+
+impl<T> IntSetExt<T> for IntSet<T>
+where
+    T: Clone + Eq + Hash + IsEnabled,
+{
+    /**
+    Returns a copy of the `HashSet` that doesn't contain the specified `value`.
+    */
+    fn without(&self, value: &T) -> IntSet<T> {
         self.iter().filter(|v| *v != value).cloned().collect()
     }
 }
