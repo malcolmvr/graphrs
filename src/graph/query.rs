@@ -605,6 +605,26 @@ where
             .collect())
     }
 
+    pub(crate) fn get_out_edges_for_node_indexes(
+        &self,
+        node_indexes: &[usize],
+    ) -> Vec<(usize, usize, f64)>
+    where
+        T: Hash + Eq + Clone + Ord,
+        A: Clone,
+    {
+        let x: Vec<(usize, usize, f64)> = node_indexes
+            .iter()
+            .flat_map(|node_index| {
+                self.get_successor_nodes_by_index(&node_index)
+                    .into_iter()
+                    .map(|adj| (*node_index, adj.node_index, adj.weight))
+                    .collect::<Vec<(usize, usize, f64)>>()
+            })
+            .collect();
+        x
+    }
+
     /**
     Returns all the nodes that connect to `node_name`.
 

@@ -1,97 +1,42 @@
 use crate::{
-    algorithms::community::partitions, algorithms::community::utility, ext::hashset::IntSetExt,
-    AdjacentNode, Edge, EdgeDedupeStrategy, Error, ErrorKind, Graph, GraphSpecs, Node,
+    algorithms::community::partitions, algorithms::community::utility,
+    algorithms::cuts::cut_size_by_indexes, ext::hashset::IntSetExt, Error, Graph,
 };
 use nohash::IntSet;
-use serde::de;
 use std::collections::{HashSet, VecDeque};
+use std::fmt::Debug;
 use std::fmt::Display;
 use std::hash::Hash;
 
-use super::partitions::modularity_by_indexes;
+mod partition;
+use partition::Partition;
 
-struct Partition {
-    pub node_partition: Vec<usize>,
-    pub partition: Vec<IntSet<usize>>,
-    pub degree_sums: Vec<f64>,
-}
-
-impl Partition {
-    pub fn node_community(&self, node: usize) -> &IntSet<usize> {
-        &self.partition[self.node_partition[node]]
-    }
-    pub fn degree_sum(&self, node: usize) -> f64 {
-        self.degree_sums[self.node_partition[node]]
-    }
-    pub fn move_node<T, A>(
-        &mut self,
-        v: usize,
-        target: IntSet<usize>,
-        graph: &Graph<T, A>,
-        weighted: bool,
-    ) where
-        T: Hash + Eq + Clone + Ord + Display + Send + Sync,
-        A: Clone + Send + Sync,
-    {
-        let source_partition_idx = self.node_partition[v];
-        let target_partition_idx: usize;
-        if target.len() > 0 {
-            let el = target.iter().next().unwrap();
-            target_partition_idx = self.node_partition[*el];
-        } else {
-            target_partition_idx = self.partition.len();
-            self.degree_sums.push(0.0);
-        }
-
-        // Remove `v` from its old community and place it into the target partition
-        self.partition[source_partition_idx].remove(&v);
-        self.partition[target_partition_idx].insert(v);
-
-        // Also update the sum of node degrees in that partition
-        let deg_v = match weighted {
-            true => graph.get_node_weighted_degree_by_index(v),
-            false => graph.get_node_degree_by_index(v) as f64,
-        };
-        self.degree_sums[source_partition_idx] -= deg_v;
-        self.degree_sums[target_partition_idx] += deg_v;
-
-        // Update v's entry in the index lookup table
-        self.node_partition[v] = target_partition_idx;
-
-        // If the original partition is empty now, that we removed v from it, remove it and adjust the indexes in _node_part
-        if self.partition[source_partition_idx].len() == 0 {
-            self.partition.remove(source_partition_idx);
-            self.degree_sums.remove(source_partition_idx);
-            self.node_partition = self
-                .node_partition
-                .iter()
-                .map(|i| {
-                    if *i < source_partition_idx {
-                        *i
-                    } else {
-                        *i - 1
-                    }
-                })
-                .collect();
-        }
-    }
-}
+mod aggregate_graph;
+use aggregate_graph::AggregateGraph;
 
 pub fn leiden<T, A>(
     graph: &Graph<T, A>,
     weighted: bool,
     resolution: Option<f64>,
+    omega: Option<f64>,
 ) -> Result<Vec<HashSet<T>>, Error>
 where
     T: Hash + Eq + Clone + Ord + Display + Send + Sync,
     A: Clone + Send + Sync,
 {
     let _resolution = resolution.unwrap_or(0.05);
-    let partition = get_singleton_partition(graph, weighted);
+    let _omega = omega.unwrap_or(0.3);
+    let aggregate_graph = AggregateGraph::initial(graph, weighted);
+    let mut partition = get_singleton_partition(graph, weighted);
     // Ok(partitions::convert_usize_partitions_to_t(partition, &graph))
     let mut prev_partition: Option<Partition> = None;
     loop {
-        let new_partition = move_nodes_fast(graph, &partition, weighted, _resolution);
+        let new_partition = move_nodes_fast(
+            &aggregate_graph.graph,
+            &mut partition,
+            weighted,
+            _resolution,
+        );
         if partitions::partition_is_singleton(&new_partition.partition, graph.number_of_nodes())
             || (prev_partition.is_some()
                 && partitions::partitions_eq(
@@ -104,13 +49,15 @@ where
                 &graph,
             ));
         }
-        prev_partition = Some(new_partition);
+        prev_partition = Some(new_partition.clone());
+        let refined_partition =
+            refine_partition(&aggregate_graph, &new_partition, _resolution, _omega);
     }
 }
 
 fn move_nodes_fast<T, A>(
     graph: &Graph<T, A>,
-    partition: &Partition,
+    partition: &mut Partition,
     weighted: bool,
     resolution: f64,
 ) -> Partition
@@ -118,16 +65,10 @@ where
     T: Hash + Eq + Clone + Ord + Display + Send + Sync,
     A: Clone + Send + Sync,
 {
-    let mut shuffled_indexes: VecDeque<usize> =
-        utility::get_shuffled_node_indexes(graph, None).into();
-    while let Some(v) = shuffled_indexes.pop_front() {
-        let adjacent_community_indexes = get_adjacent_communities(v, graph, &partition);
-        let mut adjacent_communities: Vec<&IntSet<usize>> = adjacent_community_indexes
-            .into_iter()
-            .map(|x| &partition.partition[x])
-            .collect();
+    let mut queue: VecDeque<usize> = utility::get_shuffled_node_indexes(graph, None).into();
+    while let Some(v) = queue.pop_front() {
         let empty = IntSet::default();
-        adjacent_communities.push(&empty);
+        let adjacent_communities = get_adjacent_communities(v, graph, partition, &empty);
         let (max_community, max_delta) = argmax(
             v,
             partition,
@@ -136,12 +77,84 @@ where
             weighted,
             resolution,
         );
-        if max_delta > 0.0 {}
+        if max_delta > 0.0 {
+            partition.move_node(v, &max_community, graph, weighted);
+            let queue_set: IntSet<usize> = queue.iter().cloned().collect();
+            for u in graph.get_successor_nodes_by_index(&v) {
+                if !max_community.contains(&u.node_index) && !queue_set.contains(&u.node_index) {
+                    queue.push_back(u.node_index);
+                }
+            }
+        }
     }
-    Partition {
-        partition: partition.partition.clone(),
-        node_partition: partition.node_partition.clone(),
-        degree_sums: partition.degree_sums.clone(),
+    partition.clone()
+}
+
+fn refine_partition<T, A>(
+    aggregate_graph: &AggregateGraph<T, A>,
+    partition: &Partition,
+    resolution: f64,
+    omega: f64,
+) -> Partition
+where
+    T: Hash + Eq + Clone + Ord + Display + Send + Sync,
+    A: Clone + Send + Sync,
+{
+    let mut refined_partition = get_singleton_partition(&aggregate_graph.graph, true);
+    for community in partition.partition.iter() {
+        // merge_nodes_subset(
+        //     &refined_partition,
+        //     &community,
+        //     graph,
+        //     weighted,
+        //     resolution,
+        //     omega,
+        // );
+    }
+    refined_partition
+}
+
+fn merge_nodes_subset<T, A>(
+    partition: &mut Partition,
+    community: &IntSet<usize>,
+    aggregate_graph: &AggregateGraph<T, A>,
+    resolution: f64,
+    omega: f64,
+) where
+    T: Hash + Eq + Clone + Ord + Debug + Display + Send + Sync,
+    A: Clone + Send + Sync,
+{
+    let size_s = aggregate_graph.node_total(community);
+    let R: IntSet<usize> = community
+        .iter()
+        .map(|v| v.clone())
+        .filter(|v| {
+            let community_without_v: Vec<usize> = community.without(v).iter().cloned().collect();
+            let x = cut_size_by_indexes(&aggregate_graph.graph, &[*v], &community_without_v, true);
+            let v_set = vec![*v].into_iter().collect();
+            let v_node_total = aggregate_graph.node_total(&v_set);
+            x >= resolution * v_node_total * (size_s - v_node_total)
+        })
+        .collect();
+    for v in R {
+        if partition.node_community(v).len() != 1 {
+            continue;
+        }
+        let T = partition
+            .partition
+            .into_iter()
+            .filter(|C| {
+                let nbunch1: Vec<usize> = C.iter().map(|n| n.clone()).collect();
+                let nbunch2: Vec<usize> = (community - C).iter().map(|n| n.clone()).collect();
+                let cs = cut_size_by_indexes(
+                    &aggregate_graph.graph,
+                    nbunch1.as_slice(),
+                    nbunch2.as_slice(),
+                    true,
+                );
+                if C.is_subset(community) {}
+            })
+            .collect();
     }
 }
 
@@ -168,44 +181,46 @@ where
     }
 }
 
-fn get_adjacent_communities<T, A>(
+fn get_adjacent_communities<'a, T, A>(
     node: usize,
     graph: &Graph<T, A>,
-    partition: &Partition,
-) -> IntSet<usize>
+    partition: &'a Partition,
+    empty: &'a IntSet<usize>,
+) -> Vec<&'a IntSet<usize>>
 where
     T: Hash + Eq + Clone + Ord + Display + Send + Sync,
     A: Clone + Send + Sync,
 {
-    let mut adjacent_communities = IntSet::default();
-    adjacent_communities.insert(partition.node_partition[node]);
+    let mut adjacent_communities: Vec<&IntSet<usize>> = vec![];
+    adjacent_communities.push(&partition.partition[partition.node_partition[node]]);
     for u in graph.get_successor_nodes_by_index(&node) {
-        adjacent_communities.insert(partition.node_partition[u.node_index]);
+        adjacent_communities.push(&partition.partition[partition.node_partition[u.node_index]]);
     }
+    adjacent_communities.push(&empty);
     adjacent_communities
 }
 
-fn argmax<'a, T, A>(
+fn argmax<T, A>(
     v: usize,
     partition: &Partition,
-    communities: &'a [&IntSet<usize>],
+    communities: &[&IntSet<usize>],
     graph: &Graph<T, A>,
     weighted: bool,
     resolution: f64,
-) -> (&'a IntSet<usize>, f64)
+) -> (IntSet<usize>, f64)
 where
     T: Hash + Eq + Clone + Ord + Display + Send + Sync,
     A: Clone + Send + Sync,
 {
     let mut idx = 0;
-    let mut opt = communities[idx];
-    let mut val = get_delta(v, partition, opt, graph, weighted, resolution);
+    let mut opt: IntSet<usize> = communities[idx].iter().cloned().collect();
+    let mut val = get_delta(v, partition, &opt, graph, weighted, resolution);
     for k in 1..communities.len() {
         let optk = &communities[k];
         let valk = get_delta(v, partition, optk, graph, weighted, resolution);
         if valk > val {
             idx = k;
-            opt = optk;
+            opt = optk.iter().cloned().collect();
             val = valk;
         }
     }
@@ -247,6 +262,8 @@ where
         / m
 }
 
+// fn aggregate_graph(graph: &Graph)
+
 fn single_node_neighbor_cut_size<T, A>(
     graph: &Graph<T, A>,
     v: usize,
@@ -274,6 +291,7 @@ mod tests {
     use super::*;
     use crate::{Edge, Graph, GraphSpecs, Node};
     use assert_approx_eq::assert_approx_eq;
+    use sprs::vec;
     use std::sync::Arc;
 
     #[test]
@@ -387,26 +405,30 @@ mod tests {
             node_partition: vec![0, 0, 1, 2, 3],
             degree_sums: vec![0.0, 0.0, 0.0, 0.0],
         };
-        let result = get_adjacent_communities(0, &graph, &partition);
-        assert_eq!(result.len(), 2);
-        assert!(result.contains(&0));
-        assert!(result.contains(&1));
-        let result = get_adjacent_communities(1, &graph, &partition);
-        assert_eq!(result.len(), 2);
-        assert!(result.contains(&0));
-        assert!(result.contains(&1));
-        let result = get_adjacent_communities(2, &graph, &partition);
+        let empty = IntSet::default();
+        let result = get_adjacent_communities(0, &graph, &partition, &empty);
         assert_eq!(result.len(), 3);
-        assert!(result.contains(&1));
-        assert!(result.contains(&2));
-        assert!(result.contains(&3));
+        assert!(result == vec![&partition.partition[0], &partition.partition[1], &empty]);
+        let result = get_adjacent_communities(1, &graph, &partition, &empty);
+        assert!(result == vec![&partition.partition[0], &partition.partition[1], &empty]);
+        let result = get_adjacent_communities(2, &graph, &partition, &empty);
+        assert!(
+            result
+                == vec![
+                    &partition.partition[1],
+                    &partition.partition[2],
+                    &partition.partition[3],
+                    &empty
+                ]
+        );
     }
 
     #[test]
     fn test_argmax_1() {
         let graph = get_graph_for_argmax(true);
         let partition = get_partition_for_argmax();
-        let communities = get_communities_for_argmax(&partition, &graph);
+        let empty = IntSet::default();
+        let communities = get_communities_for_argmax(&partition, &graph, &empty);
         let result = argmax(0, &partition, &communities, &graph, true, 1.0);
         assert_eq!(result.0.len(), 1);
         assert!(result.0.contains(&2));
@@ -421,7 +443,8 @@ mod tests {
     fn test_argmax_2() {
         let graph = get_graph_for_argmax(false);
         let partition = get_partition_for_argmax();
-        let communities = get_communities_for_argmax(&partition, &graph);
+        let empty = IntSet::default();
+        let communities = get_communities_for_argmax(&partition, &graph, &empty);
         let result = argmax(0, &partition, &communities, &graph, true, 1.0);
         assert_eq!(result.0.len(), 1);
         assert!(result.0.contains(&2));
@@ -434,7 +457,22 @@ mod tests {
 
     #[test]
     fn test_move_node() {
-        // TODO
+        let graph = get_graph_for_argmax(true);
+        let mut partition = get_partition_for_argmax();
+        let mut target = IntSet::default();
+        target.insert(2);
+        partition.move_node(0, &target, &graph, true);
+        assert_eq!(partition.partition.len(), 4);
+        assert!(partition.partition[0] == vec![1].into_iter().collect());
+        assert!(partition.partition[1] == vec![0, 2].into_iter().collect());
+        assert!(partition.partition[2] == vec![3].into_iter().collect());
+        assert!(partition.partition[3] == vec![4].into_iter().collect());
+        assert_eq!(partition.node_partition[0], 1);
+        assert_eq!(partition.node_partition[1], 0);
+        assert_eq!(partition.node_partition[2], 1);
+        assert_eq!(partition.node_partition[3], 2);
+        assert_eq!(partition.node_partition[4], 3);
+        assert!(partition.degree_sums == vec![-1.1, 1.1, 0.0, 0.0]);
     }
 
     fn get_graph_for_argmax(directed: bool) -> Graph<i32, ()> {
@@ -475,11 +513,8 @@ mod tests {
     fn get_communities_for_argmax<'a>(
         partition: &'a Partition,
         graph: &Graph<i32, ()>,
+        empty: &'a IntSet<usize>,
     ) -> Vec<&'a IntSet<usize>> {
-        let community_indexes = get_adjacent_communities(0, &graph, &partition);
-        community_indexes
-            .into_iter()
-            .map(|x| &partition.partition[x])
-            .collect()
+        get_adjacent_communities(0, &graph, &partition, empty)
     }
 }
