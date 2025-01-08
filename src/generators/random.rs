@@ -94,7 +94,7 @@ fn fast_gnp_random_graph_undirected(
         let lr: f64 = (1.0_f64 - rng.gen::<f64>()).ln();
         w = w + 1 + ((lr / lp) as i32);
         while w >= v && v < num_nodes {
-            w += v;
+            w -= v;
             v += 1;
         }
         if v < num_nodes {

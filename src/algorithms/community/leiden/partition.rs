@@ -34,8 +34,12 @@ impl Partition {
             target_partition_idx = self.node_partition[*el];
         } else {
             target_partition_idx = self.partition.len();
+            self.partition.push(target.clone());
             self.degree_sums.push(0.0);
         }
+
+        // println!("source_partition_idx: {:?}", source_partition_idx);
+        // println!("target_partition_idx: {:?}", target_partition_idx);
 
         // Remove `v` from its old community and place it into the target partition
         self.partition[source_partition_idx].remove(&v);
@@ -71,7 +75,7 @@ impl Partition {
     }
 
     pub fn from_partition(graph: &Graph<usize, f64>, partition: Vec<IntSet<usize>>) -> Partition {
-        println!("degrees: {:?}", graph.get_weighted_degree_for_all_nodes());
+        // println!("degrees: {:?}", graph.get_weighted_degree_for_all_nodes());
         let node_partition: Vec<usize> = partition
             .iter()
             .enumerate()
