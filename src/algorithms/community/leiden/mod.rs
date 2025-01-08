@@ -2,7 +2,11 @@ use crate::{
     algorithms::community::partitions, algorithms::community::utility,
     algorithms::cuts::cut_size_by_indexes, ext::hashset::IntSetExt, Error, Graph,
 };
+use core::f64;
+use itertools::Itertools;
 use nohash::IntSet;
+use rand::distributions::WeightedIndex;
+use rand::{distributions::Distribution, RngCore};
 use std::collections::{HashSet, VecDeque};
 use std::fmt::Debug;
 use std::fmt::Display;
@@ -18,54 +22,83 @@ pub fn leiden<T, A>(
     graph: &Graph<T, A>,
     weighted: bool,
     resolution: Option<f64>,
-    omega: Option<f64>,
+    theta: Option<f64>,
+    gamma: Option<f64>,
 ) -> Result<Vec<HashSet<T>>, Error>
 where
-    T: Hash + Eq + Clone + Ord + Display + Send + Sync,
+    T: Hash + Eq + Clone + Ord + Debug + Display + Send + Sync,
     A: Clone + Send + Sync,
 {
-    let _resolution = resolution.unwrap_or(0.05);
-    let _omega = omega.unwrap_or(0.3);
-    let aggregate_graph = AggregateGraph::initial(graph, weighted);
+    let _resolution = resolution.unwrap_or(0.25);
+    let _theta = theta.unwrap_or(0.3);
+    let _gamma = gamma.unwrap_or(0.05);
+    let mut aggregate_graph = AggregateGraph::initial(graph, weighted);
     let mut partition = get_singleton_partition(graph, weighted);
-    // Ok(partitions::convert_usize_partitions_to_t(partition, &graph))
     let mut prev_partition: Option<Partition> = None;
     loop {
-        let new_partition = move_nodes_fast(
+        partition = move_nodes_fast(
             &aggregate_graph.graph,
             &mut partition,
             weighted,
             _resolution,
         );
-        if partitions::partition_is_singleton(&new_partition.partition, graph.number_of_nodes())
+        if partitions::partition_is_singleton(&partition.partition, graph.number_of_nodes())
             || (prev_partition.is_some()
                 && partitions::partitions_eq(
-                    &new_partition.partition,
+                    &partition.partition,
                     &prev_partition.unwrap().partition,
                 ))
         {
+            let flattened = partition.flatten(&aggregate_graph);
             return Ok(partitions::convert_usize_partitions_to_t(
-                new_partition.partition,
+                flattened.partition,
                 &graph,
             ));
         }
-        prev_partition = Some(new_partition.clone());
+        prev_partition = Some(partition.clone());
+        println!("\n");
         let refined_partition =
-            refine_partition(&aggregate_graph, &new_partition, _resolution, _omega);
+            refine_partition(&aggregate_graph, &partition, _resolution, _theta, _gamma);
+        println!("refined_partition {:?}", refined_partition);
+        println!("\n");
+        aggregate_graph = aggregate_graph.from_partition(&refined_partition);
+        println!(
+            "aggregate_graph {:?}",
+            aggregate_graph
+                .graph
+                .get_all_nodes()
+                .into_iter()
+                .map(|n| (n.name, n.attributes.unwrap()))
+                .collect::<Vec<(usize, f64)>>()
+        ); // MALCOLM
+        let partitions: Vec<IntSet<usize>> = partition
+            .partition
+            .iter()
+            .map(|c| {
+                aggregate_graph
+                    .node_nodes
+                    .as_ref()
+                    .unwrap()
+                    .iter()
+                    .enumerate()
+                    .filter(|(_i, nodes)| nodes.is_subset(c))
+                    .map(|(i, _nodes)| i)
+                    .collect()
+            })
+            .collect();
+        partition = Partition::from_partition(&aggregate_graph.graph, partitions);
+        println!("partition {:?}", partition);
     }
 }
 
-fn move_nodes_fast<T, A>(
-    graph: &Graph<T, A>,
+fn move_nodes_fast(
+    graph: &Graph<usize, f64>,
     partition: &mut Partition,
     weighted: bool,
     resolution: f64,
-) -> Partition
-where
-    T: Hash + Eq + Clone + Ord + Display + Send + Sync,
-    A: Clone + Send + Sync,
-{
+) -> Partition {
     let mut queue: VecDeque<usize> = utility::get_shuffled_node_indexes(graph, None).into();
+    // let mut queue: VecDeque<usize> = (0..graph.number_of_nodes()).collect::<Vec<usize>>().into();
     while let Some(v) = queue.pop_front() {
         let empty = IntSet::default();
         let adjacent_communities = get_adjacent_communities(v, graph, partition, &empty);
@@ -77,6 +110,10 @@ where
             weighted,
             resolution,
         );
+        println!(
+            "max_community: {:?} max_delta: {}",
+            max_community, max_delta
+        );
         if max_delta > 0.0 {
             partition.move_node(v, &max_community, graph, weighted);
             let queue_set: IntSet<usize> = queue.iter().cloned().collect();
@@ -87,43 +124,43 @@ where
             }
         }
     }
+    println!("done move_nodes_fast");
+    println!("{:?}", partition);
     partition.clone()
 }
 
-fn refine_partition<T, A>(
-    aggregate_graph: &AggregateGraph<T, A>,
+fn refine_partition(
+    aggregate_graph: &AggregateGraph,
     partition: &Partition,
     resolution: f64,
-    omega: f64,
-) -> Partition
-where
-    T: Hash + Eq + Clone + Ord + Display + Send + Sync,
-    A: Clone + Send + Sync,
-{
+    theta: f64,
+    gamma: f64,
+) -> Partition {
     let mut refined_partition = get_singleton_partition(&aggregate_graph.graph, true);
+    let mut rng: Box<dyn RngCore> = Box::new(rand::thread_rng());
     for community in partition.partition.iter() {
-        // merge_nodes_subset(
-        //     &refined_partition,
-        //     &community,
-        //     graph,
-        //     weighted,
-        //     resolution,
-        //     omega,
-        // );
+        merge_nodes_subset(
+            &mut refined_partition,
+            &community,
+            aggregate_graph,
+            resolution,
+            theta,
+            gamma,
+            &mut rng,
+        );
     }
     refined_partition
 }
 
-fn merge_nodes_subset<T, A>(
+fn merge_nodes_subset(
     partition: &mut Partition,
     community: &IntSet<usize>,
-    aggregate_graph: &AggregateGraph<T, A>,
+    aggregate_graph: &AggregateGraph,
     resolution: f64,
-    omega: f64,
-) where
-    T: Hash + Eq + Clone + Ord + Debug + Display + Send + Sync,
-    A: Clone + Send + Sync,
-{
+    theta: f64,
+    gamma: f64,
+    rng: &mut Box<dyn RngCore>,
+) {
     let size_s = aggregate_graph.node_total(community);
     let R: IntSet<usize> = community
         .iter()
@@ -133,16 +170,19 @@ fn merge_nodes_subset<T, A>(
             let x = cut_size_by_indexes(&aggregate_graph.graph, &[*v], &community_without_v, true);
             let v_set = vec![*v].into_iter().collect();
             let v_node_total = aggregate_graph.node_total(&v_set);
-            x >= resolution * v_node_total * (size_s - v_node_total)
+            x >= gamma * v_node_total * (size_s - v_node_total)
         })
         .collect();
-    for v in R {
+    println!("R: {:?}", R);
+    for v in R.into_iter().sorted() {
         if partition.node_community(v).len() != 1 {
             continue;
         }
-        let T = partition
+        println!("v: {:?}", v);
+        let T: Vec<IntSet<usize>> = partition
             .partition
-            .into_iter()
+            .iter()
+            .cloned()
             .filter(|C| {
                 let nbunch1: Vec<usize> = C.iter().map(|n| n.clone()).collect();
                 let nbunch2: Vec<usize> = (community - C).iter().map(|n| n.clone()).collect();
@@ -152,9 +192,31 @@ fn merge_nodes_subset<T, A>(
                     nbunch2.as_slice(),
                     true,
                 );
-                if C.is_subset(community) {}
+                let C_node_total = aggregate_graph.node_total(C);
+                C.is_subset(community) && cs >= gamma * C_node_total * (size_s - C_node_total)
             })
             .collect();
+        println!("  T: {:?}", T);
+        let mut communities: Vec<(&IntSet<usize>, f64)> = T
+            .iter()
+            .map(|C| {
+                (
+                    C,
+                    get_delta(v, partition, C, &aggregate_graph.graph, true, resolution),
+                )
+            })
+            .filter(|(_C, delta)| *delta >= 0.0)
+            .collect();
+        let weights: Vec<f64> = communities
+            .iter()
+            .map(|(_C, delta)| (delta / theta).exp())
+            .collect();
+        let dist = WeightedIndex::new(&weights).unwrap();
+        let new_community = communities[dist.sample(rng)];
+        // communities.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap()); // MALCOLM
+        // let new_community = communities.last().unwrap(); // MALCOLM
+        println!("  new_community: {:?}", new_community);
+        partition.move_node(v, new_community.0, &aggregate_graph.graph, true);
     }
 }
 
@@ -191,12 +253,26 @@ where
     T: Hash + Eq + Clone + Ord + Display + Send + Sync,
     A: Clone + Send + Sync,
 {
-    let mut adjacent_communities: Vec<&IntSet<usize>> = vec![];
-    adjacent_communities.push(&partition.partition[partition.node_partition[node]]);
+    let mut adjacent_community_ids: IntSet<usize> = IntSet::default();
+    // let mut adjacent_communities: Vec<&IntSet<usize>> = vec![];
+    adjacent_community_ids.insert(partition.node_partition[node]);
     for u in graph.get_successor_nodes_by_index(&node) {
-        adjacent_communities.push(&partition.partition[partition.node_partition[u.node_index]]);
+        adjacent_community_ids.insert(partition.node_partition[u.node_index]);
     }
+    // if node == 2 {
+    //     println!("{:?}", partition);
+    //     println!("{:?}", adjacent_community_ids);
+    // } // MALCOLM
+    let mut adjacent_communities: Vec<&IntSet<usize>> = adjacent_community_ids
+        .into_iter()
+        .map(|i| &partition.partition[i])
+        .collect();
     adjacent_communities.push(&empty);
+    // println!(
+    //     "adjacent_communities for {}: {:?}",
+    //     node,
+    //     adjacent_communities.len()
+    // ); // MALCOLM
     adjacent_communities
 }
 
@@ -212,14 +288,12 @@ where
     T: Hash + Eq + Clone + Ord + Display + Send + Sync,
     A: Clone + Send + Sync,
 {
-    let mut idx = 0;
-    let mut opt: IntSet<usize> = communities[idx].iter().cloned().collect();
+    let mut opt: IntSet<usize> = communities[0].iter().cloned().collect();
     let mut val = get_delta(v, partition, &opt, graph, weighted, resolution);
     for k in 1..communities.len() {
         let optk = &communities[k];
         let valk = get_delta(v, partition, optk, graph, weighted, resolution);
         if valk > val {
-            idx = k;
             opt = optk.iter().cloned().collect();
             val = valk;
         }
@@ -257,12 +331,16 @@ where
         false => partition.degree_sum(*target.into_iter().next().unwrap()),
     };
 
-    ((diff_target - diff_source)
+    let delta = ((diff_target - diff_source)
         - resolution / (2.0 * m) * (deg_v.powf(2.0) + deg_v * (degs_target - degs_source)))
-        / m
-}
+        / m;
 
-// fn aggregate_graph(graph: &Graph)
+    // MALCOLM
+    // println!("partition: {:?}", partition);
+    // println!("target: {:?}", target);
+    // println!("delta | v: {} target: {:?} delta: {}", v, target, delta);
+    delta
+}
 
 fn single_node_neighbor_cut_size<T, A>(
     graph: &Graph<T, A>,
@@ -291,7 +369,8 @@ mod tests {
     use super::*;
     use crate::{Edge, Graph, GraphSpecs, Node};
     use assert_approx_eq::assert_approx_eq;
-    use sprs::vec;
+    use rand::SeedableRng;
+    use rand_chacha::ChaCha20Rng;
     use std::sync::Arc;
 
     #[test]
@@ -475,7 +554,94 @@ mod tests {
         assert!(partition.degree_sums == vec![-1.1, 1.1, 0.0, 0.0]);
     }
 
-    fn get_graph_for_argmax(directed: bool) -> Graph<i32, ()> {
+    #[test]
+    fn test_merge_nodes_subset_1() {
+        let (mut partition, community, aggregate_graph) = get_params_for_merge_nodes_subset();
+        let mut rng: Box<dyn RngCore> = Box::new(ChaCha20Rng::seed_from_u64(1));
+        merge_nodes_subset(
+            &mut partition,
+            &community,
+            &aggregate_graph,
+            0.25,
+            0.3,
+            0.05,
+            &mut rng,
+        );
+        assert_eq!(partition.node_partition, vec![1, 0, 1, 2, 2, 2]);
+        assert_eq!(
+            partition.partition,
+            vec![
+                vec![1].into_iter().collect(),
+                vec![0, 2].into_iter().collect(),
+                vec![3, 4, 5].into_iter().collect(),
+            ]
+        );
+        assert_eq!(partition.degree_sums, vec![3.3, 12.3, 20.5]);
+    }
+
+    #[test]
+    fn test_merge_nodes_subset_2() {
+        let (mut partition, community, aggregate_graph) = get_params_for_merge_nodes_subset();
+        let mut rng: Box<dyn RngCore> = Box::new(ChaCha20Rng::seed_from_u64(4));
+        merge_nodes_subset(
+            &mut partition,
+            &community,
+            &aggregate_graph,
+            0.25,
+            0.3,
+            0.05,
+            &mut rng,
+        );
+        assert_eq!(partition.node_partition, vec![0, 0, 0, 1, 2, 2]);
+        assert_eq!(
+            partition.partition,
+            vec![
+                vec![0, 1, 2].into_iter().collect(),
+                vec![3].into_iter().collect(),
+                vec![4, 5].into_iter().collect(),
+            ]
+        );
+        assert_eq!(partition.degree_sums, vec![15.600000000000001, 6.2, 12.6]);
+    }
+
+    fn get_params_for_merge_nodes_subset<'a>() -> (Partition, IntSet<usize>, AggregateGraph) {
+        let nodes = vec![
+            Node::from_name(0),
+            Node::from_name(1),
+            Node::from_name(2),
+            Node::from_name(3),
+            Node::from_name(4),
+            Node::from_name(5),
+        ];
+        let edges: Vec<Arc<Edge<i32, ()>>> = vec![
+            Edge::with_weight(0, 1, 1.1),
+            Edge::with_weight(1, 2, 2.2),
+            Edge::with_weight(0, 2, 3.7),
+            Edge::with_weight(2, 3, 1.7),
+            Edge::with_weight(3, 4, 2.1),
+            Edge::with_weight(4, 5, 3.2),
+            Edge::with_weight(3, 5, 4.1),
+        ];
+        let graph =
+            Graph::new_from_nodes_and_edges(nodes, edges, GraphSpecs::undirected()).unwrap();
+        let partition = Partition {
+            partition: vec![
+                vec![0].into_iter().collect(),
+                vec![1].into_iter().collect(),
+                vec![2].into_iter().collect(),
+                vec![3].into_iter().collect(),
+                vec![4].into_iter().collect(),
+                vec![5].into_iter().collect(),
+            ],
+            node_partition: vec![0, 1, 2, 3, 4, 5],
+            degree_sums: vec![4.8, 3.3, 7.5, 6.2, 5.3, 7.3],
+        };
+        let community = vec![0, 1, 2, 3, 4, 5].into_iter().collect();
+        let aggregate_graph = AggregateGraph::initial(&graph, true);
+        (partition, community, aggregate_graph)
+    }
+
+    fn get_graph_for_argmax(directed: bool) -> Graph<usize, f64> {
         let nodes = vec![
             Node::from_name(0),
             Node::from_name(1),
@@ -483,7 +649,7 @@ mod tests {
             Node::from_name(3),
             Node::from_name(4),
         ];
-        let edges: Vec<Arc<Edge<i32, ()>>> = vec![
+        let edges: Vec<Arc<Edge<usize, f64>>> = vec![
             Edge::with_weight(0, 2, 1.1),
             Edge::with_weight(1, 2, 2.3),
             Edge::with_weight(2, 3, 3.5),
@@ -512,7 +678,7 @@ mod tests {
 
     fn get_communities_for_argmax<'a>(
         partition: &'a Partition,
-        graph: &Graph<i32, ()>,
+        graph: &Graph<usize, f64>,
         empty: &'a IntSet<usize>,
     ) -> Vec<&'a IntSet<usize>> {
         get_adjacent_communities(0, &graph, &partition, empty)

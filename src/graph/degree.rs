@@ -1,5 +1,5 @@
 use super::Graph;
-use crate::{AdjacentNode, Error, ErrorKind};
+use crate::{Error, ErrorKind};
 use std::collections::HashMap;
 use std::fmt::Display;
 use std::hash::Hash;
