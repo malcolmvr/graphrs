@@ -81,14 +81,6 @@ impl AggregateGraph {
     }
 
     pub fn from_partition(self, partition: &Partition) -> AggregateGraph {
-        // println!(
-        //     "self.graph.nodes {:?}",
-        //     self.graph
-        //         .get_all_nodes()
-        //         .into_iter()
-        //         .map(|n| (n.name, n.attributes.unwrap()))
-        //         .collect::<Vec<(usize, f64)>>()
-        // ); // MALCOLM
         let node_nodes = partition.partition.iter().map(|c| c.clone()).collect();
         let node_weights: Vec<f64> = partition
             .partition
@@ -99,7 +91,6 @@ impl AggregateGraph {
                     .sum::<f64>()
             })
             .collect();
-        // println!("node_weights {:?}", node_weights);
         let new_nodes: Vec<Arc<Node<usize, f64>>> = partition
             .partition
             .iter()
@@ -138,9 +129,6 @@ impl AggregateGraph {
             },
         )
         .unwrap();
-        // for edge in new_graph.get_all_edges().iter() {
-        //     println!("{} {} {}", edge.u, edge.v, edge.weight);
-        // }
         AggregateGraph {
             graph: new_graph,
             node_nodes: Some(node_nodes),

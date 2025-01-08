@@ -38,9 +38,6 @@ impl Partition {
             self.degree_sums.push(0.0);
         }
 
-        // println!("source_partition_idx: {:?}", source_partition_idx);
-        // println!("target_partition_idx: {:?}", target_partition_idx);
-
         // Remove `v` from its old community and place it into the target partition
         self.partition[source_partition_idx].remove(&v);
         self.partition[target_partition_idx].insert(v);
@@ -75,7 +72,6 @@ impl Partition {
     }
 
     pub fn from_partition(graph: &Graph<usize, f64>, partition: Vec<IntSet<usize>>) -> Partition {
-        // println!("degrees: {:?}", graph.get_weighted_degree_for_all_nodes());
         let node_partition: Vec<usize> = partition
             .iter()
             .enumerate()
@@ -96,6 +92,25 @@ impl Partition {
             partition,
             degree_sums,
         }
+    }
+
+    pub fn get_adjacent_communities<'a>(
+        &'a self,
+        node: usize,
+        graph: &Graph<usize, f64>,
+        empty: &'a IntSet<usize>,
+    ) -> Vec<&'a IntSet<usize>> {
+        let mut adjacent_community_ids: IntSet<usize> = IntSet::default();
+        adjacent_community_ids.insert(self.node_partition[node]);
+        for u in graph.get_successor_nodes_by_index(&node) {
+            adjacent_community_ids.insert(self.node_partition[u.node_index]);
+        }
+        let mut adjacent_communities: Vec<&IntSet<usize>> = adjacent_community_ids
+            .into_iter()
+            .map(|i| &self.partition[i])
+            .collect();
+        adjacent_communities.push(&empty);
+        adjacent_communities
     }
 
     pub fn flatten(self, aggregate_graph: &AggregateGraph) -> Self {
@@ -163,5 +178,50 @@ mod tests {
             GraphSpecs::undirected_create_missing()
         };
         Graph::new_from_nodes_and_edges(nodes, edges, specs).unwrap()
+    }
+
+    #[test]
+    fn test_get_adjacent_communities() {
+        let nodes = vec![
+            Node::from_name(0),
+            Node::from_name(1),
+            Node::from_name(2),
+            Node::from_name(3),
+            Node::from_name(4),
+        ];
+        let edges: Vec<Arc<Edge<usize, f64>>> = vec![
+            Edge::new(0, 2),
+            Edge::new(1, 2),
+            Edge::new(2, 3),
+            Edge::new(2, 4),
+        ];
+        let specs = GraphSpecs::directed_create_missing();
+        let graph = Graph::new_from_nodes_and_edges(nodes, edges, specs).unwrap();
+        let partition = Partition {
+            partition: vec![
+                vec![0, 1].into_iter().collect(),
+                vec![2].into_iter().collect(),
+                vec![3].into_iter().collect(),
+                vec![4].into_iter().collect(),
+            ],
+            node_partition: vec![0, 0, 1, 2, 3],
+            degree_sums: vec![0.0, 0.0, 0.0, 0.0],
+        };
+        let empty = IntSet::default();
+        let result = partition.get_adjacent_communities(0, &graph, &empty);
+        assert_eq!(result.len(), 3);
+        assert!(result == vec![&partition.partition[0], &partition.partition[1], &empty]);
+        let result = partition.get_adjacent_communities(1, &graph, &empty);
+        assert!(result == vec![&partition.partition[0], &partition.partition[1], &empty]);
+        let result = partition.get_adjacent_communities(2, &graph, &empty);
+        assert!(
+            result
+                == vec![
+                    &partition.partition[1],
+                    &partition.partition[2],
+                    &partition.partition[3],
+                    &empty
+                ]
+        );
     }
 }
