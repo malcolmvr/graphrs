@@ -1,15 +1,11 @@
 use crate::{
-    algorithms::community::partitions, Edge, EdgeDedupeStrategy, Error, ErrorKind, Graph,
-    GraphSpecs, Node,
+    algorithms::community::partitions, algorithms::community::utility::get_shuffled_node_indexes,
+    Edge, EdgeDedupeStrategy, Error, ErrorKind, Graph, GraphSpecs, Node,
 };
 use nohash::{IntMap, IntSet};
-use rand::prelude::*;
-use rand::seq::SliceRandom;
-use rand::thread_rng;
-use std::collections::HashSet;
-use std::fmt::Display;
 use std::hash::Hash;
 use std::sync::Arc;
+use std::{collections::HashSet, fmt::Display};
 
 /**
 Returns the best partition of a graph, using the Louvain algorithm.
@@ -83,14 +79,7 @@ where
     A: Clone + Send + Sync,
 {
     let _threshold = threshold.unwrap_or(0.0000001);
-    let partition: Vec<IntSet<usize>> = (0..graph.number_of_nodes())
-        .into_iter()
-        .map(|i| {
-            let mut set = IntSet::default();
-            set.insert(i);
-            set
-        })
-        .collect();
+    let partition = partitions::get_singleton_partition(graph);
     let mut modularity =
         partitions::modularity_by_indexes(&graph, &partition, weighted, resolution).unwrap();
     let m = graph.size(weighted);
@@ -105,7 +94,9 @@ where
             partitions::modularity_by_indexes(&graph_com, &inner_partition, weighted, resolution)
                 .unwrap();
         if new_mod - modularity <= _threshold {
-            return Ok(convert_usize_partitons_to_t(partitions, &graph));
+            return Ok(partitions::convert_usize_partitions_vec_to_t(
+                partitions, &graph,
+            ));
         }
         modularity = new_mod;
         graph_com = generate_graph(&graph_com, inner_partition);
@@ -114,31 +105,9 @@ where
         inner_partition = z.1;
         improvement = z.2;
     }
-    Ok(convert_usize_partitons_to_t(partitions, &graph))
-}
-
-/// Converts a graph partition of usize replacements of node names T to
-/// a partition using the node names T.
-fn convert_usize_partitons_to_t<T, A>(
-    partition: Vec<Vec<IntSet<usize>>>,
-    graph: &Graph<T, A>,
-) -> Vec<Vec<HashSet<T>>>
-where
-    T: Hash + Eq + Clone + Ord + Display + Send + Sync,
-    A: Clone + Send + Sync,
-{
-    partition
-        .into_iter()
-        .map(|v| {
-            v.into_iter()
-                .map(|hs| {
-                    hs.into_iter()
-                        .map(|u| graph.get_node_by_index(&u).unwrap().name.clone())
-                        .collect::<HashSet<T>>()
-                })
-                .collect::<Vec<HashSet<T>>>()
-        })
-        .collect()
+    Ok(partitions::convert_usize_partitions_vec_to_t(
+        partitions, &graph,
+    ))
 }
 
 /// Calculate one level of the Louvain partitions tree.
@@ -203,29 +172,6 @@ fn compute_one_level(
         .filter(|part| !part.is_empty())
         .collect();
     (new_partition, new_inner_partition, improvement)
-}
-
-/// Returns a random number generator (RNG), optionally seeded.
-fn get_rng(seed: Option<u64>) -> StdRng {
-    match seed {
-        None => {
-            let mut trng = thread_rng();
-            StdRng::seed_from_u64(trng.next_u64())
-        }
-        Some(s) => StdRng::seed_from_u64(s),
-    }
-}
-
-/// Returns all the node indexes in `graph`, shuffled randomly.
-fn get_shuffled_node_indexes<T, A>(graph: &Graph<T, A>, seed: Option<u64>) -> Vec<usize>
-where
-    T: Hash + Eq + Clone + Ord + Display + Send + Sync,
-    A: Clone + Send + Sync,
-{
-    let mut rng = get_rng(seed);
-    let mut indexes: Vec<usize> = (0..graph.number_of_nodes()).collect();
-    indexes.shuffle(&mut rng);
-    indexes
 }
 
 #[inline]

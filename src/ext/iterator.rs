@@ -1,4 +1,6 @@
 use itertools::Itertools;
+use nohash::{IntSet, IsEnabled};
+use std::hash::Hash;
 
 pub struct ChunkByCount<I: Iterator> {
     #[allow(clippy::type_complexity)]
@@ -20,10 +22,39 @@ where
     }
 }
 
+pub struct UniqueByNoHash<I: Iterator, V, F> {
+    inner: I,
+    seen: IntSet<V>,
+    f: F,
+}
+
+impl<I, V, F> Iterator for UniqueByNoHash<I, V, F>
+where
+    I: Iterator,
+    V: IsEnabled + Hash + Eq,
+    F: FnMut(&I::Item) -> V,
+{
+    type Item = I::Item;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.inner.next().filter(|x| {
+            let key = (self.f)(x);
+            let r = !self.seen.contains(&key);
+            self.seen.insert(key);
+            r
+        })
+    }
+}
+
 pub trait IteratorExt: Iterator {
     fn chunk_by_count(self) -> ChunkByCount<Self>
     where
         Self: Sized;
+    fn unique_by_no_hash<V, F>(self, f: F) -> UniqueByNoHash<Self, V, F>
+    where
+        Self: Sized,
+        V: IsEnabled + Hash + Eq,
+        for<'a> F: FnMut(&'a Self::Item) -> V;
 }
 
 impl<I> IteratorExt for I
@@ -37,6 +68,18 @@ where
     {
         ChunkByCount {
             inner: self.chunk_by(|i| i.clone()),
+        }
+    }
+    fn unique_by_no_hash<V, F>(self, f: F) -> UniqueByNoHash<Self, V, F>
+    where
+        Self: Sized,
+        V: IsEnabled + Hash + Eq,
+        F: FnMut(&I::Item) -> V,
+    {
+        UniqueByNoHash::<Self, V, F> {
+            inner: self,
+            seen: IntSet::<V>::default(),
+            f,
         }
     }
 }

@@ -1,3 +1,6 @@
+/// Functions to find the boundary of a set of nodes.
+pub mod boundary;
+
 /// Compute the centrality of nodes and edges in the graph.
 pub mod centrality;
 
@@ -9,6 +12,9 @@ pub mod community;
 
 /// Find components of a graph.
 pub mod components;
+
+/// Functions for finding and evaluating cuts in a graph.
+pub mod cuts;
 
 /// Compute resiliency measures of a graph.
 pub mod resiliency;

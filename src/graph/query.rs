@@ -1,5 +1,7 @@
 use super::Graph;
-use crate::{ext::vec::VecExt, AdjacentNode, Edge, Error, ErrorKind, Node};
+use crate::{
+    ext::iterator::IteratorExt, ext::vec::VecExt, AdjacentNode, Edge, Error, ErrorKind, Node,
+};
 use itertools::Itertools;
 use nohash::IntSet;
 use std::collections::{HashMap, HashSet};
@@ -603,6 +605,26 @@ where
             .collect())
     }
 
+    pub(crate) fn get_out_edges_for_node_indexes(
+        &self,
+        node_indexes: &[usize],
+    ) -> Vec<(usize, usize, f64)>
+    where
+        T: Hash + Eq + Clone + Ord,
+        A: Clone,
+    {
+        let x: Vec<(usize, usize, f64)> = node_indexes
+            .iter()
+            .flat_map(|node_index| {
+                self.get_successor_nodes_by_index(&node_index)
+                    .into_iter()
+                    .map(|adj| (*node_index, adj.node_index, adj.weight))
+                    .collect::<Vec<(usize, usize, f64)>>()
+            })
+            .collect();
+        x
+    }
+
     /**
     Returns all the nodes that connect to `node_name`.
 
@@ -919,6 +941,17 @@ where
             .collect()
     }
 
+    pub(crate) fn get_adjacent_nodes_by_index(&self, node_index: usize) -> Vec<&AdjacentNode> {
+        match self.specs.directed {
+            true => self.successors_vec[node_index]
+                .iter()
+                .chain(self.predecessors_vec[node_index].iter())
+                .unique_by_no_hash(|adj| adj.node_index) // self-loops wind up in successors and predecessors
+                .collect(),
+            false => self.successors_vec[node_index].iter().collect(),
+        }
+    }
+
     /// Gets a `HashMap` of all the successor edges.
     pub fn get_successors_map(&self) -> &HashMap<T, HashSet<T>>
     where
@@ -1054,5 +1087,33 @@ where
                 message: format!("Node '{}' not found in the graph.", node_name),
             }),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+
+    use crate::{Edge, Graph, GraphSpecs};
+
+    #[test]
+    fn test_get_adjacent_nodes_by_index() {
+        let edges = vec![Edge::new(0, 1), Edge::new(1, 2), Edge::new(2, 2)];
+        let specs = GraphSpecs {
+            self_loops: true,
+            ..GraphSpecs::directed_create_missing()
+        };
+        let graph: Graph<usize, ()> =
+            Graph::new_from_nodes_and_edges(vec![], edges, specs).unwrap();
+        let result = graph.get_adjacent_nodes_by_index(0);
+        assert_eq!(result.len(), 1);
+        assert_eq!(result[0].node_index, 1);
+        let result = graph.get_adjacent_nodes_by_index(1);
+        assert_eq!(result.len(), 2);
+        assert_eq!(result[0].node_index, 2);
+        assert_eq!(result[1].node_index, 0);
+        let result = graph.get_adjacent_nodes_by_index(2);
+        assert_eq!(result.len(), 2);
+        assert_eq!(result[0].node_index, 2);
+        assert_eq!(result[1].node_index, 1);
     }
 }

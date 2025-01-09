@@ -164,6 +164,19 @@ where
         }
     }
 
+    pub(crate) fn get_node_degree_by_index(&self, node_index: usize) -> usize {
+        let adjacent = self.get_adjacent_nodes_by_index(node_index);
+        adjacent
+            .iter()
+            .map(|adj| {
+                if adj.node_index == node_index {
+                    return 2;
+                }
+                1
+            })
+            .sum()
+    }
+
     /**
     Computes the in-degree of a given node.
     The node in-degree is the number of edges (u, v) where v is the node.
@@ -264,6 +277,19 @@ where
                 Some(total_weight + self_loops_weight)
             }
         }
+    }
+
+    pub(crate) fn get_node_weighted_degree_by_index(&self, node_index: usize) -> f64 {
+        let adjacent = self.get_adjacent_nodes_by_index(node_index);
+        adjacent
+            .iter()
+            .map(|adj| {
+                if adj.node_index == node_index {
+                    return adj.weight * 2.0;
+                }
+                adj.weight
+            })
+            .sum()
     }
 
     /**
@@ -471,5 +497,43 @@ where
             .iter()
             .map(|s| s.iter().map(|e| e.weight).sum())
             .collect()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+
+    use crate::{Edge, Graph, GraphSpecs};
+
+    #[test]
+    fn test_get_node_degree_by_index() {
+        let edges = vec![Edge::new(0, 1), Edge::new(1, 2), Edge::new(2, 2)];
+        let specs = GraphSpecs {
+            self_loops: true,
+            ..GraphSpecs::directed_create_missing()
+        };
+        let graph: Graph<usize, ()> =
+            Graph::new_from_nodes_and_edges(vec![], edges, specs).unwrap();
+        assert_eq!(graph.get_node_degree_by_index(0), 1);
+        assert_eq!(graph.get_node_degree_by_index(1), 2);
+        assert_eq!(graph.get_node_degree_by_index(2), 3);
+    }
+
+    #[test]
+    fn test_get_weighted_node_degree_by_index() {
+        let edges = vec![
+            Edge::with_weight(0, 1, 0.5),
+            Edge::with_weight(1, 2, 6.3),
+            Edge::with_weight(2, 2, 10.0),
+        ];
+        let specs = GraphSpecs {
+            self_loops: true,
+            ..GraphSpecs::directed_create_missing()
+        };
+        let graph: Graph<usize, ()> =
+            Graph::new_from_nodes_and_edges(vec![], edges, specs).unwrap();
+        assert_eq!(graph.get_node_weighted_degree_by_index(0), 0.5);
+        assert_eq!(graph.get_node_weighted_degree_by_index(1), 6.8);
+        assert_eq!(graph.get_node_weighted_degree_by_index(2), 26.3);
     }
 }
