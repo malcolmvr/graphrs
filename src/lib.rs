@@ -33,6 +33,8 @@ Python bindings are available in the [graphrs-python](<https://pypi.org/project/
 
 ## Modules
 
+- `algorithms::boundary`
+- `algorithms::cuts`
 - `algorithms::centrality`
 - `algorithms::cluster`
 - `algorithms::community`
