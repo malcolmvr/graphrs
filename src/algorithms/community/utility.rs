@@ -18,7 +18,7 @@ where
 }
 
 /// Returns a random number generator (RNG), optionally seeded.
-fn get_rng(seed: Option<u64>) -> StdRng {
+pub fn get_rng(seed: Option<u64>) -> StdRng {
     match seed {
         None => {
             let mut trng = thread_rng();

@@ -4,6 +4,13 @@ use nohash::IntSet;
 
 use super::partition::Partition;
 
+/**
+The quality function to use for the Leiden algorithm.
+[Modularity](<https://en.wikipedia.org/wiki/Leiden_algorithm#Modularity>) is a traditional
+method of assessing how well a set of communities partition a graph.
+[Constant Potts Model](<https://en.wikipedia.org/wiki/Leiden_algorithm#Constant_Potts_Model_(CPM)>)
+is similar to modularity.
+*/
 pub enum QualityFunction {
     Modularity,
     CPM,

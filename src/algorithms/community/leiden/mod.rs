@@ -3,10 +3,10 @@ use crate::{
     algorithms::cuts::cut_size_by_indexes, ext::hashset::IntSetExt, Error, ErrorKind, Graph,
 };
 use core::f64;
-use itertools::Itertools;
 use nohash::IntSet;
+use rand::distributions::Distribution;
 use rand::distributions::WeightedIndex;
-use rand::{distributions::Distribution, RngCore};
+use rand::prelude::StdRng;
 use std::collections::{HashSet, VecDeque};
 use std::fmt::Debug;
 use std::fmt::Display;
@@ -40,7 +40,12 @@ guaranteeing well-connected communities" by V.A. Traag, L. Waltman and N.J. van 
 
 # Examples
 
-
+```
+use graphrs::{algorithms::community::leiden::{leiden, QualityFunction}, generators};
+let graph = generators::social::karate_club_graph();
+let communities = leiden(&graph, true, QualityFunction::CPM, None, None, None);
+assert_eq!(communities.unwrap().len(), 4);
+```
 */
 pub fn leiden<T, A>(
     graph: &Graph<T, A>,
@@ -160,7 +165,7 @@ fn refine_partition(
     gamma: f64,
 ) -> Partition {
     let mut refined_partition = get_singleton_partition(&aggregate_graph.graph, true);
-    let mut rng: Box<dyn RngCore> = Box::new(rand::thread_rng());
+    let mut rng: StdRng = utility::get_rng(None);
     for community in partition.partition.iter() {
         merge_nodes_subset(
             &mut refined_partition,
@@ -184,7 +189,7 @@ fn merge_nodes_subset(
     resolution: f64,
     theta: f64,
     gamma: f64,
-    rng: &mut Box<dyn RngCore>,
+    rng: &mut StdRng,
 ) {
     let size_s = aggregate_graph.node_total(community);
     let communities_of_size: IntSet<usize> = community
@@ -198,7 +203,7 @@ fn merge_nodes_subset(
             x >= gamma * v_node_total * (size_s - v_node_total)
         })
         .collect();
-    for v in communities_of_size.into_iter().sorted() {
+    for v in communities_of_size {
         if partition.node_community(v).len() != 1 {
             continue;
         }
@@ -276,8 +281,6 @@ mod tests {
 
     use super::*;
     use crate::{Edge, Graph, GraphSpecs, Node};
-    use rand::SeedableRng;
-    use rand_chacha::ChaCha20Rng;
     use std::sync::Arc;
 
     #[test]
@@ -303,7 +306,7 @@ mod tests {
     #[test]
     fn test_merge_nodes_subset_1() {
         let (mut partition, community, aggregate_graph) = get_params_for_merge_nodes_subset();
-        let mut rng: Box<dyn RngCore> = Box::new(ChaCha20Rng::seed_from_u64(1));
+        let mut rng: StdRng = utility::get_rng(Some(1));
         merge_nodes_subset(
             &mut partition,
             &community,
@@ -314,22 +317,21 @@ mod tests {
             0.05,
             &mut rng,
         );
-        assert_eq!(partition.node_partition, vec![1, 0, 1, 2, 2, 2]);
+        assert_eq!(partition.node_partition, vec![0, 0, 0, 1, 1, 1]);
         assert_eq!(
             partition.partition,
             vec![
-                vec![1].into_iter().collect(),
-                vec![0, 2].into_iter().collect(),
+                vec![0, 1, 2].into_iter().collect(),
                 vec![3, 4, 5].into_iter().collect(),
             ]
         );
-        assert_eq!(partition.degree_sums, vec![3.3, 12.3, 20.5]);
+        assert_eq!(partition.degree_sums, vec![15.600000000000001, 18.9]);
     }
 
     #[test]
     fn test_merge_nodes_subset_2() {
         let (mut partition, community, aggregate_graph) = get_params_for_merge_nodes_subset();
-        let mut rng: Box<dyn RngCore> = Box::new(ChaCha20Rng::seed_from_u64(4));
+        let mut rng: StdRng = utility::get_rng(Some(3));
         merge_nodes_subset(
             &mut partition,
             &community,
@@ -340,16 +342,16 @@ mod tests {
             0.05,
             &mut rng,
         );
-        assert_eq!(partition.node_partition, vec![0, 0, 0, 1, 2, 2]);
+        assert_eq!(partition.node_partition, vec![0, 1, 0, 2, 2, 2]);
         assert_eq!(
             partition.partition,
             vec![
-                vec![0, 1, 2].into_iter().collect(),
-                vec![3].into_iter().collect(),
-                vec![4, 5].into_iter().collect(),
+                vec![0, 2].into_iter().collect(),
+                vec![1].into_iter().collect(),
+                vec![3, 4, 5].into_iter().collect(),
             ]
         );
-        assert_eq!(partition.degree_sums, vec![15.600000000000001, 6.2, 12.6]);
+        assert_eq!(partition.degree_sums, vec![10.8, 3.3, 18.9]);
     }
 
     fn get_params_for_merge_nodes_subset<'a>() -> (Partition, IntSet<usize>, AggregateGraph) {
@@ -365,7 +367,7 @@ mod tests {
             Edge::with_weight(0, 1, 1.1),
             Edge::with_weight(1, 2, 2.2),
             Edge::with_weight(0, 2, 3.7),
-            Edge::with_weight(2, 3, 1.7),
+            Edge::with_weight(2, 3, 0.1),
             Edge::with_weight(3, 4, 2.1),
             Edge::with_weight(4, 5, 3.2),
             Edge::with_weight(3, 5, 4.1),
