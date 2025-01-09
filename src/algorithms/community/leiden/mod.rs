@@ -73,6 +73,7 @@ where
     let mut aggregate_graph = AggregateGraph::initial(graph, weighted);
     let mut partition = get_singleton_partition(graph, weighted);
     let mut prev_partition: Option<Partition> = None;
+    let mut rng: StdRng = utility::get_rng(None);
     loop {
         partition = move_nodes_fast(
             &aggregate_graph.graph,
@@ -81,13 +82,7 @@ where
             &quality_function,
             _resolution,
         );
-        if partitions::partition_is_singleton(&partition.partition, graph.number_of_nodes())
-            || (prev_partition.is_some()
-                && partitions::partitions_eq(
-                    &partition.partition,
-                    &prev_partition.unwrap().partition,
-                ))
-        {
+        if is_done(&aggregate_graph.graph, &partition, &prev_partition) {
             let flattened = partition.flatten(&aggregate_graph);
             return Ok(partitions::convert_usize_partitions_to_t(
                 flattened.partition,
@@ -102,27 +97,18 @@ where
             _resolution,
             _theta,
             _gamma,
+            &mut rng,
         );
         aggregate_graph = aggregate_graph.from_partition(&refined_partition);
-        let partitions: Vec<IntSet<usize>> = partition
-            .partition
-            .iter()
-            .map(|c| {
-                aggregate_graph
-                    .node_nodes
-                    .as_ref()
-                    .unwrap()
-                    .iter()
-                    .enumerate()
-                    .filter(|(_i, nodes)| nodes.is_subset(c))
-                    .map(|(i, _nodes)| i)
-                    .collect()
-            })
-            .collect();
+        let partitions = partition.get_lifted_partitions(&aggregate_graph);
         partition = Partition::from_partition(&aggregate_graph.graph, partitions);
     }
 }
 
+/**
+Perform fast local node moves to communities to improve the partition's quality.
+For every node, greedily move it to a neighboring community, maximizing the improvement in the partition's quality.
+*/
 fn move_nodes_fast(
     graph: &Graph<usize, f64>,
     partition: &mut Partition,
@@ -156,6 +142,29 @@ fn move_nodes_fast(
     partition.clone()
 }
 
+/**
+Determines if the Leiden algorithm is done. The definition of done is when the current
+partition is a singleton or when the current and previous partitions are equal
+(no change was made).
+*/
+fn is_done(
+    graph: &Graph<usize, f64>,
+    partition: &Partition,
+    prev_partition: &Option<Partition>,
+) -> bool {
+    let partition_is_singleton =
+        partitions::partition_is_singleton(&partition.partition, graph.number_of_nodes());
+    let partitions_eq = prev_partition.is_some()
+        && partitions::partitions_eq(
+            &partition.partition,
+            &prev_partition.as_ref().unwrap().partition,
+        );
+    partition_is_singleton || partitions_eq
+}
+
+/**
+Refine all communities by merging repeatedly, starting from a singleton partition.
+*/
 fn refine_partition(
     aggregate_graph: &AggregateGraph,
     partition: &Partition,
@@ -163,9 +172,9 @@ fn refine_partition(
     resolution: f64,
     theta: f64,
     gamma: f64,
+    rng: &mut StdRng,
 ) -> Partition {
     let mut refined_partition = get_singleton_partition(&aggregate_graph.graph, true);
-    let mut rng: StdRng = utility::get_rng(None);
     for community in partition.partition.iter() {
         merge_nodes_subset(
             &mut refined_partition,
@@ -175,12 +184,15 @@ fn refine_partition(
             resolution,
             theta,
             gamma,
-            &mut rng,
+            rng,
         );
     }
     refined_partition
 }
 
+/**
+Merge the nodes in the subset `community` into one or more sets to refine the partition.
+*/
 fn merge_nodes_subset(
     partition: &mut Partition,
     community: &IntSet<usize>,
@@ -253,6 +265,9 @@ fn merge_nodes_subset(
     }
 }
 
+/**
+Gets a partition of `Graph` where each partition contains one node.
+*/
 fn get_singleton_partition<T, A>(graph: &Graph<T, A>, weighted: bool) -> Partition
 where
     T: Hash + Eq + Clone + Ord + Display + Send + Sync,
@@ -281,12 +296,38 @@ mod tests {
 
     use super::*;
     use crate::{Edge, Graph, GraphSpecs, Node};
+    use assert_approx_eq::assert_approx_eq;
     use std::sync::Arc;
 
     #[test]
+    fn test_is_done() {
+        let graph = get_graph_1();
+
+        let partition = get_partition_1();
+        let prev_partition = get_partition_1();
+        assert!(is_done(&graph, &partition, &Some(prev_partition.clone())));
+
+        let prev_partition = get_partition_2();
+        assert!(!is_done(&graph, &partition, &Some(prev_partition.clone())));
+
+        let partition = Partition {
+            partition: vec![
+                vec![0].into_iter().collect(),
+                vec![1].into_iter().collect(),
+                vec![2].into_iter().collect(),
+                vec![3].into_iter().collect(),
+                vec![4].into_iter().collect(),
+            ],
+            node_partition: vec![0, 1, 2, 3, 4],
+            degree_sums: vec![4.8, 3.3, 7.5, 6.2, 5.3],
+        };
+        assert!(is_done(&graph, &partition, &Some(prev_partition)));
+    }
+
+    #[test]
     fn test_move_node() {
-        let graph = get_graph_for_argmax(true);
-        let mut partition = get_partition_for_argmax();
+        let graph = get_graph_1();
+        let mut partition = get_partition_1();
         let mut target = IntSet::default();
         target.insert(2);
         partition.move_node(0, &target, &graph, true);
@@ -354,26 +395,44 @@ mod tests {
         assert_eq!(partition.degree_sums, vec![10.8, 3.3, 18.9]);
     }
 
+    #[test]
+    fn test_refine_partition() {
+        let graph = get_graph_2();
+        let aggregate_graph = AggregateGraph::initial(&graph, true);
+        let partition = Partition {
+            partition: vec![
+                vec![0, 1, 2].into_iter().collect(),
+                vec![3, 4, 5].into_iter().collect(),
+            ],
+            node_partition: vec![0, 0, 0, 1, 1, 1],
+            degree_sums: vec![0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+        };
+        let mut rng = utility::get_rng(Some(1));
+        let refined_partition = refine_partition(
+            &aggregate_graph,
+            &partition,
+            &QualityFunction::Modularity,
+            0.25,
+            0.3,
+            0.05,
+            &mut rng,
+        );
+        assert_eq!(refined_partition.node_partition, vec![0, 0, 0, 1, 2, 1]);
+        assert_eq!(
+            refined_partition.partition,
+            vec![
+                vec![0, 1, 2].into_iter().collect(),
+                vec![3, 5].into_iter().collect(),
+                vec![4].into_iter().collect(),
+            ]
+        );
+        assert_approx_eq!(refined_partition.degree_sums[0], 14.1);
+        assert_approx_eq!(refined_partition.degree_sums[1], 13.6);
+        assert_approx_eq!(refined_partition.degree_sums[2], 5.3);
+    }
+
     fn get_params_for_merge_nodes_subset<'a>() -> (Partition, IntSet<usize>, AggregateGraph) {
-        let nodes = vec![
-            Node::from_name(0),
-            Node::from_name(1),
-            Node::from_name(2),
-            Node::from_name(3),
-            Node::from_name(4),
-            Node::from_name(5),
-        ];
-        let edges: Vec<Arc<Edge<i32, ()>>> = vec![
-            Edge::with_weight(0, 1, 1.1),
-            Edge::with_weight(1, 2, 2.2),
-            Edge::with_weight(0, 2, 3.7),
-            Edge::with_weight(2, 3, 0.1),
-            Edge::with_weight(3, 4, 2.1),
-            Edge::with_weight(4, 5, 3.2),
-            Edge::with_weight(3, 5, 4.1),
-        ];
-        let graph =
-            Graph::new_from_nodes_and_edges(nodes, edges, GraphSpecs::undirected()).unwrap();
+        let graph = get_graph_2();
         let partition = Partition {
             partition: vec![
                 vec![0].into_iter().collect(),
@@ -391,7 +450,7 @@ mod tests {
         (partition, community, aggregate_graph)
     }
 
-    fn get_graph_for_argmax(directed: bool) -> Graph<usize, f64> {
+    fn get_graph_1() -> Graph<usize, f64> {
         let nodes = vec![
             Node::from_name(0),
             Node::from_name(1),
@@ -405,15 +464,32 @@ mod tests {
             Edge::with_weight(2, 3, 3.5),
             Edge::with_weight(2, 4, 4.7),
         ];
-        let specs = if directed {
-            GraphSpecs::directed_create_missing()
-        } else {
-            GraphSpecs::undirected_create_missing()
-        };
+        let specs = GraphSpecs::undirected_create_missing();
         Graph::new_from_nodes_and_edges(nodes, edges, specs).unwrap()
     }
 
-    fn get_partition_for_argmax() -> Partition {
+    fn get_graph_2() -> Graph<usize, f64> {
+        let nodes = vec![
+            Node::from_name(0),
+            Node::from_name(1),
+            Node::from_name(2),
+            Node::from_name(3),
+            Node::from_name(4),
+            Node::from_name(5),
+        ];
+        let edges: Vec<Arc<Edge<usize, f64>>> = vec![
+            Edge::with_weight(0, 1, 1.1),
+            Edge::with_weight(1, 2, 2.2),
+            Edge::with_weight(0, 2, 3.7),
+            Edge::with_weight(2, 3, 0.1),
+            Edge::with_weight(3, 4, 2.1),
+            Edge::with_weight(4, 5, 3.2),
+            Edge::with_weight(3, 5, 4.1),
+        ];
+        Graph::new_from_nodes_and_edges(nodes, edges, GraphSpecs::undirected()).unwrap()
+    }
+
+    fn get_partition_1() -> Partition {
         Partition {
             partition: vec![
                 vec![0, 1].into_iter().collect(),
@@ -422,6 +498,19 @@ mod tests {
                 vec![4].into_iter().collect(),
             ],
             node_partition: vec![0, 0, 1, 2, 3],
+            degree_sums: vec![0.0, 0.0, 0.0, 0.0],
+        }
+    }
+
+    fn get_partition_2() -> Partition {
+        Partition {
+            partition: vec![
+                vec![0, 2].into_iter().collect(),
+                vec![1].into_iter().collect(),
+                vec![3].into_iter().collect(),
+                vec![4].into_iter().collect(),
+            ],
+            node_partition: vec![0, 1, 0, 2, 3],
             degree_sums: vec![0.0, 0.0, 0.0, 0.0],
         }
     }

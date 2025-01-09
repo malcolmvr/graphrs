@@ -125,6 +125,25 @@ impl Partition {
             .collect();
         Partition::from_partition(graph, partitions)
     }
+
+    pub fn get_lifted_partitions(&self, aggregate_graph: &AggregateGraph) -> Vec<IntSet<usize>> {
+        let partitions: Vec<IntSet<usize>> = self
+            .partition
+            .iter()
+            .map(|c| {
+                aggregate_graph
+                    .node_nodes
+                    .as_ref()
+                    .unwrap()
+                    .iter()
+                    .enumerate()
+                    .filter(|(_i, nodes)| nodes.is_subset(c))
+                    .map(|(i, _nodes)| i)
+                    .collect()
+            })
+            .collect();
+        partitions
+    }
 }
 
 #[cfg(test)]

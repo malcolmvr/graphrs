@@ -140,8 +140,10 @@ let centralities = centrality::eigenvector::eigenvector_centrality(&graph, false
 
 ```rust
 use graphrs::{algorithms::{community}, generators};
+use graphrs::{algorithms::community::leiden::{leiden, QualityFunction}};
 let graph = generators::social::karate_club_graph();
 let partitions = community::louvain::louvain_partitions(&graph, false, None, None, Some(1));
+let partitions = leiden(&graph, true, QualityFunction::CPM, None, None, None);
 ```
 
 ### Read and write graphml files
