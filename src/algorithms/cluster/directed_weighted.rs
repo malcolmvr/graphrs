@@ -1,5 +1,6 @@
 use super::utility::{get_adjacent_nodes_without, get_normalized_edge_weight};
 use crate::Graph;
+use rayon::prelude::{IntoParallelIterator, ParallelIterator};
 use std::collections::HashSet;
 use std::fmt::Display;
 use std::hash::Hash;
@@ -32,7 +33,7 @@ where
             .collect(),
         Some(names) => names.to_vec(),
     };
-    ns.into_iter()
+    ns.into_par_iter()
         .map(|i| {
             let ipreds = get_adjacent_nodes_without(graph, &i, true);
             let isuccs = get_adjacent_nodes_without(graph, &i, false);
