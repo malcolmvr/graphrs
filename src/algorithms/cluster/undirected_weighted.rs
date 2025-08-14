@@ -87,6 +87,7 @@ mod tests {
 
     use super::*;
     use crate::{Edge, Graph, GraphSpecs};
+    use assert_approx_eq::assert_approx_eq;
     use std::collections::HashMap;
 
     #[test]
@@ -108,15 +109,15 @@ mod tests {
             .collect();
         let mut dawt = hm.get("n0").unwrap();
         assert_eq!(dawt.degree, 3);
-        assert_eq!(dawt.weighted_triangles, 1.86348664915158);
+        assert_approx_eq!(dawt.weighted_triangles, 1.86348664915158);
         dawt = hm.get("n1").unwrap();
         assert_eq!(dawt.degree, 1);
         assert_eq!(dawt.weighted_triangles, 0.0);
         dawt = hm.get("n2").unwrap();
         assert_eq!(dawt.degree, 2);
-        assert_eq!(dawt.weighted_triangles, 1.86348664915158);
+        assert_approx_eq!(dawt.weighted_triangles, 1.86348664915158);
         dawt = hm.get("n3").unwrap();
         assert_eq!(dawt.degree, 2);
-        assert_eq!(dawt.weighted_triangles, 1.86348664915158);
+        assert_approx_eq!(dawt.weighted_triangles, 1.86348664915158);
     }
 }
