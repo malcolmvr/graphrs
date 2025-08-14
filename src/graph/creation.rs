@@ -88,7 +88,7 @@ where
                 kind: ErrorKind::DuplicateEdge,
                 message: format!(
                     "A duplicate edge was found: {}. \
-                    Set the `GraphSpecs.edge_dedupe_strategy` if a different
+                    Set the `GraphSpecs.edge_dedupe_strategy` if a different \
                     behavior is desired.",
                     edge
                 ),
