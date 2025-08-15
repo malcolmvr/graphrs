@@ -4,6 +4,7 @@ mod utility;
 mod tests {
 
     use super::utility::round;
+    use assert_approx_eq::assert_approx_eq;
     use graphrs::{algorithms::cluster, generators, Edge, Graph, GraphSpecs};
     use std::collections::HashMap;
 
@@ -11,14 +12,14 @@ mod tests {
     fn test_average_clustering_1() {
         let graph = generators::social::karate_club_graph();
         let result = cluster::average_clustering(&graph, false, None, true).unwrap();
-        assert_eq!(round(&result, 3), 0.571);
+        assert_approx_eq!(round(&result, 3), 0.571);
     }
 
     #[test]
     fn test_average_clustering_2() {
         let graph = generators::social::karate_club_graph();
         let result = cluster::average_clustering(&graph, false, None, false).unwrap();
-        assert_eq!(round(&result, 3), 0.606);
+        assert_approx_eq!(round(&result, 3), 0.606);
     }
 
     #[test]
@@ -82,11 +83,11 @@ mod tests {
             Graph::new_from_nodes_and_edges(vec![], edges, GraphSpecs::undirected_create_missing())
                 .unwrap();
         let result = cluster::clustering(&graph, true, None).unwrap();
-        assert_eq!(result.get("n0").unwrap(), &0.274042154286997);
-        assert_eq!(result.get("n1").unwrap(), &0.0);
-        assert_eq!(result.get("n2").unwrap(), &0.5873586146969583);
-        assert_eq!(result.get("n3").unwrap(), &0.5873586146969583);
-        assert_eq!(result.get("n4").unwrap(), &0.9399493812298838);
+        assert_approx_eq!(result.get("n0").unwrap(), &0.274042154286997);
+        assert_approx_eq!(result.get("n1").unwrap(), &0.0);
+        assert_approx_eq!(result.get("n2").unwrap(), &0.5873586146969583);
+        assert_approx_eq!(result.get("n3").unwrap(), &0.5873586146969583);
+        assert_approx_eq!(result.get("n4").unwrap(), &0.9399493812298838);
     }
 
     #[test]
@@ -103,11 +104,11 @@ mod tests {
             Graph::new_from_nodes_and_edges(vec![], edges, GraphSpecs::directed_create_missing())
                 .unwrap();
         let result = cluster::clustering(&graph, false, None).unwrap();
-        assert_eq!(result.get("n0").unwrap(), &0.16666666666666666);
-        assert_eq!(result.get("n1").unwrap(), &0.0);
-        assert_eq!(result.get("n2").unwrap(), &0.3333333333333333);
-        assert_eq!(result.get("n3").unwrap(), &0.3333333333333333);
-        assert_eq!(result.get("n4").unwrap(), &0.5);
+        assert_approx_eq!(result.get("n0").unwrap(), &0.16666666666666666);
+        assert_approx_eq!(result.get("n1").unwrap(), &0.0);
+        assert_approx_eq!(result.get("n2").unwrap(), &0.3333333333333333);
+        assert_approx_eq!(result.get("n3").unwrap(), &0.3333333333333333);
+        assert_approx_eq!(result.get("n4").unwrap(), &0.5);
     }
 
     #[test]
@@ -124,11 +125,11 @@ mod tests {
             Graph::new_from_nodes_and_edges(vec![], edges, GraphSpecs::directed_create_missing())
                 .unwrap();
         let result = cluster::clustering(&graph, true, None).unwrap();
-        assert_eq!(result.get("n0").unwrap(), &0.1370210771434985);
-        assert_eq!(result.get("n1").unwrap(), &0.0);
-        assert_eq!(result.get("n2").unwrap(), &0.29367930734847913);
-        assert_eq!(result.get("n3").unwrap(), &0.29367930734847913);
-        assert_eq!(result.get("n4").unwrap(), &0.4699746906149419);
+        assert_approx_eq!(result.get("n0").unwrap(), &0.1370210771434985);
+        assert_approx_eq!(result.get("n1").unwrap(), &0.0);
+        assert_approx_eq!(result.get("n2").unwrap(), &0.29367930734847913);
+        assert_approx_eq!(result.get("n3").unwrap(), &0.29367930734847913);
+        assert_approx_eq!(result.get("n4").unwrap(), &0.4699746906149419);
     }
 
     #[test]
@@ -194,9 +195,9 @@ mod tests {
     fn test_square_clustering_1() {
         let graph = generators::social::karate_club_graph();
         let result = cluster::square_clustering(&graph, Some(&[0, 1, 33]));
-        assert_eq!(result.get(&0).unwrap(), &0.09051724137931035);
-        assert_eq!(result.get(&1).unwrap(), &0.17216117216117216);
-        assert_eq!(result.get(&33).unwrap(), &0.12158054711246201);
+        assert_approx_eq!(result.get(&0).unwrap(), &0.09051724137931035);
+        assert_approx_eq!(result.get(&1).unwrap(), &0.17216117216117216);
+        assert_approx_eq!(result.get(&33).unwrap(), &0.12158054711246201);
     }
 
     #[test]
