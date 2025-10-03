@@ -1034,11 +1034,11 @@ where
     }
 
     /**
-    Returns the number of nodes in the graph.
+    Returns the number of edges in the graph.
     ```
     use graphrs::{generators};
     let graph = generators::social::karate_club_graph();
-    assert_eq!(graph.number_of_nodes(), 34);
+    assert_eq!(graph.number_of_edges(), 34);
     ```
     */
     pub fn number_of_edges(&self) -> usize {
