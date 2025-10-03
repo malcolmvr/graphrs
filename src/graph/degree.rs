@@ -85,10 +85,6 @@ where
             .collect())
     }
 
-    pub(crate) fn get_in_degree_for_all_node_indexes(&self) -> Vec<usize> {
-        self.predecessors_vec.iter().map(|s| s.len()).collect()
-    }
-
     /**
     Compute the out-degree for all nodes in the graph.
 
@@ -127,10 +123,6 @@ where
                 )
             })
             .collect())
-    }
-
-    pub(crate) fn get_out_degree_for_all_node_indexes(&self) -> Vec<usize> {
-        self.successors_vec.iter().map(|s| s.len()).collect()
     }
 
     /**
@@ -444,13 +436,6 @@ where
             .collect())
     }
 
-    pub(crate) fn get_weighted_in_degree_for_all_node_indexes(&self) -> Vec<f64> {
-        self.predecessors_vec
-            .iter()
-            .map(|s| s.iter().map(|e| e.weight).sum())
-            .collect()
-    }
-
     /**
     Compute the weighted out-degree for all nodes in the graph.
 
@@ -490,13 +475,6 @@ where
                 )
             })
             .collect())
-    }
-
-    pub(crate) fn get_weighted_out_degree_for_all_node_indexes(&self) -> Vec<f64> {
-        self.successors_vec
-            .iter()
-            .map(|s| s.iter().map(|e| e.weight).sum())
-            .collect()
     }
 }
 

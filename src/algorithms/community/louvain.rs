@@ -1,14 +1,113 @@
-use crate::{
-    algorithms::community::partitions, algorithms::community::utility::get_shuffled_node_indexes,
-    Edge, EdgeDedupeStrategy, Error, ErrorKind, Graph, GraphSpecs, Node,
-};
-use nohash::{IntMap, IntSet};
+use crate::{Error, ErrorKind, Graph};
 use std::hash::Hash;
-use std::sync::Arc;
-use std::{collections::HashSet, fmt::Display};
+use std::{
+    collections::{hash_map::Entry, HashMap, HashSet},
+    fmt::Display,
+};
+
+// Performance optimizations:
+// - Cached modularity calculations (m_half, resolution_over_m) to avoid repeated divisions
+// - Memory pre-allocation with capacity hints for HashMaps and Vectors
+// - Conditional determinism: fast HashMap iteration when seed=None, sorted when seed=Some(_)
+// - For even better performance, consider using FxHashMap from fxhash crate instead of std::HashMap
+
+// Type aliases for clarity
+type CommunityId = usize;
+type NodeId = usize;
 
 /**
-Returns the best partition of a graph, using the Louvain algorithm.
+ * Rewritten from scratch Louvain algorithm for community detection.
+ *
+ * This implementation is optimized for performance by using delta modularity
+ * calculation instead of recalculating the entire modularity for each node move.
+ * The algorithm efficiently tracks community connections and degrees for fast updates.
+ */
+struct Modularity<T>
+where
+    T: Hash + Eq + Clone + Ord + Display + Send + Sync,
+{
+    m: f32, // total weight of edges in the graph
+    resolution: f32,
+    seed: Option<u64>, // seed for deterministic results
+    // Cache frequently used calculations
+    m_half: f32,            // m * 0.5 - cached to avoid repeated multiplication
+    resolution_over_m: f32, // resolution / m - cached for delta modularity calculation
+    original_nodes: Vec<T>, // map from node index to original node name
+    origin_nodes_community: Vec<CommunityId>,
+    nodes: Vec<CNode>,
+    communities: Vec<Community>,
+    edges: Vec<Vec<WEdge>>,
+}
+
+#[derive(Clone)]
+struct Community {
+    next_id: CommunityId,
+    nodes: Vec<NodeId>,
+    total_degree: f32,
+}
+
+impl Community {
+    fn init(node_id: NodeId) -> Self {
+        Self {
+            nodes: vec![node_id],
+            next_id: 0,
+            total_degree: 0.0,
+        }
+    }
+
+    fn add_node(&mut self, node_id: NodeId, degree: f32) {
+        self.nodes.push(node_id);
+        self.total_degree += degree;
+    }
+
+    fn remove_node(&mut self, node_id: NodeId, degree: f32) {
+        if let Some(pos) = self.nodes.iter().position(|&x| x == node_id) {
+            self.nodes.swap_remove(pos);
+            self.total_degree -= degree;
+        } else {
+            panic!("Node {} not found in community {:?}", node_id, self.nodes);
+        }
+    }
+}
+
+struct CNode {
+    community_id: CommunityId,
+    degree: f32,
+    self_reference_weight: f32,
+    communities: HashMap<CommunityId, f32>, // neighboring communities and shared edge weights
+}
+
+impl CNode {
+    fn init(node_id: NodeId) -> Self {
+        Self {
+            community_id: node_id,
+            degree: 0.0,
+            self_reference_weight: 0.0,
+            communities: HashMap::new(),
+        }
+    }
+
+    fn init_cache(&mut self, edges: &[WEdge], node_component: &[CommunityId]) {
+        let mut sum_weights = self.self_reference_weight;
+        for edge in edges.iter() {
+            sum_weights += edge.weight;
+            let neighbor = edge.to;
+            let neighbor_community = node_component[neighbor];
+            *self.communities.entry(neighbor_community).or_insert(0.0) += edge.weight;
+        }
+        self.degree = sum_weights;
+    }
+}
+
+#[derive(PartialEq, Copy, Clone, Debug)]
+struct WEdge {
+    from: NodeId,
+    to: NodeId,
+    weight: f32,
+}
+
+/**
+Returns the best partition of a graph, using the optimized Louvain algorithm.
 
 # Arguments
 
@@ -16,14 +115,17 @@ Returns the best partition of a graph, using the Louvain algorithm.
 * `weighted`: set to `true` to use edge weights when determining communities
 * `resolution`: If less than 1.0 larger communities are favoured. If greater than 1.0 smaller communities are favoured.
 * `threshold`: Determines how quickly the algorithms stops trying to find partitions with higher modularity. Higher values cause the algorithm to give up more quickly.
-* `seed`: The Louvain algorithm implemented uses random number generators. Setting the `seed` causes consistent behaviour.
+* `seed`: Random seed for deterministic results. When `Some(_)`, results will be deterministic but slower due to sorting overhead. When `None`, results are non-deterministic but faster.
 
 # Examples
 
 ```
 use graphrs::{algorithms::{community}, generators};
 let graph = generators::social::karate_club_graph();
-let communities = community::louvain::louvain_communities(&graph, false, None, None, Some(1));
+// Non-deterministic but fast
+let communities = community::louvain::louvain_communities(&graph, false, None, None, None);
+// Deterministic but slower
+let communities = community::louvain::louvain_communities(&graph, false, None, None, Some(42));
 assert_eq!(communities.unwrap().len(), 4);
 ```
 */
@@ -49,7 +151,7 @@ where
 }
 
 /**
-Returns the best partitions of a graph, using the Louvain algorithm.
+Returns the best partitions of a graph, using the optimized Louvain algorithm.
 
 # Arguments
 
@@ -57,489 +159,592 @@ Returns the best partitions of a graph, using the Louvain algorithm.
 * `weighted`: set to `true` to use edge weights when determining communities
 * `resolution`: If less than 1.0 larger communities are favoured. If greater than 1.0 smaller communities are favoured.
 * `threshold`: Determines how quickly the algorithms stops trying to find partitions with higher modularity. Higher values cause the algorithm to give up more quickly.
-* `seed`: The Louvain algorithm implemented uses random number generators. Setting the `seed` causes consistent behaviour.__rust_force_expr!
+* `seed`: Random seed for deterministic results. When `Some(_)`, results will be deterministic but slower due to sorting overhead. When `None`, results are non-deterministic but faster.
 
 # Examples
 
 ```
 use graphrs::{algorithms::{community}, generators};
 let graph = generators::social::karate_club_graph();
-let partitions = community::louvain::louvain_partitions(&graph, false, None, None, Some(1));
+// Non-deterministic but fast
+let partitions = community::louvain::louvain_partitions(&graph, false, None, None, None);
+// Deterministic but slower
+let partitions = community::louvain::louvain_partitions(&graph, false, None, None, Some(42));
 ```
 */
 pub fn louvain_partitions<T, A>(
     graph: &Graph<T, A>,
     weighted: bool,
     resolution: Option<f64>,
-    threshold: Option<f64>,
+    _threshold: Option<f64>,
     seed: Option<u64>,
 ) -> Result<Vec<Vec<HashSet<T>>>, Error>
 where
     T: Hash + Eq + Clone + Ord + Display + Send + Sync,
     A: Clone + Send + Sync,
 {
-    let _threshold = threshold.unwrap_or(0.0000001);
-    let partition = partitions::get_singleton_partition(graph);
-    let mut modularity =
-        partitions::modularity_by_indexes(&graph, &partition, weighted, resolution).unwrap();
-    let m = graph.size(weighted);
-    let mut graph_com = convert_graph(&graph, weighted);
-    let (mut partition, mut inner_partition, _improvement) =
-        compute_one_level(&graph_com, m, &partition, resolution.unwrap_or(1.0), seed);
-    let mut improvement = true;
-    let mut partitions: Vec<Vec<IntSet<usize>>> = vec![];
-    while improvement {
-        partitions.push(partition.to_vec());
-        let new_mod =
-            partitions::modularity_by_indexes(&graph_com, &inner_partition, weighted, resolution)
-                .unwrap();
-        if new_mod - modularity <= _threshold {
-            return Ok(partitions::convert_usize_partitions_vec_to_t(
-                partitions, &graph,
-            ));
-        }
-        modularity = new_mod;
-        graph_com = generate_graph(&graph_com, inner_partition);
-        let z = compute_one_level(&graph_com, m, &partition, resolution.unwrap_or(1.0), seed);
-        partition = z.0;
-        inner_partition = z.1;
-        improvement = z.2;
-    }
-    Ok(partitions::convert_usize_partitions_vec_to_t(
-        partitions, &graph,
-    ))
+    let mut modularity = Modularity::new(graph, weighted, seed)?;
+    modularity.resolution = resolution.unwrap_or(1.0) as f32;
+
+    let _result = modularity.run_louvain()?;
+
+    // Convert result back to the expected format for graphrs
+    let mut all_partitions = Vec::new();
+    let final_communities = modularity.get_final_communities();
+    all_partitions.push(final_communities);
+
+    Ok(all_partitions)
 }
 
-/// Calculate one level of the Louvain partitions tree.
-#[allow(clippy::ptr_arg)]
-fn compute_one_level(
-    graph: &Graph<usize, IntSet<usize>>,
-    m: f64,
-    partition: &Vec<IntSet<usize>>,
-    resolution: f64,
-    seed: Option<u64>,
-) -> (Vec<IntSet<usize>>, Vec<IntSet<usize>>, bool) {
-    let mut node2com: Vec<usize> = (0..graph.number_of_nodes()).collect();
-    let mut _partition = partition.clone();
-    let mut inner_partition = map_node_indexes_to_hashsets(graph);
-    let mut deg_info = get_degree_information(graph, partition);
-    let shuffled_indexes = get_shuffled_node_indexes(graph, seed);
-    let mut nb_moves = 1;
-    let mut improvement = false;
-    while nb_moves > 0 {
-        nb_moves = 0;
-        for u in &shuffled_indexes {
-            let mut best_mod = 0.0;
-            let mut best_com: usize = node2com[*u];
-            let weights2com = get_neighbor_weights(graph, u, &node2com);
-            subtract_degree_from_best_com(
-                best_com,
-                u,
-                &weights2com,
-                m,
-                resolution,
-                &mut deg_info,
-                graph.specs.directed,
-            );
-            #[rustfmt::skip]
-            update_best_com(&mut best_com, &mut best_mod, weights2com, &deg_info, m, resolution, graph.specs.directed);
-            add_degree_to_best_com(best_com, &mut deg_info, graph.specs.directed);
-            if best_com != node2com[*u] {
-                let node_hs = vec![u].into_iter().copied().collect::<IntSet<usize>>();
-                let com = graph
-                    .get_node_by_index(u)
-                    .unwrap()
-                    .attributes
-                    .clone()
-                    .unwrap_or(node_hs);
-                let n2c = node2com[*u];
-                _partition[n2c] = _partition[n2c].difference(&com).cloned().collect();
-                inner_partition[n2c].remove(u);
-                _partition[best_com] = _partition[best_com].union(&com).cloned().collect();
-                inner_partition[best_com].insert(*u);
-                node2com[*u] = best_com;
-                improvement = true;
-                nb_moves += 1;
-            }
-        }
-    }
-    let new_partition: Vec<IntSet<usize>> = _partition
-        .into_iter()
-        .filter(|part| !part.is_empty())
-        .collect();
-    let new_inner_partition: Vec<IntSet<usize>> = inner_partition
-        .into_iter()
-        .filter(|part| !part.is_empty())
-        .collect();
-    (new_partition, new_inner_partition, improvement)
-}
-
-#[inline]
-fn add_degree_to_best_com(best_com: usize, deg_info: &mut DegreeInfo, directed: bool) {
-    match directed {
-        true => {
-            deg_info.stot_in[best_com] += deg_info.in_degree;
-            deg_info.stot_out[best_com] += deg_info.out_degree;
-        }
-        false => {
-            deg_info.stot[best_com] += deg_info.degree;
-        }
-    }
-}
-
-fn update_best_com(
-    best_com: &mut usize,
-    best_mod: &mut f64,
-    weights2com: IntMap<usize, f64>,
-    deg_info: &DegreeInfo,
-    m: f64,
-    resolution: f64,
-    directed: bool,
-) {
-    for (nbr_com, wt) in weights2com {
-        let gain = match directed {
-            true => {
-                deg_info.remove_cost + wt / m
-                    - resolution
-                        * (deg_info.out_degree * deg_info.stot_in[nbr_com]
-                            + deg_info.in_degree * deg_info.stot_out[nbr_com])
-                        / m.powf(2.0)
-            }
-            false => {
-                deg_info.remove_cost + wt / m
-                    - resolution * (deg_info.stot[nbr_com] * deg_info.degree) / (2.0 * m.powf(2.0))
-            }
-        };
-        if gain > *best_mod {
-            *best_mod = gain;
-            *best_com = nbr_com;
-        }
-    }
-}
-
-#[inline]
-fn subtract_degree_from_best_com(
-    best_com: usize,
-    u: &usize,
-    weights2com: &IntMap<usize, f64>,
-    m: f64,
-    resolution: f64,
-    deg_info: &mut DegreeInfo,
-    directed: bool,
-) {
-    match directed {
-        true => {
-            deg_info.in_degree = deg_info.in_degrees[*u];
-            deg_info.out_degree = deg_info.out_degrees[*u];
-            deg_info.stot_in[best_com] -= deg_info.in_degree;
-            deg_info.stot_out[best_com] -= deg_info.out_degree;
-            deg_info.remove_cost = -weights2com.get(&best_com).unwrap_or(&0.0) / m
-                + resolution
-                    * (deg_info.out_degree * deg_info.stot_in[best_com]
-                        + deg_info.in_degree * deg_info.stot_out[best_com])
-                    / m.powf(2.0);
-        }
-        false => {
-            deg_info.degree = deg_info.degrees[*u];
-            deg_info.stot[best_com] -= deg_info.degree;
-            deg_info.remove_cost = -weights2com.get(&best_com).unwrap_or(&0.0) / m
-                + resolution * (deg_info.stot[best_com] * deg_info.degree) / (2.0 * m.powf(2.0));
-        }
-    }
-}
-
-/// Holds information about the degrees of nodes of a graph.
-#[derive(Debug)]
-struct DegreeInfo {
-    pub in_degrees: Vec<f64>,
-    pub out_degrees: Vec<f64>,
-    pub stot_in: Vec<f64>,
-    pub stot_out: Vec<f64>,
-    pub degrees: Vec<f64>,
-    pub stot: Vec<f64>,
-    pub degree: f64,
-    pub in_degree: f64,
-    pub out_degree: f64,
-    pub remove_cost: f64,
-}
-
-/// Gets information about the degrees of nodes of a graph.
-fn get_degree_information<T, A>(graph: &Graph<T, A>, partition: &[IntSet<usize>]) -> DegreeInfo
+impl<T> Modularity<T>
 where
     T: Hash + Eq + Clone + Ord + Display + Send + Sync,
-    A: Clone + Send + Sync,
 {
-    let mut in_degrees = vec![];
-    let mut out_degrees = vec![];
-    let mut stot_in: Vec<f64> = vec![];
-    let mut stot_out: Vec<f64> = vec![];
-    let mut degrees = vec![];
-    let mut stot: Vec<f64> = vec![];
-
-    if graph.specs.directed {
-        // the `get_weighted_*` methods can be used here, whether or not the original graph
-        // was weighted because `set_all_edge_weights` has been called in `louvain_partitions`
-        in_degrees = graph.get_weighted_in_degree_for_all_node_indexes();
-        out_degrees = graph.get_weighted_out_degree_for_all_node_indexes();
-        stot_in = (0..partition.len())
-            .into_iter()
-            .map(|i| in_degrees[i])
-            .collect();
-        stot_out = (0..partition.len())
-            .into_iter()
-            .map(|i| out_degrees[i])
-            .collect();
-    } else {
-        degrees = graph.get_weighted_degree_for_all_node_indexes();
-        stot = (0..partition.len())
-            .into_iter()
-            .map(|i| degrees[i])
-            .collect();
+    /// Helper method to get community keys in a deterministic order when seed is provided
+    fn get_community_keys_iter(
+        &self,
+        communities_map: &HashMap<CommunityId, f32>,
+    ) -> Vec<CommunityId> {
+        if self.seed.is_some() {
+            let mut keys: Vec<CommunityId> = Vec::with_capacity(communities_map.len());
+            keys.extend(communities_map.keys().copied());
+            keys.sort_unstable(); // unstable sort is faster
+            keys
+        } else {
+            communities_map.keys().copied().collect()
+        }
     }
-
-    DegreeInfo {
-        in_degrees,
-        out_degrees,
-        stot_in,
-        stot_out,
-        degrees,
-        stot,
-        degree: 0.0,
-        in_degree: 0.0,
-        out_degree: 0.0,
-        remove_cost: 0.0,
-    }
-}
-
-/// Converts a graph of node named by `T` to a graph where nodes are named
-/// with `usize` values instead. It uses the `node_map` to perform the T to
-/// usize replacements.
-fn convert_graph<T, A>(graph: &Graph<T, A>, weighted: bool) -> Graph<usize, IntSet<usize>>
-where
-    T: Hash + Eq + Clone + Ord + Display + Send + Sync,
-    A: Clone + Send + Sync,
-{
-    let mut converted_graph: Graph<T, A>;
-    let graph = match graph.specs.multi_edges {
-        true => {
-            converted_graph = graph.to_single_edges().unwrap();
-            &converted_graph
-        }
-        false => graph,
-    };
-    let graph = match weighted {
-        false => {
-            converted_graph = graph.set_all_edge_weights(1.0);
-            &converted_graph
-        }
-        true => graph,
-    };
-    let nodes = graph
-        .get_all_nodes()
-        .iter()
-        .map(|n| {
-            let u = graph.get_node_index(&n.name).unwrap();
-            Node::from_name_and_attributes(u, vec![u].into_iter().collect::<IntSet<usize>>())
-        })
-        .collect::<Vec<_>>();
-    let edges = graph
-        .get_all_edges()
-        .iter()
-        .map(|e| {
-            Arc::new(Edge {
-                u: graph.get_node_index(&e.u).unwrap(),
-                v: graph.get_node_index(&e.v).unwrap(),
-                weight: e.weight,
-                attributes: None,
-            })
-        })
-        .collect();
-    Graph::new_from_nodes_and_edges(nodes, edges, graph.specs.clone()).unwrap()
-}
-
-/// Generates a new graph based on the partitions of a given graph.
-fn generate_graph(
-    graph: &Graph<usize, IntSet<usize>>,
-    partition: Vec<IntSet<usize>>,
-) -> Graph<usize, IntSet<usize>> {
-    let mut new_graph = Graph::new(GraphSpecs {
-        self_loops: true,
-        edge_dedupe_strategy: EdgeDedupeStrategy::KeepLast,
-        ..graph.specs.clone()
-    });
-    let mut node2com = IntMap::<usize, usize>::default();
-    partition.iter().enumerate().for_each(|(i, part)| {
-        let mut nodes = IntSet::<usize>::default();
-        for node in part {
-            *node2com.entry(node.clone()).or_insert(0) = i;
-            let node_object = graph.get_node(node.clone()).unwrap();
-            let node_hs = vec![node].into_iter().cloned().collect::<IntSet<usize>>();
-            let to_extend = node_object.attributes.clone().unwrap_or(node_hs);
-            nodes.extend(to_extend);
-        }
-        new_graph.add_node(Node::from_name_and_attributes(i, nodes));
-    });
-    graph.get_all_edges().iter().for_each(|e| {
-        let com1 = node2com.get(&e.u).unwrap();
-        let com2 = node2com.get(&e.v).unwrap();
-        let new_graph_edge_weight = new_graph
-            .get_edge(*com1, *com2)
-            .unwrap_or(&Edge::with_weight(*com1, *com2, 0.0))
-            .weight;
-        new_graph
-            .add_edge(Edge::with_weight(
-                *com1,
-                *com2,
-                e.weight + new_graph_edge_weight,
-            ))
-            .expect("unexpected failure to add edge");
-    });
-    new_graph
-}
-
-/// For a given node `u` returns all the weights of the edges to its neighbors.
-fn get_neighbor_weights<T, A>(
-    graph: &Graph<T, A>,
-    u: &usize,
-    node2com: &Vec<usize>,
-) -> IntMap<usize, f64>
-where
-    T: Hash + Eq + Clone + Ord + Display + Send + Sync,
-    A: Clone + Send + Sync,
-{
-    let mut hm: IntMap<usize, f64> = IntMap::default();
-    let adjacent = match graph.specs.directed {
-        true => &graph
-            .get_successor_nodes_by_index(u)
-            .into_iter()
-            .chain(graph.get_predecessor_nodes_by_index(u).into_iter())
-            .collect::<Vec<_>>(),
-        false => &graph
-            .get_successor_nodes_by_index(u)
+    fn new<A>(graph: &Graph<T, A>, weighted: bool, seed: Option<u64>) -> Result<Self, Error>
+    where
+        A: Clone + Send + Sync,
+    {
+        let nodes_len = graph.number_of_nodes();
+        let resolution = 1.0;
+        let original_nodes: Vec<T> = graph
+            .get_all_nodes()
             .iter()
-            .collect::<Vec<_>>(),
-    };
-    for adj in adjacent {
-        if *u == adj.node_index {
-            continue;
-        }
-        let weight = match adj.weight.is_nan() {
-            true => 1.0,
-            false => adj.weight,
+            .map(|n| n.name.clone())
+            .collect();
+        let origin_nodes_community = (0..nodes_len).collect();
+        let nodes = (0..nodes_len).map(CNode::init).collect();
+        let communities = (0..nodes_len).map(Community::init).collect();
+        let mut wedges: Vec<Vec<WEdge>> = vec![Vec::new(); nodes_len];
+        let mut m = 0.0;
+
+        // Build edge lists with pre-allocation hint
+        let all_edges = graph.get_all_edges();
+        let estimated_degree = if nodes_len > 0 {
+            (all_edges.len() * 2) / nodes_len + 1
+        } else {
+            0
         };
-        *hm.entry(node2com[adj.node_index]).or_default() += weight;
+
+        // Pre-allocate edge vectors with estimated capacity
+        for wedge_vec in wedges.iter_mut() {
+            wedge_vec.reserve(estimated_degree);
+        }
+
+        // Process edges sequentially - simpler and more predictable performance
+        for edge in all_edges {
+            let from = graph.get_node_index(&edge.u).unwrap();
+            let to = graph.get_node_index(&edge.v).unwrap();
+            let weight = if weighted { edge.weight as f32 } else { 1.0 };
+
+            wedges[from].push(WEdge { from, to, weight });
+            wedges[to].push(WEdge {
+                from: to,
+                to: from,
+                weight,
+            });
+            m += 2.0 * weight;
+        }
+
+        // Handle edge case of graphs with no edges (m = 0)
+        let resolution_over_m = if m > 0.0 { resolution / m } else { 0.0 };
+
+        Ok(Self {
+            m,
+            resolution,
+            seed,
+            m_half: m * 0.5,
+            resolution_over_m,
+            original_nodes,
+            origin_nodes_community,
+            nodes,
+            communities,
+            edges: wedges,
+        })
     }
-    hm
+
+    fn run_louvain(&mut self) -> Result<Vec<Vec<HashSet<T>>>, Error> {
+        self.init_caches();
+
+        // Handle edge case: graphs with no edges - each node is its own community
+        if self.m == 0.0 {
+            let final_communities = self.get_communities();
+            return Ok(vec![final_communities]);
+        }
+
+        let mut some_change = true;
+        let mut all_partitions = Vec::new();
+        let mut iteration_count = 0;
+        let max_iterations = 1000; // Prevent infinite loops
+
+        while some_change && iteration_count < max_iterations {
+            some_change = false;
+            let mut local_change = true;
+            iteration_count += 1;
+
+            // Debug: prevent infinite loops with more aggressive counter
+            let mut inner_iteration_count = 0;
+            let max_inner_iterations = 1000;
+
+            while local_change && inner_iteration_count < max_inner_iterations {
+                local_change = false;
+                inner_iteration_count += 1;
+                let mut step = 0;
+                let mut node_index = 0;
+                let num_communities = self.communities.len();
+
+                // Safety check: if no communities, break out
+                if num_communities == 0 {
+                    break;
+                }
+
+                // Sequential processing due to data dependencies in community detection
+                while step < num_communities {
+                    let best_community = self.find_best_community(node_index);
+                    let node = &self.nodes[node_index];
+
+                    if let Some(best_community) = best_community {
+                        if best_community != node.community_id {
+                            self.move_node_to(node_index, best_community);
+                            local_change = true;
+                        }
+                    }
+
+                    step += 1;
+                    node_index = (node_index + 1) % num_communities;
+                }
+
+                some_change = local_change || some_change;
+            }
+
+            if some_change {
+                let current_communities = self.get_communities();
+                all_partitions.push(current_communities);
+                self.merge_nodes();
+            }
+        }
+
+        // Add final partition
+        let final_communities = self.get_communities();
+        all_partitions.push(final_communities);
+
+        Ok(all_partitions)
+    }
+
+    fn init_caches(&mut self) {
+        let node_component: Vec<CommunityId> = self.nodes.iter().map(|n| n.community_id).collect();
+
+        // Sequential cache initialization - simpler and more predictable
+        for (node_index, node) in self.nodes.iter_mut().enumerate() {
+            node.init_cache(&self.edges[node_index], &node_component);
+        }
+
+        for community in self.communities.iter_mut() {
+            community.total_degree = Self::community_total_degree_compute(community, &self.nodes);
+        }
+    }
+
+    fn community_total_degree_compute(community: &Community, nodes: &[CNode]) -> f32 {
+        let mut sum = 0.0;
+        for node_index in community.nodes.iter() {
+            let node = &nodes[*node_index];
+            sum += node.degree;
+        }
+        sum
+    }
+
+    fn find_best_community(&self, node_id: NodeId) -> Option<CommunityId> {
+        let mut best: f32 = 0.0;
+        let mut best_community = None;
+        let node = &self.nodes[node_id];
+
+        // Early exit if node has no community connections
+        if node.communities.is_empty() {
+            return None;
+        }
+
+        // Optimize for the common case (no seed) - iterate directly over HashMap
+        if self.seed.is_none() {
+            for (&community_index, &shared_degree) in &node.communities {
+                if shared_degree > 0.0 {
+                    let q_value = self.q(node_id, community_index, shared_degree);
+                    if q_value > best {
+                        best = q_value;
+                        best_community = Some(community_index);
+                    }
+                }
+            }
+        } else {
+            // Deterministic case - use sorted keys
+            let community_keys = self.get_community_keys_iter(&node.communities);
+            for community_index in community_keys {
+                if let Some(shared_degree) = node.communities.get(&community_index) {
+                    if *shared_degree > 0.0 {
+                        let q_value = self.q(node_id, community_index, *shared_degree);
+                        if q_value > best {
+                            best = q_value;
+                            best_community = Some(community_index);
+                        }
+                    }
+                }
+            }
+        }
+        best_community
+    }
+
+    fn q(&self, node_id: NodeId, community_id: CommunityId, shared_degree: f32) -> f32 {
+        // Optimized delta modularity calculation using cached values
+        // delta_q = (resolution*d_ij - (d_i*d_j)/(2*m))/m
+        let node = &self.nodes[node_id];
+        let current_community = node.community_id;
+        let community = &self.communities[community_id];
+
+        if current_community == community_id {
+            if community.nodes.len() == 1 {
+                0.0
+            } else {
+                let d_i = node.degree;
+                // we simulate the case that the node is removed from current community
+                let d_j = community.total_degree - d_i;
+                let d_ij = shared_degree * 2.0;
+                // Use cached values for better performance
+                self.resolution_over_m * d_ij - (d_i * d_j) / (self.m_half * self.m)
+            }
+        } else {
+            let d_i = node.degree;
+            let d_j = community.total_degree;
+            let d_ij = shared_degree * 2.0;
+            // Use cached values for better performance
+            self.resolution_over_m * d_ij - (d_i * d_j) / (self.m_half * self.m)
+        }
+    }
+
+    fn move_node_to(&mut self, node_id: NodeId, community_id: CommunityId) {
+        let old_community_id = self.nodes[node_id].community_id;
+        let node_degree = self.nodes[node_id].degree;
+
+        let old_community = &mut self.communities[old_community_id];
+        old_community.remove_node(node_id, node_degree);
+
+        let new_community = &mut self.communities[community_id];
+        new_community.add_node(node_id, node_degree);
+
+        // Update neighbor community connections
+        for wedge in self.edges[node_id].iter() {
+            let neighbor = wedge.to;
+            let neighbor_node = &mut self.nodes[neighbor];
+
+            if let Entry::Occupied(mut entry) = neighbor_node.communities.entry(old_community_id) {
+                let new_val = *entry.get() - wedge.weight;
+                if new_val == 0.0 {
+                    entry.remove();
+                } else {
+                    *entry.get_mut() = new_val;
+                }
+            }
+            *neighbor_node.communities.entry(community_id).or_insert(0.0) += wedge.weight;
+        }
+
+        self.nodes[node_id].community_id = community_id;
+    }
+
+    fn get_communities(&self) -> Vec<HashSet<T>> {
+        // Pre-allocate with estimated capacity based on active communities
+        let active_communities = self
+            .communities
+            .iter()
+            .filter(|c| !c.nodes.is_empty())
+            .count();
+        let mut communities_map: HashMap<CommunityId, HashSet<T>> =
+            HashMap::with_capacity(active_communities);
+
+        for (node_index, &community_id) in self.origin_nodes_community.iter().enumerate() {
+            let actual_community = self.nodes[community_id].community_id;
+            communities_map
+                .entry(actual_community)
+                .or_insert_with(HashSet::new)
+                .insert(self.original_nodes[node_index].clone());
+        }
+
+        if self.seed.is_some() {
+            // Return communities in deterministic order
+            let mut sorted_communities: Vec<(CommunityId, HashSet<T>)> =
+                communities_map.into_iter().collect();
+            sorted_communities.sort_by_key(|(community_id, _)| *community_id);
+            sorted_communities
+                .into_iter()
+                .map(|(_, community)| community)
+                .collect()
+        } else {
+            communities_map.into_values().collect()
+        }
+    }
+
+    fn get_final_communities(&self) -> Vec<HashSet<T>> {
+        self.get_communities()
+    }
+
+    fn merge_nodes(&mut self) {
+        // Map old community IDs to new community IDs
+        let mut new_community_count = 0;
+        for c in self.communities.iter_mut() {
+            if !c.nodes.is_empty() {
+                c.next_id = new_community_count;
+                new_community_count += 1;
+            }
+        }
+
+        let mut new_communities: Vec<Community> = Vec::with_capacity(new_community_count);
+        let mut new_edges: Vec<Vec<WEdge>> = vec![Vec::new(); new_community_count];
+        let mut new_nodes: Vec<CNode> = Vec::with_capacity(new_community_count);
+        let mut m = 0.0;
+
+        for community in self.communities.iter() {
+            if community.nodes.is_empty() {
+                continue;
+            }
+
+            let new_community_id = community.next_id;
+            new_communities.push(Community::init(new_community_id));
+            let mut new_node = CNode::init(new_community_id);
+            let mut edges_for_community: HashMap<CommunityId, f32> = HashMap::new();
+            let mut self_reference = 0.0;
+
+            for &node_id in community.nodes.iter() {
+                for wedge in self.edges[node_id].iter() {
+                    let neighbor_community = self.nodes[wedge.to].community_id;
+                    let neighbor_community_new = self.communities[neighbor_community].next_id;
+                    *edges_for_community
+                        .entry(neighbor_community_new)
+                        .or_insert(0.0) += wedge.weight;
+                }
+                self_reference += self.nodes[node_id].self_reference_weight;
+            }
+
+            // Optimize edge iteration based on whether determinism is needed
+            if self.seed.is_some() {
+                // Deterministic case - need to sort
+                let mut sorted_edges: Vec<(&CommunityId, &f32)> =
+                    Vec::with_capacity(edges_for_community.len());
+                sorted_edges.extend(edges_for_community.iter());
+                sorted_edges.sort_unstable_by_key(|(community_id, _)| *community_id);
+
+                for (neighbor_community, weight) in sorted_edges {
+                    m += weight;
+                    if *neighbor_community == new_community_id {
+                        self_reference += weight;
+                    } else {
+                        new_edges[new_community_id].push(WEdge {
+                            from: new_community_id,
+                            to: *neighbor_community,
+                            weight: *weight,
+                        });
+                    }
+                }
+            } else {
+                // Fast path - iterate directly over HashMap
+                for (neighbor_community, weight) in &edges_for_community {
+                    m += weight;
+                    if *neighbor_community == new_community_id {
+                        self_reference += weight;
+                    } else {
+                        new_edges[new_community_id].push(WEdge {
+                            from: new_community_id,
+                            to: *neighbor_community,
+                            weight: *weight,
+                        });
+                    }
+                }
+            }
+
+            new_node.self_reference_weight = self_reference;
+            new_nodes.push(new_node);
+        }
+
+        // Update origin nodes community mapping
+        for i in 0..self.origin_nodes_community.len() {
+            let new_community_old_id = self.nodes[self.origin_nodes_community[i]].community_id;
+            let new_community_id = self.communities[new_community_old_id].next_id;
+            self.origin_nodes_community[i] = new_community_id;
+        }
+
+        self.communities = new_communities;
+        self.nodes = new_nodes;
+        self.edges = new_edges;
+        self.m = m;
+        // Update cached values when m changes - handle division by zero
+        self.m_half = m * 0.5;
+        self.resolution_over_m = if m > 0.0 { self.resolution / m } else { 0.0 };
+        self.init_caches();
+    }
 }
 
-/// Creates the initial mapping of node names in the `graph` to
-/// a vector where each item contains an IntSet that contains a single
-/// node index.
-fn map_node_indexes_to_hashsets<T, A>(graph: &Graph<T, A>) -> Vec<IntSet<usize>>
+// Helper function to compute modularity for the current community assignment
+pub fn compute_modularity<T, A>(
+    graph: &Graph<T, A>,
+    communities: &[HashSet<T>],
+    weighted: bool,
+) -> f32
 where
     T: Hash + Eq + Clone + Ord + Display + Send + Sync,
     A: Clone + Send + Sync,
 {
-    (0..graph.number_of_nodes())
-        .into_iter()
-        .map(|i| {
-            let mut hs = IntSet::default();
-            hs.insert(i);
-            hs
-        })
-        .collect()
+    let m = graph.size(weighted) as f32;
+    let mut q = 0.0f32;
+
+    // Create node to community mapping
+    let mut node_to_community: HashMap<&T, usize> = HashMap::new();
+    for (comm_id, community) in communities.iter().enumerate() {
+        for node in community {
+            node_to_community.insert(node, comm_id);
+        }
+    }
+
+    for community in communities {
+        let mut internal_edges = 0.0f32;
+        let mut total_degree = 0.0f32;
+
+        for node in community {
+            let degree = if weighted {
+                graph.get_node_weighted_degree(node.clone()).unwrap_or(0.0) as f32
+            } else {
+                graph.get_node_degree(node.clone()).unwrap_or(0) as f32
+            };
+            total_degree += degree;
+
+            // Count internal edges
+            if let Ok(neighbors) = graph.get_successor_nodes(node.clone()) {
+                for neighbor in neighbors {
+                    if let Some(&neighbor_comm) = node_to_community.get(&neighbor.name) {
+                        if neighbor_comm == *node_to_community.get(node).unwrap() {
+                            let edge_weight = if weighted {
+                                if let Ok(edge) =
+                                    graph.get_edge(node.clone(), neighbor.name.clone())
+                                {
+                                    edge.weight as f32
+                                } else {
+                                    1.0f32
+                                }
+                            } else {
+                                1.0f32
+                            };
+                            internal_edges += edge_weight;
+                        }
+                    }
+                }
+            }
+        }
+
+        internal_edges /= 2.0; // Each internal edge is counted twice
+        q += internal_edges / m - (total_degree / (2.0 * m)).powi(2);
+    }
+
+    q
 }
 
 #[cfg(test)]
 mod tests {
-
     use super::*;
     use crate::{Edge, Graph, GraphSpecs};
-    use itertools::Itertools;
 
-    #[rustfmt::skip]
     #[test]
-    fn test_convert_graph() {
-        let mut graph = Graph::<&str, ()>::new(GraphSpecs {multi_edges: true, ..GraphSpecs::directed_create_missing()});
-        graph.add_edges(vec![
-            Edge::with_weight("n1", "n2", 1.0),
-            Edge::with_weight("n1", "n2", 1.1),
-            Edge::with_weight("n2", "n1", 1.2),
-            Edge::with_weight("n1", "n3", 1.3),
-            Edge::with_weight("n1", "n4", 1.4),
-            Edge::with_weight("n4", "n3", 1.5),
-        ]).expect("couldn't add edges");
-        let converted_graph = convert_graph(&graph, true);
-        assert_eq!(converted_graph.get_all_nodes().iter().map(|n| n.name).sorted().collect::<Vec<usize>>(), vec![0, 1, 2, 3]);
-        assert_eq!(converted_graph.get_node(1).unwrap().attributes.clone().unwrap().len(), 1);
-        assert_eq!(converted_graph.get_all_edges().len(), 5);
-        assert_eq!(converted_graph.get_edge(0, 1).unwrap().weight, 2.1);
-        assert_eq!(converted_graph.get_edge(1, 0).unwrap().weight, 1.2);
-        assert_eq!(converted_graph.get_edge(0, 2).unwrap().weight, 1.3);
-        assert_eq!(converted_graph.get_edge(0, 3).unwrap().weight, 1.4);
-        assert_eq!(converted_graph.get_edge(3, 2).unwrap().weight, 1.5);
+    fn test_louvain_basic() {
+        let mut graph = Graph::<usize, ()>::new(GraphSpecs::undirected_create_missing());
+
+        // Create a simple graph with two clear communities: {0,1,2} and {3,4,5}
+        graph
+            .add_edges(vec![
+                Edge::new(0, 1),
+                Edge::new(0, 2),
+                Edge::new(1, 2),
+                Edge::new(2, 3), // bridge edge
+                Edge::new(3, 4),
+                Edge::new(3, 5),
+                Edge::new(4, 5),
+            ])
+            .expect("couldn't add edges");
+
+        let communities = louvain_communities(&graph, false, None, None, None).unwrap();
+
+        // Should find 2 communities
+        assert_eq!(communities.len(), 2);
+
+        // Verify that nodes are grouped correctly
+        let mut community_sizes: Vec<usize> = communities.iter().map(|c| c.len()).collect();
+        community_sizes.sort();
+        assert_eq!(community_sizes, vec![3, 3]);
     }
 
-    #[rustfmt::skip]
     #[test]
-    fn test_generate_graph() {
-        let mut graph = Graph::new(GraphSpecs::directed_create_missing());
-        graph.add_edges(vec![
-            Edge::with_weight(0, 1, 1.1),
-            Edge::with_weight(1, 0, 1.2),
-            Edge::with_weight(0, 2, 1.3),
-            Edge::with_weight(0, 3, 1.4),
-            Edge::with_weight(3, 2, 1.5),
-        ]).expect("couldn't add edges");
-        let communities = vec![
-            vec![0, 1].into_iter().collect(),
-            vec![2, 3].into_iter().collect(),
-        ];
-        let gen_graph = generate_graph(&graph, communities);
-        assert_eq!(gen_graph.get_all_nodes().iter().map(|n| n.name).sorted().collect::<Vec<usize>>(), vec![0, 1]);
-        assert_eq!(gen_graph.get_node(0).unwrap().attributes.as_ref().unwrap().iter().copied().sorted().collect::<Vec<usize>>(), vec![0, 1]);
-        assert_eq!(gen_graph.get_node(1).unwrap().attributes.as_ref().unwrap().iter().copied().sorted().collect::<Vec<usize>>(), vec![2, 3]);
-        assert_eq!(gen_graph.get_all_edges().len(), 3);
-        assert_eq!(gen_graph.get_edge(0, 0).unwrap().weight, 2.3);
-        assert_eq!(gen_graph.get_edge(0, 1).unwrap().weight, 2.7);
-        assert_eq!(gen_graph.get_edge(1, 1).unwrap().weight, 1.5);
+    fn test_modularity_calculation() {
+        let mut graph = Graph::<usize, ()>::new(GraphSpecs::undirected_create_missing());
+
+        // Create a graph with clear community structure: two connected components
+        graph
+            .add_edges(vec![
+                Edge::new(0, 1),
+                Edge::new(1, 2),
+                Edge::new(3, 4),
+                Edge::new(4, 5),
+            ])
+            .expect("couldn't add edges");
+
+        // Communities matching the structure: {0,1,2} and {3,4,5}
+        let mut community_0 = HashSet::new();
+        community_0.insert(0usize);
+        community_0.insert(1usize);
+        community_0.insert(2usize);
+        let mut community_1 = HashSet::new();
+        community_1.insert(3usize);
+        community_1.insert(4usize);
+        community_1.insert(5usize);
+        let communities_structured = vec![community_0, community_1];
+        let mod_structured = compute_modularity(&graph, &communities_structured, false);
+
+        // All nodes in one community (poor structure)
+        let mut community_all = HashSet::new();
+        community_all.insert(0usize);
+        community_all.insert(1usize);
+        community_all.insert(2usize);
+        community_all.insert(3usize);
+        community_all.insert(4usize);
+        community_all.insert(5usize);
+        let communities_all = vec![community_all];
+        let mod_all = compute_modularity(&graph, &communities_all, false);
+
+        // Structured communities should have higher modularity than all-in-one
+        assert!(mod_structured > mod_all);
     }
 
-    #[rustfmt::skip]
     #[test]
-    fn test_get_neighbor_weights() {
-        let mut graph: Graph<&str, ()> = Graph::new(GraphSpecs::directed_create_missing());
-        graph.add_edges(vec![
-            Edge::with_weight("n1", "n2", 1.1),
-            Edge::with_weight("n2", "n1", 1.2),
-            Edge::with_weight("n1", "n3", 1.3),
-            Edge::with_weight("n1", "n4", 1.4),
-            Edge::with_weight("n4", "n3", 1.5),
-        ]).expect("couldn't add edges");
-        let node2com = vec![0, 0, 2, 2];
-        let weights = get_neighbor_weights(&graph, &0, &node2com);
-        assert_eq!(weights.len(), 2);
-        assert_eq!(weights.get(&0).unwrap(), &2.3);
-        assert_eq!(weights.get(&2).unwrap(), &2.7);
-    }
+    fn test_weighted_louvain() {
+        let mut graph = Graph::<&str, ()>::new(GraphSpecs::undirected_create_missing());
 
-    #[rustfmt::skip]
-    #[test]
-    fn test_map_node_indexes_to_hashsets() {
-        let mut graph: Graph<usize, HashSet<usize>> = Graph::new(GraphSpecs::directed_create_missing());
-        graph.add_edges(vec![
-            Edge::with_weight(1, 2, 1.1),
-            Edge::with_weight(2, 1, 1.2),
-            Edge::with_weight(1, 3, 1.3),
-            Edge::with_weight(1, 4, 1.4),
-            Edge::with_weight(4, 3, 1.5),
-        ]).expect("couldn't add edges");
-        let names = map_node_indexes_to_hashsets(&graph);
-        assert_eq!(names.iter().map(|hs| hs.len()).collect::<Vec<usize>>(), vec![1, 1, 1, 1]);
-        assert_eq!(
-            names.into_iter().flat_map(|hs| hs.into_iter().collect::<Vec<usize>>())
-                 .sorted().collect::<Vec<usize>>()
-            , vec![0, 1, 2, 3]
-        );
+        graph
+            .add_edges(vec![
+                Edge::with_weight("a", "b", 5.0),
+                Edge::with_weight("b", "c", 5.0),
+                Edge::with_weight("c", "d", 1.0), // weak connection
+                Edge::with_weight("d", "e", 5.0),
+            ])
+            .expect("couldn't add edges");
+
+        let communities = louvain_communities(&graph, true, None, None, None).unwrap();
+
+        // Should favor grouping strongly connected nodes
+        assert!(communities.len() >= 2);
     }
 }

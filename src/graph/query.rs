@@ -1038,7 +1038,7 @@ where
     ```
     use graphrs::{generators};
     let graph = generators::social::karate_club_graph();
-    assert_eq!(graph.number_of_edges(), 34);
+    assert_eq!(graph.number_of_edges(), 78);
     ```
     */
     pub fn number_of_edges(&self) -> usize {

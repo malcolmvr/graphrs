@@ -44,25 +44,6 @@ where
     node_names_count == all_nodes_len && sum_names == all_nodes_len
 }
 
-pub(crate) fn is_partition_of_indexes<T, A>(
-    graph: &Graph<T, A>,
-    communities: &[IntSet<usize>],
-) -> bool
-where
-    T: Hash + Eq + Clone + Ord + Display + Send + Sync,
-    A: Clone + Send + Sync,
-{
-    let num_nodes = graph.number_of_nodes();
-    let node_indexes_count = communities
-        .iter()
-        .flatten()
-        .copied()
-        .filter(|n| *n < num_nodes)
-        .collect::<IntSet<usize>>()
-        .len();
-    node_indexes_count == num_nodes
-}
-
 pub(crate) fn get_singleton_partition<T, A>(graph: &Graph<T, A>) -> Vec<IntSet<usize>>
 where
     T: Hash + Eq + Clone + Ord + Display + Send + Sync,
@@ -169,69 +150,6 @@ where
     Ok(communities.iter().map(community_contribution).sum())
 }
 
-pub(crate) fn modularity_by_indexes<T, A>(
-    graph: &Graph<T, A>,
-    communities: &[IntSet<usize>],
-    weighted: bool,
-    resolution: Option<f64>,
-) -> Result<f64, Error>
-where
-    T: Hash + Eq + Clone + Ord + Display + Send + Sync,
-    A: Clone + Send + Sync,
-{
-    if !is_partition_of_indexes(graph, communities) {
-        return Err(Error {
-            kind: ErrorKind::NotAPartition,
-            message: "The specified communities did not form a partition of a Graph.".to_string(),
-        });
-    }
-    // compute four variables depending on whether or not the graph is directed and `weighted` is true/false
-    let (out_degree, in_degree, m, norm) = match graph.specs.directed {
-        true => {
-            let (outd, ind) = match weighted {
-                true => (
-                    graph.get_weighted_out_degree_for_all_node_indexes(),
-                    graph.get_weighted_in_degree_for_all_node_indexes(),
-                ),
-                false => (
-                    convert_values_to_f64_vec(graph.get_out_degree_for_all_node_indexes()),
-                    convert_values_to_f64_vec(graph.get_in_degree_for_all_node_indexes()),
-                ),
-            };
-            let m: f64 = outd.iter().sum();
-            let norm = (1.0 / m).powf(2.0);
-            (outd, ind, m, norm)
-        }
-        false => {
-            let deg = match weighted {
-                true => graph.get_weighted_degree_for_all_node_indexes(),
-                false => convert_values_to_f64_vec(graph.get_degree_for_all_node_indexes()),
-            };
-            let deg_sum: f64 = deg.iter().sum();
-            let m = deg_sum / 2.0;
-            let norm = (1.0 / deg_sum).powf(2.0);
-            (deg.clone(), deg, m, norm)
-        }
-    };
-    let community_contribution = |community: &IntSet<usize>| {
-        let comm_vec: Vec<usize> = community.iter().cloned().collect();
-        let subgraph = graph.get_subgraph_by_indexes(&comm_vec).unwrap();
-        let subgraph_edges = subgraph.get_all_edges();
-        let subgraph_edges_weight = match weighted {
-            true => subgraph_edges.iter().map(|e| e.weight).sum(),
-            false => subgraph_edges.len() as f64,
-        };
-        let out_degree_sum: f64 = community.iter().map(|n| out_degree[*n]).sum();
-        let in_degree_sum = match graph.specs.directed {
-            true => community.iter().map(|n| in_degree[*n]).sum(),
-            false => out_degree_sum,
-        };
-        subgraph_edges_weight / m
-            - resolution.unwrap_or(1.0) * out_degree_sum * in_degree_sum * norm
-    };
-    Ok(communities.iter().map(community_contribution).sum())
-}
-
 pub(crate) fn partition_is_singleton(partition: &[IntSet<usize>], num_nodes: usize) -> bool {
     let len = partition.len();
     let flattened_len = partition.into_iter().flatten().count();
@@ -254,22 +172,6 @@ pub(crate) fn partitions_eq(
         .into_iter()
         .zip(matching_partition2_indexes)
         .all(|(hs1, i)| hs1 == &partition2[i])
-}
-
-/// Converts a graph partition of usize replacements of node names T to
-/// a partition using the node names T.
-pub(crate) fn convert_usize_partitions_vec_to_t<T, A>(
-    partitions_vec: Vec<Vec<IntSet<usize>>>,
-    graph: &Graph<T, A>,
-) -> Vec<Vec<HashSet<T>>>
-where
-    T: Hash + Eq + Clone + Ord + Display + Send + Sync,
-    A: Clone + Send + Sync,
-{
-    partitions_vec
-        .into_iter()
-        .map(|v| convert_usize_partitions_to_t(v, graph))
-        .collect()
 }
 
 /// Converts a graph partition of usize replacements of node names T to
@@ -299,10 +201,6 @@ where
     hashmap.into_iter().map(|(k, v)| (k, v as f64)).collect()
 }
 
-fn convert_values_to_f64_vec(values: Vec<usize>) -> Vec<f64> {
-    values.into_iter().map(|v| v as f64).collect()
-}
-
 #[cfg(test)]
 mod tests {
 
@@ -319,13 +217,6 @@ mod tests {
         assert_eq!(f64_hashmap.get("a").unwrap(), &1.0);
         assert_eq!(f64_hashmap.get("b").unwrap(), &2.0);
         assert_eq!(f64_hashmap.get("c").unwrap(), &3.0);
-    }
-
-    #[test]
-    fn test_convert_values_to_f64_vec() {
-        let values = vec![1, 2, 3];
-        let f64_vec = convert_values_to_f64_vec(values);
-        assert_eq!(f64_vec, vec![1.0, 2.0, 3.0]);
     }
 
     #[test]
@@ -350,30 +241,6 @@ mod tests {
         assert_eq!(converted[0], hs1);
         assert_eq!(converted[1], hs2);
         assert_eq!(converted[2], hs3);
-    }
-
-    #[test]
-    fn test_convert_usize_partitions_vec_to_t() {
-        let edges = vec![
-            Edge::new("n1", "n2"),
-            Edge::new("n3", "n4"),
-            Edge::new("n5", "n6"),
-        ];
-        let graph: Graph<&str, ()> =
-            Graph::new_from_nodes_and_edges(vec![], edges, GraphSpecs::undirected_create_missing())
-                .unwrap();
-        let partitions = vec![
-            vec![0, 1].into_iter().collect(),
-            vec![2, 3].into_iter().collect(),
-            vec![4, 5].into_iter().collect(),
-        ];
-        let converted = convert_usize_partitions_vec_to_t(vec![partitions], &graph);
-        let hs1: HashSet<&str> = vec!["n1", "n2"].into_iter().collect();
-        let hs2: HashSet<&str> = vec!["n3", "n4"].into_iter().collect();
-        let hs3: HashSet<&str> = vec!["n5", "n6"].into_iter().collect();
-        assert_eq!(converted[0][0], hs1);
-        assert_eq!(converted[0][1], hs2);
-        assert_eq!(converted[0][2], hs3);
     }
 
     #[test]
