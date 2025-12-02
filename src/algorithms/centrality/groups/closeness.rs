@@ -1,5 +1,6 @@
+use crate::algorithms::shortest_path::dijkstra;
 use crate::{Error, ErrorKind, Graph};
-use std::collections::{HashMap, HashSet, VecDeque};
+use std::collections::{HashMap, HashSet};
 use std::fmt::{Debug, Display};
 use std::hash::Hash;
 
@@ -13,14 +14,11 @@ This implementation follows NetworkX's exact algorithm:
 c_close(S) = |V-S| / sum(d_S,v for v in V-S)
 where d_S,v = min(d_u,v for u in S)
 
-Note: NetworkX does not actually have normalization for group closeness centrality.
-The normalized parameter is kept for API compatibility but is ignored.
-
 # Arguments
 
 * `graph`: a Graph instance
 * `group`: a HashSet containing the nodes in the group
-* `normalized`: kept for API compatibility, but ignored (NetworkX has no normalization)
+* `weighted`: if true, use edge weights; if false, treat all edges as weight 1
 
 # References
 
@@ -29,7 +27,7 @@ The normalized parameter is kept for API compatibility but is ignored.
 pub fn group_closeness_centrality<T, A>(
     graph: &Graph<T, A>,
     group: &HashSet<T>,
-    _normalized: bool, // NetworkX doesn't actually normalize, kept for API compatibility
+    weighted: bool,
 ) -> Result<f64, Error>
 where
     T: Hash + Eq + Clone + Ord + Debug + Display + Send + Sync,
@@ -75,8 +73,29 @@ where
         });
     }
 
-    // Use multi-source shortest path computation (like NetworkX)
-    let shortest_paths = multi_source_shortest_paths(graph, &group_vec)?;
+    // NetworkX reverses directed graphs to use incoming distances
+    let working_graph = if graph.specs.directed {
+        Some(graph.reverse()?)
+    } else {
+        None
+    };
+
+    let actual_graph = if let Some(ref reversed_graph) = working_graph {
+        reversed_graph
+    } else {
+        graph
+    };
+
+    // Use appropriate shortest path computation based on weighted parameter
+    let shortest_paths = if weighted {
+        // For weighted graphs, use NetworkX-compatible multi-source Dijkstra
+        multi_source_dijkstra_distances(actual_graph, &group_vec)?
+    } else {
+        // For unweighted graphs, use single-source BFS from each group member
+        // and take minimum distance to match NetworkX exactly
+        // For directed graphs, use the reversed graph; for undirected, use original
+        single_source_shortest_paths_minimum_unweighted(actual_graph, &group_vec)?
+    };
 
     // Get all non-group nodes
     let non_group_nodes: HashSet<T> = all_nodes_set.difference(&group_set).cloned().collect();
@@ -100,10 +119,10 @@ where
 }
 
 /**
-Compute shortest path distances from multiple sources using multi-source BFS.
-This is equivalent to NetworkX's multi_source_dijkstra_path_length for unweighted graphs.
+Compute shortest path distances from multiple sources using multi-source Dijkstra.
+This is equivalent to NetworkX's multi_source_dijkstra_path_length for weighted graphs.
 */
-fn multi_source_shortest_paths<T, A>(
+fn multi_source_dijkstra_distances<T, A>(
     graph: &Graph<T, A>,
     sources: &[T],
 ) -> Result<HashMap<T, f64>, Error>
@@ -111,44 +130,81 @@ where
     T: Hash + Eq + Clone + Ord + Debug + Display + Send + Sync,
     A: Clone + Send + Sync,
 {
-    let mut distances: HashMap<T, f64> = HashMap::new();
-    let mut queue = VecDeque::new();
+    // Use existing dijkstra multi_source to get shortest paths from all sources
+    let multi_source_result = dijkstra::multi_source(
+        graph,
+        true, // weighted=true
+        sources.to_vec(),
+        None,  // target=None (find distances to all nodes)
+        None,  // cutoff=None
+        false, // first_only=false
+        false, // with_paths=false (we only need distances)
+    )?;
 
-    // Initialize distances from all sources to 0 and add them to queue
-    for source in sources {
-        distances.insert(source.clone(), 0.0);
-        queue.push_back((source.clone(), 0.0));
-    }
+    // Convert the nested HashMap result to single distance map
+    // taking minimum distance from any source to each target
+    let mut min_distances: HashMap<T, f64> = HashMap::new();
 
-    // Multi-source BFS
-    while let Some((current, current_dist)) = queue.pop_front() {
-        // Skip if we've already found a shorter path to this node
-        if let Some(&existing_dist) = distances.get(&current) {
-            if current_dist > existing_dist {
-                continue;
-            }
-        }
-
-        if let Ok(neighbors) = graph.get_neighbor_nodes(current.clone()) {
-            for neighbor in neighbors {
-                let new_distance = current_dist + 1.0;
-
-                // Only update if we found a shorter path (or this is first path)
-                let should_update = if let Some(&existing_dist) = distances.get(&neighbor.name) {
-                    new_distance < existing_dist
-                } else {
-                    true
-                };
-
-                if should_update {
-                    distances.insert(neighbor.name.clone(), new_distance);
-                    queue.push_back((neighbor.name.clone(), new_distance));
+    for (_source, target_distances) in multi_source_result {
+        for (target, shortest_path_info) in target_distances {
+            let distance = shortest_path_info.distance;
+            if let Some(&existing_distance) = min_distances.get(&target) {
+                if distance < existing_distance {
+                    min_distances.insert(target, distance);
                 }
+            } else {
+                min_distances.insert(target, distance);
             }
         }
     }
 
-    Ok(distances)
+    Ok(min_distances)
+}
+
+/**
+Compute shortest path distances from multiple sources using single-source BFS
+from each source and taking minimum distances.
+
+This matches NetworkX exact behavior for unweighted directed graphs.
+*/
+fn single_source_shortest_paths_minimum_unweighted<T, A>(
+    graph: &Graph<T, A>,
+    sources: &[T],
+) -> Result<HashMap<T, f64>, Error>
+where
+    T: Hash + Eq + Clone + Ord + Debug + Display + Send + Sync,
+    A: Clone + Send + Sync,
+{
+    use crate::algorithms::shortest_path::dijkstra;
+
+    let mut min_distances: HashMap<T, f64> = HashMap::new();
+
+    // For each source, run single-source dijkstra with weighted=false (BFS)
+    for source in sources {
+        let distances = dijkstra::single_source(
+            graph,
+            false, // weighted=false for unweighted shortest paths
+            source.clone(),
+            None,  // target=None (all nodes)
+            None,  // cutoff=None
+            false, // first_only=false
+            false, // with_paths=false
+        )?;
+
+        // Update minimum distances
+        for (target, path_info) in distances {
+            let distance = path_info.distance;
+            if let Some(&existing_dist) = min_distances.get(&target) {
+                if distance < existing_dist {
+                    min_distances.insert(target, distance);
+                }
+            } else {
+                min_distances.insert(target, distance);
+            }
+        }
+    }
+
+    Ok(min_distances)
 }
 
 #[cfg(test)]
@@ -172,7 +228,7 @@ mod tests {
         let centrality = group_closeness_centrality(&graph, &group, false).unwrap();
         assert!(centrality > 0.0);
 
-        let normalized_centrality = group_closeness_centrality(&graph, &group, true).unwrap();
+        let normalized_centrality = group_closeness_centrality(&graph, &group, false).unwrap();
         assert!(normalized_centrality > 0.0);
         assert!(normalized_centrality <= 1.0);
     }
