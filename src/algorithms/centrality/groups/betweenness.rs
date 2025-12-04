@@ -454,20 +454,19 @@ where
     while let Some(v) = queue.pop_front() {
         s_stack.push(v);
 
-        if let Ok(neighbors) = graph.get_successor_nodes(all_nodes[v].clone()) {
-            for neighbor in neighbors {
-                if let Some(&w) = node_to_index.get(&neighbor.name) {
-                    // First time we see w?
-                    if d[w] < 0.0 {
-                        queue.push_back(w);
-                        d[w] = d[v] + 1.0;
-                    }
+        let neighbors = graph.get_successors_or_neighbors(all_nodes[v].clone());
+        for neighbor in neighbors {
+            if let Some(&w) = node_to_index.get(&neighbor.name) {
+                // First time we see w?
+                if d[w] < 0.0 {
+                    queue.push_back(w);
+                    d[w] = d[v] + 1.0;
+                }
 
-                    // Shortest path to w via v?
-                    if (d[w] - d[v] - 1.0_f64).abs() < 1e-10_f64 {
-                        sigma[w] += sigma[v];
-                        p[w].push(v);
-                    }
+                // Shortest path to w via v?
+                if (d[w] - d[v] - 1.0_f64).abs() < 1e-10_f64 {
+                    sigma[w] += sigma[v];
+                    p[w].push(v);
                 }
             }
         }
@@ -529,35 +528,33 @@ where
             continue;
         }
 
-        if let Ok(successors) = graph.get_successor_nodes(all_nodes[v].clone()) {
-            for successor in successors {
-                if let Some(&w) = node_to_index.get(&successor.name) {
-                    // Get edge weight - extract from the edge's weight field
-                    let weight = match graph.get_edge(all_nodes[v].clone(), all_nodes[w].clone()) {
-                        Ok(edge) => edge.weight,
-                        Err(_) => 1.0, // Default weight if edge not found
-                    };
+        let successors = graph.get_successors_or_neighbors(all_nodes[v].clone());
+        for successor in successors {
+            if let Some(&w) = node_to_index.get(&successor.name) {
+                // Get edge weight - extract from the edge's weight field
+                let weight = match graph.get_edge(all_nodes[v].clone(), all_nodes[w].clone()) {
+                    Ok(edge) => edge.weight,
+                    Err(_) => 1.0, // Default weight if edge not found
+                };
+                let new_dist = d[v] + weight;
 
-                    let new_dist = d[v] + weight;
-
-                    // First time seeing this node or found a shorter path
-                    if d[w] == f64::INFINITY {
-                        d[w] = new_dist;
-                        sigma[w] = sigma[v];
-                        p[w].push(v);
-                        queue.push((OrderedFloat(new_dist), w));
-                    } else if (new_dist - d[w]).abs() < 1e-10 {
-                        // Found another shortest path of same length
-                        sigma[w] += sigma[v];
-                        p[w].push(v);
-                    } else if new_dist < d[w] {
-                        // Found a strictly shorter path
-                        d[w] = new_dist;
-                        sigma[w] = sigma[v];
-                        p[w].clear();
-                        p[w].push(v);
-                        queue.push((OrderedFloat(new_dist), w));
-                    }
+                // First time seeing this node or found a shorter path
+                if d[w] == f64::INFINITY {
+                    d[w] = new_dist;
+                    sigma[w] = sigma[v];
+                    p[w].push(v);
+                    queue.push((OrderedFloat(new_dist), w));
+                } else if (new_dist - d[w]).abs() < 1e-10 {
+                    // Found another shortest path of same length
+                    sigma[w] += sigma[v];
+                    p[w].push(v);
+                } else if new_dist < d[w] {
+                    // Found a strictly shorter path
+                    d[w] = new_dist;
+                    sigma[w] = sigma[v];
+                    p[w].clear();
+                    p[w].push(v);
+                    queue.push((OrderedFloat(new_dist), w));
                 }
             }
         }
@@ -748,10 +745,6 @@ mod networkx_compatibility_tests {
             }
 
             let result = group_betweenness_centrality(&graph, &group, true, false, false).unwrap();
-            println!(
-                "Group {:?}: graphrs={}, networkx={}",
-                group_nodes, result, expected
-            );
 
             // Allow small floating point differences
             assert!(
@@ -784,10 +777,6 @@ mod networkx_compatibility_tests {
             }
 
             let result = group_betweenness_centrality(&graph, &group, true, false, false).unwrap();
-            println!(
-                "Karate Club Group {:?}: graphrs={}, networkx={}",
-                group_nodes, result, expected
-            );
 
             // Allow small floating point differences
             assert!(
@@ -817,7 +806,6 @@ mod networkx_compatibility_tests {
         let result = group_betweenness_centrality(&graph, &group, true, false, false).unwrap();
         let expected = 0.0; // NetworkX result
 
-        println!("K4 Group {{1}}: graphrs={}, networkx={}", result, expected);
         assert!((result - expected).abs() < 1e-10);
     }
 
@@ -836,10 +824,6 @@ mod networkx_compatibility_tests {
         let result = group_betweenness_centrality(&graph, &group, true, false, false).unwrap();
         let expected = 1.0; // NetworkX result
 
-        println!(
-            "Star Group {{0}} (center): graphrs={}, networkx={}",
-            result, expected
-        );
         assert!((result - expected).abs() < 1e-10);
 
         // Test leaf nodes
@@ -849,10 +833,6 @@ mod networkx_compatibility_tests {
         let result = group_betweenness_centrality(&graph, &group, true, false, false).unwrap();
         let expected = 0.0; // NetworkX result
 
-        println!(
-            "Star Group {{1,2}} (leaves): graphrs={}, networkx={}",
-            result, expected
-        );
         assert!((result - expected).abs() < 1e-10);
     }
 
@@ -877,9 +857,6 @@ mod networkx_compatibility_tests {
         // Test weighted (uses actual edge weights)
         let weighted_result =
             group_betweenness_centrality(&graph, &group, true, false, true).unwrap();
-
-        println!("Unweighted result: {}", unweighted_result);
-        println!("Weighted result: {}", weighted_result);
 
         // The results should be different because weighted paths will prefer 0->3 directly
         // while unweighted will treat all edges equally
