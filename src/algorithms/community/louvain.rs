@@ -6,7 +6,7 @@ use std::{
 };
 
 // Performance optimizations:
-// - Cached modularity calculations (m_half, resolution_over_m) to avoid repeated divisions
+// - Cached modularity calculations (m_half) to avoid repeated divisions
 // - Memory pre-allocation with capacity hints for HashMaps and Vectors
 // - Conditional determinism: fast HashMap iteration when seed=None, sorted when seed=Some(_)
 // - For even better performance, consider using FxHashMap from fxhash crate instead of std::HashMap
@@ -31,7 +31,6 @@ where
     seed: Option<u64>, // seed for deterministic results
     // Cache frequently used calculations
     m_half: f32,            // m * 0.5 - cached to avoid repeated multiplication
-    resolution_over_m: f32, // resolution / m - cached for delta modularity calculation
     original_nodes: Vec<T>, // map from node index to original node name
     origin_nodes_community: Vec<CommunityId>,
     nodes: Vec<CNode>,
@@ -259,15 +258,11 @@ where
             m += 2.0 * weight;
         }
 
-        // Handle edge case of graphs with no edges (m = 0)
-        let resolution_over_m = if m > 0.0 { resolution / m } else { 0.0 };
-
         Ok(Self {
             m,
             resolution,
             seed,
             m_half: m * 0.5,
-            resolution_over_m,
             original_nodes,
             origin_nodes_community,
             nodes,
@@ -407,7 +402,7 @@ where
 
     fn q(&self, node_id: NodeId, community_id: CommunityId, shared_degree: f32) -> f32 {
         // Optimized delta modularity calculation using cached values
-        // delta_q = (resolution*d_ij - (d_i*d_j)/(2*m))/m
+        // delta_q = (d_ij - resolution*(d_i*d_j)/(2*m))/m
         let node = &self.nodes[node_id];
         let current_community = node.community_id;
         let community = &self.communities[community_id];
@@ -420,15 +415,15 @@ where
                 // we simulate the case that the node is removed from current community
                 let d_j = community.total_degree - d_i;
                 let d_ij = shared_degree * 2.0;
-                // Use cached values for better performance
-                self.resolution_over_m * d_ij - (d_i * d_j) / (self.m_half * self.m)
+                // Use cached values for better performance - resolution multiplies the null model term
+                (d_ij - self.resolution * (d_i * d_j) / (self.m_half)) / self.m
             }
         } else {
             let d_i = node.degree;
             let d_j = community.total_degree;
             let d_ij = shared_degree * 2.0;
-            // Use cached values for better performance
-            self.resolution_over_m * d_ij - (d_i * d_j) / (self.m_half * self.m)
+            // Use cached values for better performance - resolution multiplies the null model term
+            (d_ij - self.resolution * (d_i * d_j) / (self.m_half)) / self.m
         }
     }
 
@@ -585,9 +580,8 @@ where
         self.nodes = new_nodes;
         self.edges = new_edges;
         self.m = m;
-        // Update cached values when m changes - handle division by zero
+        // Update cached values when m changes
         self.m_half = m * 0.5;
-        self.resolution_over_m = if m > 0.0 { self.resolution / m } else { 0.0 };
         self.init_caches();
     }
 }
@@ -746,5 +740,84 @@ mod tests {
 
         // Should favor grouping strongly connected nodes
         assert!(communities.len() >= 2);
+    }
+
+    #[test]
+    fn test_resolution_parameter_behavior() {
+        let mut graph = Graph::<usize, ()>::new(GraphSpecs::undirected_create_missing());
+
+        // Create a graph with intermediate community structure
+        // Two dense clusters connected by a bridge
+        graph
+            .add_edges(vec![
+                // Cluster 1: {0,1,2,3}
+                Edge::new(0, 1),
+                Edge::new(0, 2),
+                Edge::new(0, 3),
+                Edge::new(1, 2),
+                Edge::new(1, 3),
+                Edge::new(2, 3),
+                // Bridge
+                Edge::new(3, 4),
+                // Cluster 2: {4,5,6,7}
+                Edge::new(4, 5),
+                Edge::new(4, 6),
+                Edge::new(4, 7),
+                Edge::new(5, 6),
+                Edge::new(5, 7),
+                Edge::new(6, 7),
+            ])
+            .expect("couldn't add edges");
+
+        // Test low resolution (should favor larger communities)
+        let communities_low_res =
+            louvain_communities(&graph, false, Some(0.5), None, Some(42)).unwrap();
+
+        // Test high resolution (should favor smaller communities)
+        let communities_high_res =
+            louvain_communities(&graph, false, Some(2.0), None, Some(42)).unwrap();
+
+        // With lower resolution, we should get fewer (larger) communities
+        // With higher resolution, we should get more (smaller) communities
+        assert!(communities_low_res.len() <= communities_high_res.len());
+
+        // Verify the communities make sense
+        assert!(communities_low_res.len() >= 1);
+        assert!(communities_high_res.len() >= 1);
+
+        // Each node should be in exactly one community
+        let mut all_nodes_low: HashSet<usize> = HashSet::new();
+        for community in &communities_low_res {
+            for &node in community {
+                assert!(
+                    !all_nodes_low.contains(&node),
+                    "Node {} appears in multiple communities",
+                    node
+                );
+                all_nodes_low.insert(node);
+            }
+        }
+        assert_eq!(
+            all_nodes_low.len(),
+            8,
+            "Not all nodes are assigned to communities"
+        );
+
+        let mut all_nodes_high: HashSet<usize> = HashSet::new();
+        for community in &communities_high_res {
+            for &node in community {
+                assert!(
+                    !all_nodes_high.contains(&node),
+                    "Node {} appears in multiple communities",
+                    node
+                );
+                all_nodes_high.insert(node);
+            }
+        }
+        assert_eq!(
+            all_nodes_high.len(),
+            8,
+            "Not all nodes are assigned to communities"
+        );
     }
 }
