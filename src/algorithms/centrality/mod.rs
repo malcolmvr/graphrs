@@ -10,6 +10,9 @@ pub mod degree;
 /// Compute eigenvector centrality of nodes and edges.
 pub mod eigenvector;
 
+/// Compute PageRank centrality of nodes.
+pub mod pagerank;
+
 /// Compute centrality measures for groups of nodes.
 pub mod groups;
 

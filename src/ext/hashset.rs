@@ -1,6 +1,6 @@
+use nohash::{IntSet, IsEnabled};
 use std::collections::HashSet;
 use std::hash::Hash;
-use nohash::{IntSet, IsEnabled};
 
 /// Extends `HashSet` with the `without` method.
 pub trait HashSetExt<T> {
